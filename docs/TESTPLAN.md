@@ -14,9 +14,9 @@ from them (only a Duranium ✔ counts).
 
 | Piece | Version / branch | Built by |
 |---|---|---|
-| Kernel candidate | (lead fills in: cand/10xx + merged drv/* branches, aport pkgrel) | lead |
-| Device package | (pkgrel) | platform |
-| Images | Phosh `samsung-gtactive3wifi_phosh_edge_<ver>`, GNOME `..._gnome_edge_<ver>` | lead / CI |
+| Kernel candidate | cand/1035 (091acc188): cand/1034 + drv/cam-stock + drv/audio-fix 7e3507579; linux-postmarketos-exynos9810 r25 | lead |
+| Device package | device-samsung-gtactive3wifi r48 (C2 off by default, UCM jack controls) | platform |
+| Images | 26102403 on `samsung-gtactive3wifi_phosh_edge-dev` (CI, 2026-10-24); local 26102403~test1 | lead / CI |
 
 ## A. Laptop gates (no tablet)
 
@@ -44,6 +44,7 @@ Clean-boot counter (B5):
 |---|---|---|---|
 | r23 (26102401, CI) | 1 | 1 | 0 |
 | r24 (26102402~test1, local) | 2 | 1 (15:52) | 1 (15:37, watchdog did not fire, forced restart) |
+| r25 (26102403) | not counted yet | | |
 
 ## C. Existing hardware regression (each new kernel)
 

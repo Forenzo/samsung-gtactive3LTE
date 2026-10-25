@@ -5,6 +5,25 @@ If you are the agent reading this after compaction: **you are the lead**. You
 coordinate, integrate, flash the tablet and test every change on the device
 yourself, autonomously, overnight. Keep going until the mission is met.
 
+## State 2026-10-25 17:58 AEDT (session "Docs refresh")
+
+- The owner reports (2026-10-25): rotation works, both cameras work, all
+  eight cores and the GPU work. Which image the tablet ran is not recorded
+  (the last entry had it on r24 with live modules; 26102403 = r25 is on the
+  Phosh dev channel since 2026-10-24).
+- Docs only, no code: STATUS.md GPU to ✔; Display and Touch rows no longer
+  claim the new driver is unbooted (the DPU is card0 since cand/1025,
+  touch passed in Phosh 2026-10-24); "GNOME on the GPU" is now "Desktop on
+  the GPU" ✔ for Phosh; Home/Recent keys ? (bindings shipped 2026-10-22,
+  not pressed in Phosh). README's status table rewritten (it still said the
+  big cores did not come online), PLAN.md's next three steps and layer
+  ticks, HARDWARE.md Wi-Fi chip BCM4375, TESTPLAN "Under test now" = r25.
+- Nothing in flight from this session.
+- Next three steps: as PLAN.md "Next three steps (2026-10-25)".
+- Waits for the owner: which image the 2026-10-25 test ran on; headphone
+  unplug (D11); proximity "near" test (D8); the phoc MR; Home/Recent key
+  presses (D1.7).
+
 ## State 2026-10-24 18:45 (session "Mainline boot image testing": r25 integrated and exported)
 
 - r25 = kernel cand/1035 (091acc188) + device r48 + duranium-build as

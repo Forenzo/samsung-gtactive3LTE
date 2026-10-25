@@ -1,28 +1,38 @@
 # Mainline Linux / postmarketOS on the Samsung Galaxy Tab Active3 (SM-T570)
 
-Bring-up of mainline Linux on the Wi-Fi Galaxy Tab Active3 (`gtactive3wifi`,
-Exynos 9810), with the goal of running postmarketOS Duranium.
+Mainline Linux on the Wi-Fi Galaxy Tab Active3 (`gtactive3wifi`, Exynos 9810),
+running postmarketOS Duranium (immutable, A/B updates) with Phosh or GNOME.
+The kernel and drivers are ours; the rest of the OS is unmodified
+postmarketOS.
 
 ## Status
 
+As of 2026-10-25, in postmarketOS Duranium (Phosh). The strict, per-block
+table with sources and test runs is [docs/STATUS.md](docs/STATUS.md).
+
 | Area | State |
 |---|---|
-| Boot chain (S-Boot → uniLoader → Linux 7.3) | ✅ boots from BOOT |
-| Framebuffer console (simplefb @ 0xca000000) | ✅ |
-| GPIO keys (7) | ✅ |
-| Memory (3.6 GiB) | ✅ |
-| Little cores (4× A55) | ✅ |
-| Big cores (4× Mongoose M3) | ❌ don't come online yet |
-| USB 2.0 device mode (DWC3 + 9810 PHY), NCM networking | ✅ |
-| Reboot into Download mode from Linux (PMU INFORM3) | ✅ |
-| MAX77705 USB data switch | ✅ (bit-banged I2C for now) |
-| UFS storage (64 GB Micron, HS-G3 x2, all 5 LUNs, stock GPT) | ✅ |
-| HSI2C (USI) | ⚠️ times out, being worked on |
-| Clocks, PMIC, thermal, display, touch, pen, Wi-Fi, audio | ⏳ |
+| Boot chain (S-Boot → uniLoader → U-Boot → systemd-boot → UKI), signed A/B updates with rollback | ✅ |
+| CPU: all 8 cores (4× Cortex-A55 + 4× Mongoose M3), frequency scaling | ✅ |
+| GPU Mali-G72 (Panfrost): Phosh renders on the GPU | ✅ |
+| Display (our DPU KMS driver), touch | ✅ |
+| Rotation, manual and automatic (accelerometer through the sensor hub) | ✅ |
+| Cameras: 8 MP rear, 5 MP front, on stock libcamera | ✅ fixed focus; autofocus in progress |
+| Storage (UFS), RAM, power and volume-up keys, suspend to idle | ✅ |
+| Wi-Fi (BCM4375) | ⚠️ connects at boot; the firmware hangs now and then, automatic recovery is being tested |
+| Audio: speaker, microphone, headphone jack | ⚠️ speaker, mic and plug-in pass; unplug untested |
+| Battery and charging | ⚠️ charges; temperature-based limits not booted yet |
+| CPU idle (C2) | ❌ off by default: it hangs or slows the system |
+| Bluetooth, S Pen, microSD, NFC, Home/Recent keys, flash LED | ❔ drivers load; not tested in the UI yet |
+| Volume-down and Active keys, GPS, fingerprint | ❌ |
+
+What comes next: [PLAN.md](PLAN.md).
 
 ## Layout
 
 - `patches/linux`: our kernel commits as a patch series (base in `BASE`)
+- `patches/libcamera`: libcamera patches meant for upstream (the images use
+  stock postmarketOS libcamera)
 - `bootchain/`: the boot chain the installer flashes (vendored U-Boot and
   uniLoader from exynos-linux/device-template, `build.sh`)
 - `configs/`: kernel config fragment and initramfs list template
@@ -50,9 +60,11 @@ Step by step, requirements and the way back to Android:
 
 ## Downloads and updates
 
-Images (Phosh, GNOME; release and development channels) are in the
+Images (Phosh, GNOME) are in the
 [releases](https://github.com/exynos-linux/samsung-gtactive3wifi/releases), rebuilt
-automatically on top of each postmarketOS publish. Installed tablets update
+automatically on top of each postmarketOS publish. Today only the development
+channels have builds; the release channels get one once an export passes on
+the device (`scripts/pmos-verify`). Installed tablets update
 from there with `updatectl update` (A/B, signed, automatic rollback). Vendor
 firmware is not included. [docs/RELEASES.md](docs/RELEASES.md) explains it all.
 
