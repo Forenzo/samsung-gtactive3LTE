@@ -4,24 +4,26 @@
 
 `dts/exynos9810-gtactive3lte.dts` is the first source tree for the SM-T575,
 derived by including the **fully patched** upstream SM-T570
-`exynos9810-gtactive3wifi.dts`. It inherits shared Exynos9810 drivers,
-display, touch and other board descriptions, **none of which have been
-validated on LTE**.
+`exynos9810-gtactive3wifi.dts`. It inherits the T570 board descriptions **without validating their safety on LTE**.
 
 ## What changes for the LTE prototype
 
-- Adds LTE-specific `model` and `samsung,gtactive3lte` compatible.
-- Disables the inherited RT5510 sound-card and amp. The owner's live FDT
-  instead enables a **TI TAS2562** at address `0x4c` on a different bus
-  numbering scheme; do not invent its mainline bus assignment or DAI graph.
-- Disables PCIe0 Wi-Fi and Bluetooth until wiring/firmware is confirmed.
-  **Correction:** both T570 upstream Linux patch 0071 and the live T575
-  Android FDT use **PCIe0**, not PCIe1, for the active WLAN path. A previous
-  progress update compared inconsistent controller descriptions.
-- Does **not** pretend to implement the modem: the stock `modem_if`
-  reserved memory and `mif_pdata` require a separate mainline analysis.
-- Does not change any existing Wi-Fi device-tree source, installer,
-  bootchain, firmware, package channels or automatic flashing commands.
+- Adds the LTE-specific `model` and `samsung,gtactive3lte` compatible.
+- **Identity-only**: this is a compilation baseline that inherits T570 hardware
+  definitions, which have **not** been validated on the LTE board and must
+  **not** be used for a boot test.
+- The T575 hardware inventory identifies **TAS2562** as the active speaker
+  amp, not the RT5510 populated on a tested T570 revision. Correct
+  audio bindings are deferred until the packaged kernel's actual DTS is
+  inspected.
+- The live T575 Android device tree uses **PCIe0** for the enabled controller.
+  Preserve this observation for the future wireless integration; inherited
+  PCIe wiring is not automatically safe for T575.
+- The LTE modem reserved-memory interface is recorded but has not been
+  ported. No LTE driver has been enabled.
+
+This preliminary target only tests the kernel source/DTB toolchain. It does
+not establish T575 hardware compatibility or implement LTE support.
 
 ## Build-only instructions (Linux with complete upstream source tree)
 
