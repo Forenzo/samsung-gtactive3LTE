@@ -75,3 +75,18 @@ The current Android **locked/green** properties conflict with the earlier succes
 - Extract the **live device tree** with `adb exec-out su -c 'cat /sys/firmware/fdt'` to a **local private file** (if readable). Do not publish raw DTB; some paths may include identifiers.
 - Compare decompiled SM-T575 and upstream SM-T570 DTBs/DTBOs locally before drafting an LTE DTS. Verify actual amplifier regulator/GPIO routing and modem interfaces.
 - Continue refusing the inherited T570 installer on the LTE device.
+
+### Bootloader status clarified from kernel command line (2026-11-05)
+
+The owner checked `/proc/cmdline` with Magisk root. The live kernel boot arguments report:
+
+- `androidboot.verifiedbootstate=orange`
+- `androidboot.vbmeta.device_state=unlocked`
+- `androidboot.warranty_bit=1`
+- `androidboot.revision=5`
+- `androidboot.dtbo_idx=5`
+- `androidboot.bootloader=T575XXSFEYI1`
+
+This is strong evidence that **the tablet is unlocked**, consistent with successful patched-boot tests and the owner's confirmation. The Android `ro.boot.*` properties in the earlier inventory instead reported green/locked/warranty 0; they conflict with the kernel cmdline and may be altered by the device's Play Integrity configuration. The specific cause has not been established. Do not interpret the earlier properties as proof of a locked bootloader. This does **not** establish that a new Linux image will boot correctly; preserve restoration procedures and do not flash yet.
+
+The owner has also extracted a **269 KiB live device tree** locally. Its validity/content has not been inspected yet. Raw DTBs and boot parameters may contain unique device identifiers; do not commit them to the public repository. The raw kernel command line included identifying fields that have deliberately been omitted here.
