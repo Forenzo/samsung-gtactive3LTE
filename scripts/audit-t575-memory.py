@@ -10,6 +10,18 @@ import sys
 from pathlib import Path
 
 EXPECTED = {
+    # All of these addresses and sizes came from stock SM-T575 FDT reg.
+    "sec-debug@80000000": (0x80000000, 0x00001000),
+    "kaslr@80001000": (0x80001000, 0x00001000),
+    "camera-contig@95000000": (0x95000000, 0x00A00000),
+    "rkp@af600000": (0xAF600000, 0x02400000),
+    "tima@b8000000": (0xB8000000, 0x00200000),
+    "secure-log@c0000000": (0xC0000000, 0x00080000),
+    "secure-camera@e1900000": (0xE1900000, 0x02000000),
+    "teegris@ed310000": (0xED310000, 0x00002000),
+    "exynos-ss@fda00000": (0xFDA00000, 0x01C08000),
+    "fimc-lib@ff780000": (0xFF780000, 0x00880000),
+    "camera-pool@880000000": (0x880000000, 0x0B400000),
     "framebuffer@ca000000": (0xCA000000, 0x01400000),
     "modem@f0000000": (0xF0000000, 0x09200000),
     "modem-log@f9200000": (0xF9200000, 0x02000000),
@@ -99,7 +111,7 @@ def main(dtb):
         for err in errors:
             print("ERROR:", err, file=sys.stderr)
         return 1
-    print("PASS: SM-T575 framebuffer/modem/A-Box carveouts present, no direct-child reserved-memory overlaps")
+    print(f"PASS: {len(EXPECTED)} stock fixed carveouts present; no direct-child reserved-memory overlaps")
     return 0
 
 if __name__ == "__main__":
