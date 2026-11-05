@@ -155,3 +155,50 @@ bootloader/kernel ownership and all overlapping regions, then add only
 the necessary carveouts with valid mainline bindings. Do not regard
 matching DRAM banks or a successfully compiled identity-only DTB as
 safe for flashing. The stock binary stays local and private.
+
+## Stage 4: Non-destructive boot-chain preflight (2026-11-05)
+
+The Stage 3 fixed memory-carveout compile/audit workflow
+[run 42039820541](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/42039820541)
+succeeded. This does **not** establish boot safety.
+
+The upstream T570 documentation has a working
+S-Boot → uniLoader → U-Boot → systemd-boot → UKI
+chain and a device-specific installer. **Its T570 installer and images are
+not validated for, and must not be run on, the T575.**
+
+A read-only helper for the owner's Mac has been added:
+`scripts/t575-boot-preflight.sh`. From the repository checkout:
+
+```bash
+bash scripts/t575-boot-preflight.sh
+```
+
+Prerequisites: Android booted, USB debugging authorized, Android platform-tools
+`adb` on PATH, and exactly one ADB device connected. The script verifies
+`ro.product.model=SM-T575` before collecting any data. It writes a locally
+stored, private directory with Android identity/boot properties, kernel
+command line, by-name partition list, kernel version and mount table.
+It performs **no** reboot, root escalation, raw partition reads, write,
+unlock, image generation or flashing. Because these outputs may contain
+device identifiers or boot details, keep the folder local/private and never
+upload it verbatim to public GitHub.
+
+The read-only report is only **one part** of the next boot-chain gate.
+Before proposing even a reversible boot attempt, still required:
+- Verify actual Download-mode bootloader unlock state rather than relying
+  exclusively on possibly spoofed Android `ro.boot` properties.
+- Identify the exact stock T575 BOOT partition image/format including
+  Magisk changes, DTB/DTBO selection, and Samsung boot header v2.
+- Validate backup and reliable restore for the **current working rooted
+  Android**, without factory reset or writing EFS/identity/bootloader areas.
+- Check Linux kernel load addresses, U-Boot/uniLoader compatibility,
+  reserved-memory safety, and the T575 display/USB debugging route.
+- Decide how to obtain reversible boot testing on this Samsung model:
+  Samsung Download mode is **not** evidence of Android fastboot or support
+  for a generic `fastboot boot` RAM-only approach.
+- Retain **deny by default** for any T575 image generation, installer,
+  flash or wipe commands until those gates pass.
+
+**Do not flash or boot with the current compile-only DTB.** Following a
+successful kernel bring-up, the intended GUI remains **Plasma Mobile**.
