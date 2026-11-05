@@ -140,3 +140,17 @@
 &{/soc@0/usi@13ae00c0/spi@13ae0000/touchscreen@0} {
 	spi-max-frequency = <7000000>;
 };
+
+/*
+ * Stage 10 isolation: T570 DECON takeover KMS assumes S-Boot left window 5
+ * scanning through IDMA_G0, and accepts any nonzero IDMA base address. This
+ * has NOT been measured on the SM-T575. Do not let the driver seize aperture
+ * ownership or flip a DMA register before verifying LTE scanout state.
+ *
+ * The bootloader framebuffer description stays intact, for a separate
+ * simple-framebuffer / simpledrm compatibility investigation.
+ * This DTS is still not approved for boot or flashing.
+ */
+&{/soc@0/display-controller@16030000} {
+	status = "disabled";
+};
