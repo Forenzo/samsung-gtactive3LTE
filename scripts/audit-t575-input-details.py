@@ -58,6 +58,10 @@ def main(path):
         print("\nBoth bus addresses and touchscreen SPI limit match stock overlay 5.")
     print("NOTE: This is an advisory description audit, not a hardware probe.")
     print("NOTE: GPIO polarity, phandles, firmware, pinctrl and power must be verified separately.")
+    # Stage 7 fixes are an explicit static contract, not merely advisory.
+    # Unknown future properties still need a separate hardware/driver audit.
+    if review:
+        return 1
     return 0
 
 if __name__ == "__main__":
