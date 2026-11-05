@@ -7,7 +7,8 @@ on:
     branches:
       - port/sm-t575-bringup
     paths:
-      - "dts/**"\n      - "scripts/audit-t575-*.py"
+      - "dts/**"
+      - "scripts/audit-t575-*.py"
       - "scripts/build-t575-dtb.sh"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
