@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          make -C kernel ARCH=arm64 LLVM=0 defconfig
+          make -C kernel ARCH=arm64 defconfig
           bash scripts/build-t575-dtb.sh kernel
           test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           file kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
