@@ -115,3 +115,43 @@ Next: extract the **merged effective** T570 mainline DTS from the assembled upst
 - Added `dts/exynos9810-gtactive3lte.dts` including the assembled T570 board DTS, overriding model/compatible and deliberately disabling the inherited RT5510 sound card/amp, PCIe0 Wi-Fi and Bluetooth. This is a conservative **compile-only experiment**, not a boot-safe or production DT.
 - Added `scripts/build-t575-dtb.sh` and `docs/T575-DTB-BUILD.md` for a future local build against the fully patched upstream kernel checkout.
 - **No kernel compilation or boot tests have yet been performed** in the current environment (complete patched kernel checkout/build dependencies unavailable). Do not flash this target.
+
+## Measured SM-T575 live-FDT RAM and carveouts (2026-11-05)
+
+Read from the privately uploaded **running** Android DTB; device-specific
+identifiers have been omitted. All addresses/sizes below were read from DT
+`reg` cells, not inferred from a generic Exynos datasheet.
+
+| Physical DRAM start | Length |
+| --- | --- |
+| `0x80000000` | `0x3c800000` |
+| `0xc0000000` | `0x20000000` |
+| `0xe1900000` | `0x1e700000` |
+| `0x880000000` | `0x80000000` |
+
+**These four DRAM banks agree exactly with the memory layout shown in the
+initial upstream T570 Linux patch 0003.** That is promising but does not
+validate all RAM reservations.
+
+LTE-specific and important shared reserved regions observed:
+
+| Stock node | Start | Length | End (exclusive) |
+| --- | --- | --- | --- |
+| `/reserved-memory/modem_if` | `0xf0000000` | `0x09200000` | `0xf9200000` |
+| `/reserved-memory/cp_ram_logging` | `0xf9200000` | `0x02000000` | `0xfb200000` |
+| `/reserved-memory/abox_rmem@0xEA800000` | `0xfb200000` | `0x02800000` | `0xfda00000` |
+| `/reserved-memory/bootloader_fb` | `0xca000000` | `0x01400000` | `0xcb400000` |
+
+**Caution:** The A-Box node name embeds `0xEA800000` but the live
+`reg` property actually maps `0xfb200000`; use actual `reg` and
+recheck downstream firmware use rather than assuming the node name is
+authoritative. The vendor FDT doesn't necessarily say `no-map` for
+every region; Linux should avoid loading drivers or allocating RAM that
+might collide with still-active modem / coprocessor firmware.
+
+Before any boot test, diff **all** stock `reserved-memory` entries and
+`/memreserve/` entries against the fully assembled LTE DTB, confirm
+bootloader/kernel ownership and all overlapping regions, then add only
+the necessary carveouts with valid mainline bindings. Do not regard
+matching DRAM banks or a successfully compiled identity-only DTB as
+safe for flashing. The stock binary stays local and private.
