@@ -90,6 +90,7 @@ jobs:
           python3 scripts/audit-t575-display-handover.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-decon-source.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-simpledrm.py kernel/.config kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          python3 scripts/audit-t575-simpledrm-source.py kernel
 
       - name: Save compile-only output
         if: success()
