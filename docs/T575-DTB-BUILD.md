@@ -81,3 +81,29 @@ patch/DTB build failures before trying any device boot.
 This workflow has *not been verified as successful* yet. Its source download
 depends on GitHub archive availability. No output is presently cleared for
 flashing to the SM-T575.
+
+## LTE memory protection stage (2026-11-05)
+
+Owner's privately supplied Android FDT was parsed locally (not uploaded to
+GitHub). It has no entries in its standalone `/memreserve/` header table,
+but it does expose explicit `/reserved-memory` nodes. The four stock DRAM
+banks match the T570's initial Linux memory map.
+
+The current LTE DTS now adds three *direct-child* reserved-memory entries:
+
+| Name | Start | Length | Policy |
+| --- | --- | --- | --- |
+| LTE modem interface | `0xf0000000` | `0x09200000` | `no-map` |
+| Modem logging | `0xf9200000` | `0x02000000` | `no-map` |
+| A-Box firmware | `0xfb200000` | `0x02800000` | `no-map` |
+
+The Python build audit (`scripts/audit-t575-memory.py`) parses the **built**
+DTB, confirms these exact sizes and `no-map` properties, and fails if
+*direct-child* `/reserved-memory` entries overlap. Nested debug subdivisions
+are not individually counted as top-level allocations.
+
+**This is only partial protection.** The stock FDT also describes secure
+world, camera and debug reservations which have not been fully reconciled
+against the assembled Linux DTB. This is **not approved for flashing or a
+boot test**; other reservations must be audited, and device-specific
+bootloader and memory placement need separate verification.
