@@ -9,6 +9,7 @@ on:
     paths:
       - "dts/**"
       - "scripts/audit-t575-*.py"
+      - "scripts/t575-stage34-static-dts-safety-audit.py"
       - "scripts/build-t575-dtb.sh"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
@@ -70,6 +71,11 @@ jobs:
           git -C kernel apply "../$patchfile"
           test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
           echo "Applied upstream's packaged postmarketOS kernel patch."
+
+      - name: Check evidence-backed LTE DTS safety gates
+        run: |
+          python3 -m py_compile scripts/t575-stage34-static-dts-safety-audit.py
+          python3 scripts/t575-stage34-static-dts-safety-audit.py
 
       - name: Configure arm64 kernel and compile T575 DTB
         shell: bash
