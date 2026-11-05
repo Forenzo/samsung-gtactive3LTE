@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout LTE fork
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install kernel DT build tools
         run: |
@@ -57,17 +57,18 @@ jobs:
           git -C kernel commit -qm "Import pinned kernel base"
           echo "Base: $sha"
 
-      - name: Apply upstream patch series
+      - name: Apply release-tested consolidated upstream patch
         shell: bash
         run: |
           set -euo pipefail
-          patches=(patches/linux/[0-9][0-9][0-9][0-9]-*.patch)
-          [[ ${#patches[@]} -gt 100 ]] || { echo "Patch series incomplete" >&2; exit 1; }
-          for patch in "${patches[@]}"; do
-            echo "::group::Applying $patch"
-            git -C kernel am --3way --quiet "../$patch"
-            echo "::endgroup::"
-          done
+          # APKBUILD uses this consolidated patch, which is not equivalent
+          # to replaying the independent patches/linux development series.
+          patchfile="pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3wifi.patch"
+          test -s "$patchfile"
+          git -C kernel apply --check "../$patchfile"
+          git -C kernel apply "../$patchfile"
+          test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
+          echo "Applied upstream's packaged postmarketOS kernel patch."
 
       - name: Configure arm64 kernel and compile T575 DTB
         shell: bash
