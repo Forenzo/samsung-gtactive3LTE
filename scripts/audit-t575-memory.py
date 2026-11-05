@@ -31,7 +31,7 @@ def parse(path):
     while pos < structoff + structsize:
         token = word(data, pos); pos += 4
         if token == 1:
-            end = data.index(b"\\0", pos)
+            end = data.index(b"\0", pos)
             name = data[pos:end].decode()
             pos = (end + 4) & ~3
             stack.append(name)
@@ -42,7 +42,7 @@ def parse(path):
             size = word(data, pos)
             nameoff = word(data, pos + 4)
             pos += 8
-            end = names.index(b"\\0", nameoff)
+            end = names.index(b"\0", nameoff)
             key = names[nameoff:end].decode()
             val = data[pos:pos + size]
             pos = (pos + size + 3) & ~3
