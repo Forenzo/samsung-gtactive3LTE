@@ -26,14 +26,14 @@ capture() {
     printf '\n(probe command failed; see output)\n' >> "$out/$file"
   fi
 }
-capture 01-identity.txt sh -c 'getprop ro.product.model; getprop ro.product.device; getprop ro.boot.bootloader; getprop ro.build.fingerprint; getprop ro.boot.flash.locked; getprop ro.boot.vbmeta.device_state; getprop ro.boot.verifiedbootstate'
+capture 01-identity.txt 'getprop ro.product.model; getprop ro.product.device; getprop ro.boot.bootloader; getprop ro.build.fingerprint; getprop ro.boot.flash.locked; getprop ro.boot.vbmeta.device_state; getprop ro.boot.verifiedbootstate'
 capture 02-cmdline.txt cat /proc/cmdline
-capture 03-storage.txt sh -c 'cat /proc/partitions; ls -l /dev/block/by-name /dev/block/platform/*/by-name 2>/dev/null || true'
-capture 04-kernel.txt sh -c 'uname -a; cat /proc/version'
-capture 05-mounts.txt sh -c 'cat /proc/mounts'
-capture 06-dt-model.txt sh -c 'cat /proc/device-tree/model 2>/dev/null || cat /sys/firmware/devicetree/base/model 2>/dev/null || true'
-capture 07-android-boot.txt sh -c 'getprop ro.boot.dtbo_idx; getprop ro.boot.hardware; getprop ro.boot.slot_suffix; getprop ro.boot.verifiedbootstate; getprop ro.boot.vbmeta.digest'
-capture 08-root-availability.txt sh -c 'command -v su || true; id'
+capture 03-storage.txt 'cat /proc/partitions; ls -l /dev/block/by-name /dev/block/platform/*/by-name 2>/dev/null || true'
+capture 04-kernel.txt 'uname -a; cat /proc/version'
+capture 05-mounts.txt 'cat /proc/mounts'
+capture 06-dt-model.txt 'cat /proc/device-tree/model 2>/dev/null || cat /sys/firmware/devicetree/base/model 2>/dev/null || true'
+capture 07-android-boot.txt 'getprop ro.boot.dtbo_idx; getprop ro.boot.hardware; getprop ro.boot.slot_suffix; getprop ro.boot.verifiedbootstate; getprop ro.boot.vbmeta.digest'
+capture 08-root-availability.txt 'command -v su || true; id'
 cat > "$out/README.txt" <<'END'
 READ-ONLY SM-T575 boot preflight report
 No partitions were read as raw images or modified.
