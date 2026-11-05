@@ -54,7 +54,7 @@ def read_node(root, node):
               'head -c 32 "' + path + '/status"; '
               'else printf "implicit"; fi; '
               'else printf "missing"; fi')
-    out = adb("shell", "sh", "-c", script)
+    out = adb("shell", script)
     if out is None:
         return "unavailable"
     raw = out.split(b"\x00", 1)[0].strip()
@@ -69,8 +69,8 @@ def main():
     validate()
     root = None
     for candidate in ROOTS:
-        p = adb("shell", "sh", "-c", 'test -d "' + candidate + '" && printf exists')
-        if p == b"exists":
+        p = adb("shell", 'test -d "' + candidate + '" && printf exists')
+        if p is not None and p.strip() == b"exists":
             root = candidate
             break
     print("Stage 31 — read-only running Android FDT status inventory")
