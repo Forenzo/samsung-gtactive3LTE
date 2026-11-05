@@ -25,9 +25,12 @@ validated on LTE**.
 
 ## Build-only instructions (Linux with complete upstream source tree)
 
-First assemble the **entire** SM-T570 kernel tree from the exact
-`patches/linux/BASE` commit plus all upstream `patches/linux/*.patch`
-in order, using upstream's normal tooling. This repository fork itself does
+First assemble the SM-T570 kernel tree from the exact
+`patches/linux/BASE` commit with the **consolidated** upstream patch
+`pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3wifi.patch`
+used by the upstream APKBUILD. The historical numbered `patches/linux/*.patch`
+are not a clean sequential replay: the CI run failed at patch 0029. The
+consolidated patch is the supported input for this compile experiment. This repository fork itself does
 not contain the full Linux kernel source.
 
 Then run from the fork repository directory:
@@ -61,8 +64,8 @@ separately verified.
 This fork also has a **separate compile-only** workflow:
 [.github/workflows/t575-dtb-compile.yml](../.github/workflows/t575-dtb-compile.yml).
 It is scoped to `port/sm-t575-bringup` and source changes. It downloads the
-pinned kernel base from `patches/linux/BASE`, applies the numbered kernel
-patches, runs the native arm64 `defconfig` DTB target and uploads **only the
+pinned kernel base from `patches/linux/BASE`, applies the packaged consolidated
+kernel patch, runs the arm64 `defconfig` DTB target and uploads **only the
 DTB** for inspection. It does not build/flash Android BOOT or produce a
 Duranium image.
 
