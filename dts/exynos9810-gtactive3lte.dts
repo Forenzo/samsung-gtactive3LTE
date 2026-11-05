@@ -18,6 +18,10 @@
 
 	/* Exclude LTE modem / coprocessor RAM even while their drivers are off. */
 	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+
 		/*
 		 * Samsung stock FDT reserves the entire 20 MiB S-Boot handover
 		 * framebuffer, not just the 1200x1920x4 visible pixel bytes.
@@ -28,10 +32,6 @@
 			reg = <0x0 0xca000000 0x01400000>;
 			no-map;
 		};
-
-		#address-cells = <2>;
-		#size-cells = <1>;
-		ranges;
 
 		t575_modem_mem: modem@f0000000 {
 			reg = <0x0 0xf0000000 0x09200000>;
