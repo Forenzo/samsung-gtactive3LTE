@@ -490,3 +490,34 @@ runtime S-Boot/DECON scanout register data if obtainable with
 a well-understood procedure, and verify driver clock/IRQ and
 framebuffer ownership assumptions. Until safe restoration is
 demonstrated, keep all testing compile-only and do not flash.
+
+
+## Stage 11: built-in simpledrm compile-only compatibility gate (2026-11-05)
+
+Stage 10 left the T575 DECON takeover and native panel disabled. Stage 11
+tests the *alternative early display description* at static build time
+without making a boot image or touching Android.
+
+- The CI kernel configuration requests `CONFIG_DRM=y` and
+  `CONFIG_DRM_SIMPLEDRM=y`, runs `olddefconfig` to resolve dependencies,
+  and fails if either is not built in. This **does not compile or test a
+  complete kernel image**: it verifies the resolved configuration only.
+- `scripts/audit-t575-simpledrm.py` checks the compiled DTB retains the
+  1200x1920 XRGB8888 (`x8r8g8b8`) handover description, 4800-byte
+  stride and 20 MiB reservation, with DECON takeover and native panel
+  still disabled. The Stage 9 audit separately validates the
+  `memory-region` phandle target.
+- The inherited bootloader framebuffer binding uses `memory-region`,
+  not a direct `reg`; support must be confirmed against the exact
+  selected kernel driver at runtime. Static checks alone cannot prove
+  the firmware continues scanning out or that the screen lights up.
+- The existing GitHub Actions job still produces **DTB only**. No BOOT
+  image, automatic installer, flashing command, or published firmware
+  is created.
+
+**Unresolved before first boot:** Review the CI result, confirm the exact
+kernel source/build config and simpledrm binding, investigate actual
+S-Boot scanout address and framebuffer ownership via safe read-only
+methods, and prove a T575-specific reliable recovery path. No changes
+to `efs`, `sec_efs`, modem identity partitions or working Android.
+Do not flash this DTB.
