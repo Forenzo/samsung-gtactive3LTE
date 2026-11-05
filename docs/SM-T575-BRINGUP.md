@@ -1,6 +1,6 @@
 # SM-T575 LTE bring-up: previous-device evidence and safety plan
 
-Status: **research / read-only inventory only**. No SM-T575 boot image or validated DTB exists in this branch. The upstream SM-T570 installer, release images and firmware packages **must not be used on the SM-T575**.
+Status: **compile-only DTB / static hardware validation**. A T575-specific DTB now builds in GitHub Actions, but it is not runtime validated and is not safe for flashing. No SM-T575 boot image exists in this branch. The upstream SM-T570 installer, release images and firmware packages **must not be used on the SM-T575**.
 
 ## Previously established on the actual tablet (2026-09-30 to 2026-10-01)
 
