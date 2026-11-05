@@ -338,3 +338,32 @@ firmware, IRQ/reset; I²C/Wacom regulator and pen calibration) and compare
 their bindings to the measured stock overlay 5 before applying functional
 LTE changes. Independently validate display handover and native panel
 timings. Preserve read-only testing and do not flash this DTB.
+
+
+## Stage 8: Static GPIO/phandle and display handover inspection
+
+Stage 7 CI run [42049985279](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/42049985279)
+passed: the compiled LTE Linux DTB now specifies Himax SPI at **7 MHz**
+(matching selected stock overlay 5), chip select 0, Wacom address
+`0x56`. Stage 8 adds
+`scripts/audit-t575-display-input.py`, which resolves Linux DT
+phandles in the compiled binary to report the specific GPIO and pinctrl
+providers, Wacom power supply, and simple framebuffer properties.
+
+Measured *vendor* reference pins from the extracted private overlay 5:
+
+- Touch: IRQ **GPA1_0**, reset **GPG0_6**, SPI CS **GPH0_7**.
+- Wacom: IRQ **GPA3_3**, pen-detect **GPA3_7**, firmware enable **GPM4_1**,
+  `wacom_ldo_en` rated at 3.3 V.
+- Panel: board control **GPA2_5**, LDO enable **GPG2_2**, buck enable
+  **GPH1_4**, panel reset **GPA3_4**.
+- Samsung HX83102E vendor panel declares four DSI lanes, 60 Hz, and
+  `resolution=<600 1920>`, while simple framebuffer and touchscreen
+  indicate 1200×1920. Native panel timing, polarity, horizontal scaling,
+  and power sequencing are **not** verified.
+
+Stage 8 is a read-only *compiled FDT property audit*, **not** a probe
+and **not** a guarantee of driver, pinmux or regulator compatibility.
+No T575 peripheral is newly enabled. Native panel and the inherited
+RT5510/AsoC board audio remain disabled until separate physical and
+driver compatibility validation. Do not flash Linux binaries.
