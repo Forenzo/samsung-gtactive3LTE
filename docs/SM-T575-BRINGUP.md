@@ -102,10 +102,16 @@ Confirmed high-value findings:
 - `/sound`: `compatible = "samsung,exynos9810-audio-TI"`, rather than the Wi-Fi board's RT5510-oriented routes. Inspect TAS2562's audio link and upstream kernel driver coverage before constructing audio bindings.
 - `/hsi2c@10910000/wacom@56`: `wacom,w90xx` at 0x56 (Wacom S Pen).
 - `/reserved-memory/modem_if`: `compatible = "exynos,modem_if"`, reserved region base 0xf0000000, length 0x09200000; `/mif_pdata`: `compatible = "sec_modem,modem_pdata"`. **These prove Android describes a modem interface, not that mainline modem driver support exists.**
-- `/pcie0@116A0000`: enabled; `/pcie1@116B0000`: disabled in the running Android DT. The upstream T570 docs use PCIe1 for BCM4375. **Do not blindly copy Wi-Fi PCIe assignments**. Determine actual Wi-Fi/modem bus ownership and pinctrl from the T575 DT and runtime before enabling either port.
+- `/pcie0@116A0000`: enabled; `/pcie1@116B0000`: disabled in the running Android DT. The upstream T570 Linux patch 0071 in fact uses PCIe0 for BCM4375 (an earlier summary incorrectly referred to PCIe1). **Do not assume GPIOs/regulators/firmware are identical merely because the controller is shared**. Determine actual Wi-Fi/modem bus ownership and pinctrl from the T575 DT and runtime before enabling either port.
 - `/decon_board_hx83102e` exists, supporting the Himax panel-family identification, though panel timing/power sequencing still needs explicit comparison.
 - Live inventory previously confirmed RT5665, MAX77705, S2MPS18, SM5504, and the other listed shared hardware families.
 
 **Porting impact:** The first LTE-specific DTS should be based on a careful comparison of the fully assembled upstream Linux DTS to the sanitized Android hardware mapping, with LTE-specific audio, PCIe and modem sections disabled until supported. No T575 boot image, build test or flash is validated yet. The raw FDT may contain serial/identity properties and must remain private.
 
 Next: extract the **merged effective** T570 mainline DTS from the assembled upstream Linux tree (the patch series alone is not the complete final DTS); confirm the T575 TAS2562 driver/bindings and PCIe dependencies, and create a compile-only LTE target. Keep the upstream installer blocked on SM-T575 pending separate boot-chain verification.
+
+## First compile-only LTE source (2026-11-05)
+
+- Added `dts/exynos9810-gtactive3lte.dts` including the assembled T570 board DTS, overriding model/compatible and deliberately disabling the inherited RT5510 sound card/amp, PCIe0 Wi-Fi and Bluetooth. This is a conservative **compile-only experiment**, not a boot-safe or production DT.
+- Added `scripts/build-t575-dtb.sh` and `docs/T575-DTB-BUILD.md` for a future local build against the fully patched upstream kernel checkout.
+- **No kernel compilation or boot tests have yet been performed** in the current environment (complete patched kernel checkout/build dependencies unavailable). Do not flash this target.
