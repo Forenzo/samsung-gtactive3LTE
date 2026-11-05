@@ -311,3 +311,30 @@ device-tree property, not actual hardware behavior.
 The next step is to inspect the inherited T570 DTS/pinctrl/ASoC
 binding and make **targeted compile-only LTE overrides** where
 fully justified. Do not flash the current DTB.
+
+
+## Stage 6: Audio isolation and display/input static gate (2026-11-05)
+
+The inherited SM-T570 Linux DTB enabled `richtek,rt5510` at
+`/soc@0/usi@108c00c0/i2c@108c0000/amplifier@34`. The selected
+Samsung SM-T575 overlay 5 instead marks RT5510 **disabled** and selects
+TI TAS2562 at `0x4c`. The LTE compile-only board DTS now explicitly
+disables the inherited `amplifier@34` and entire `/sound` machine node.
+This avoids describing the known-wrong audio configuration as active.
+**No TAS2562 node is activated yet**: the exact supplies, GPIOs, binding,
+and audio machine/DAI topology need a separate driver audit.
+
+The `scripts/audit-t575-peripherals.py` CI check now fails if the compiled
+DTB does not preserve the expected static configuration: RT5510 and
+`/sound` disabled; Himax `himax,hx83102e` at SPI controller
+`0x13ae0000`, Wacom `wacom,w9019` at I²C controller `0x10910000`,
+both still described as okay; and native `/panel` disabled until
+power/reset and DRM timing verification. It also rejects an unexpectedly
+enabled `ti,tas2562` node. It doesn't establish actual hardware probing
+or safe physical boot. A reported `okay` node is a description only.
+
+**Next priority:** Inspect compiled properties (SPI speed/CS, pinctrl,
+firmware, IRQ/reset; I²C/Wacom regulator and pen calibration) and compare
+their bindings to the measured stock overlay 5 before applying functional
+LTE changes. Independently validate display handover and native panel
+timings. Preserve read-only testing and do not flash this DTB.
