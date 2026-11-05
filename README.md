@@ -1,4 +1,23 @@
-# Mainline Linux / postmarketOS on the Samsung Galaxy Tab Active3 (SM-T570)
+# Samsung Galaxy Tab Active3 LTE (SM-T575) — Mainline Linux Port
+
+**Experimental device port** of mainline Linux and postmarketOS Duranium for the **Samsung Galaxy Tab Active3 LTE (SM-T575)**, based on [exynos-linux/samsung-gtactive3wifi](https://github.com/exynos-linux/samsung-gtactive3wifi).
+
+**Current status: research and hardware comparison. The SM-T575 has not been verified to boot Linux.** The existing kernel patches, installers, device tree and published images in this fork were originally made for the Wi-Fi-only **SM-T570**. **Do not flash SM-T570 images or run the inherited installer on an SM-T575.**
+
+The LTE development work lives on the [`port/sm-t575-bringup` branch](https://github.com/Forenzo/samsung-gtactive3LTE/tree/port/sm-t575-bringup), including [our LTE bring-up and safety notes](https://github.com/Forenzo/samsung-gtactive3LTE/blob/port/sm-t575-bringup/docs/SM-T575-BRINGUP.md) and a read-only macOS-compatible [hardware inventory script](https://github.com/Forenzo/samsung-gtactive3LTE/blob/port/sm-t575-bringup/scripts/t575-inventory.sh).
+
+### Planned work
+- Compare real T575 hardware and vendor device trees with the T570.
+- Prepare a separate LTE device tree and **compile-only** kernel build before testing on hardware.
+- Verify a reversible BOOT-only recovery procedure; preserve the currently rooted Android installation.
+- Bring up touchscreen, display, GPU, storage, power, audio and wireless hardware; investigate cellular modem and GNSS separately.
+- Package T575-specific postmarketOS images **only after** safe boot and device testing.
+
+This fork is independent experimental work. The T570 documentation below describes the **upstream Wi-Fi model only**, not tested LTE behavior.
+
+---
+
+## Upstream SM-T570 documentation (reference only)
 
 Mainline Linux on the Wi-Fi Galaxy Tab Active3 (`gtactive3wifi`, Exynos 9810),
 running postmarketOS Duranium (immutable, A/B updates) with Phosh or GNOME.
