@@ -1,0 +1,87 @@
+# Experimental SM-T575 DTB syntax/compile check only.
+# Never generates or publishes a boot image, firmware or release.
+name: t575-dtb-compile
+
+on:
+  push:
+    branches:
+      - port/sm-t575-bringup
+    paths:
+      - "dts/**"
+      - "scripts/build-t575-dtb.sh"
+      - "patches/linux/**"
+      - ".github/workflows/t575-dtb-compile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-dtb-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-dtb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout LTE fork
+        uses: actions/checkout@v4
+
+      - name: Install kernel DT build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libssl-dev libelf-dev \
+            device-tree-compiler python3 git
+
+      - name: Retrieve exact upstream Linux base
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r origin sha < patches/linux/BASE
+          [[ "$origin" == "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git" ]] || {
+            echo "Unexpected kernel source: $origin" >&2; exit 1;
+          }
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          # A pinned source revision, not moving mainline.
+          curl -fL --retry 4 --retry-delay 5 \
+            "https://github.com/torvalds/linux/archive/${sha}.tar.gz" \
+            -o /tmp/t575-linux.tar.gz
+          mkdir -p kernel
+          tar -xzf /tmp/t575-linux.tar.gz -C kernel --strip-components=1
+          git -C kernel init -q
+          git -C kernel config user.name "LTE DTB CI"
+          git -C kernel config user.email "ci@localhost"
+          git -C kernel add -A
+          git -C kernel commit -qm "Import pinned kernel base"
+          echo "Base: $sha"
+
+      - name: Apply upstream patch series
+        shell: bash
+        run: |
+          set -euo pipefail
+          patches=(patches/linux/[0-9][0-9][0-9][0-9]-*.patch)
+          [[ ${#patches[@]} -gt 100 ]] || { echo "Patch series incomplete" >&2; exit 1; }
+          for patch in "${patches[@]}"; do
+            echo "::group::Applying $patch"
+            git -C kernel am --quiet "../$patch"
+            echo "::endgroup::"
+          done
+
+      - name: Configure arm64 kernel and compile T575 DTB
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C kernel ARCH=arm64 LLVM=0 defconfig
+          bash scripts/build-t575-dtb.sh kernel
+          test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          file kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+
+      - name: Save compile-only output
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sm-t575-dtb-compile-only
+          path: kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          retention-days: 7
