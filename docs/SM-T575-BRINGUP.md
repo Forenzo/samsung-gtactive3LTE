@@ -440,3 +440,53 @@ unreconciled.
 `exynos9810-decon-takeover` driver and simple framebuffer interaction,
 verify bootloader scanout and display clock ownership, and establish
 a tested, reversible restoration method. Do not flash the present DTB.
+
+
+## Stage 10: actual DECON takeover driver source review (2026-11-05)
+
+Audited the **specific pinned upstream T570 kernel patch**:
+`patches/linux/0124-drm-Add-an-Exynos9810-DPU-takeover-KMS-driver.patch`
+([upstream source](https://github.com/exynos-linux/samsung-gtactive3wifi/blob/main/patches/linux/0124-drm-Add-an-Exynos9810-DPU-takeover-KMS-driver.patch)).
+
+The driver is not a native panel init implementation. Its comment says
+S-Boot already configured DECON0 and **both DSI links** and window 5
+from IDMA_G0 with the display controller bypassing SysMMU. Its
+`e9810_probe` reads the current `IDMA_IN_BASE_ADDR_Y`,
+checks only for nonzero, then evicts any existing simpledrm occupant
+via `aperture_remove_conflicting_devices()` and attempts to claim
+the framebuffer aperture. Its `e9810_flip` writes a new IDMA base
+address and requests a DECON shadow update for the assumed window.
+The driver does **not** explicitly reprogram power sequencing, DSI
+timings or panel initialization. The author reports successful
+framebuffer console takeover on **SM-T570**, not SM-T575.
+
+**Important unverified SM-T575 runtime assumptions:**
+
+1. Same S-Boot window 5, IDMA_G0 mapping, format, source geometry,
+   and DECON register configuration as the T570.
+2. Read IDMA base is inside the T575 0xca000000–0xcb400000 fixed
+   handover reservation, is actually being scanned out, and its DMA
+   mapping works with the driver-selected 32-bit DMA mask.
+3. SysMMU bypass state, shadow-register update behavior, display
+   clock retention, DECON IRQ routing, and vblank behavior.
+4. Simpledrm availability in the kernel configuration; the
+   `/chosen/framebuffer-0` DT description alone does not ensure
+   a usable display or safe takeover.
+
+**Action applied now:** The SM-T575 compile-only DTS overrides
+`/soc@0/display-controller@16030000` with
+`status = "disabled"`, preserving the simple-framebuffer DT
+description and leaving `/panel` disabled. This prevents the
+unvalidated T570 takeover device from being described as active
+on T575 and avoids claiming a successful scanout transition that
+has never been observed on LTE hardware. The Stage 10 CI gate
+`scripts/audit-t575-decon-source.py` verifies the pinned patch's
+critical takeover behavior and insists the T575 DECON + native
+panel remain disabled. It does **not** prove the alternative simpledrm
+display works on hardware.
+
+Before enabling DECON takeover: collect *read-only* trustworthy
+runtime S-Boot/DECON scanout register data if obtainable with
+a well-understood procedure, and verify driver clock/IRQ and
+framebuffer ownership assumptions. Until safe restoration is
+demonstrated, keep all testing compile-only and do not flash.
