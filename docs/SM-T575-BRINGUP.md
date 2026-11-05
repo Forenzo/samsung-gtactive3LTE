@@ -46,3 +46,32 @@ Source: the device owner's earlier September 30–October 1, 2026 test sessions.
 - [ ] LTE-specific postmarketOS Duranium image and updates
 
 See the original T570 documentation for its development status, **not** as evidence of T575 hardware compatibility.
+
+## Actual rooted-ADB inventory, 2026-11-05 (SM-T575 / T575XXSFEYI1)
+
+Source: owner-supplied output of `scripts/t575-inventory.sh --root`. **Only non-identifying hardware facts are included here**, not raw inventory, device identifiers or partition dumps.
+
+| Area | SM-T575 observation | SM-T570 upstream evidence | Implication |
+| --- | --- | --- | --- |
+| SoC | Exynos 9810, `universal9810`, vendor 4.9.191 kernel | Same Exynos 9810 / vendor 4.9.191 | Shared SoC driver work likely reusable; board wiring not proven |
+| Samsung codename | `gtactive3` | `gtactive3wifi` | Separate `gtactive3lte` DTS/model verification needed |
+| Audio codec | `rt5665` on 3-001b | `rt5665` on 3-001b | Likely reusable audio-codec layer |
+| **Speaker amplifier** | **TAS2562** at I2C 5-004c | **RT5510** at I2C 4-0034 on tested T570 hardware revision 4; T570 hardware notes mention TAS2562 on another revision | Do not reuse RT5510 board wiring; compare the TAS2562 DT/driver and audio-machine routes |
+| S Pen | `w90xx` on I2C 7-0056 | Wacom W90xx on I2C 6-0056 | Pen present; buses numbered differently, compare DT identities and wiring |
+| Touchscreen | `sec_touchscreen`, SPI 21 alias `hxcommon` | Himax touchscreen on SPI 21 | Candidate reuse; need actual DT sensor ID and reset/IRQ pins |
+| NFC / PMIC / MUIC | `sec-nfc`, `s2mps18mfd`, `max77705`, `sm5504_muic_pogo` | Same families documented | Likely shared drivers, but wiring still must be checked |
+| Camera | camera sensor on 0-002d, 1-0037; actuator at 2-000c; EEPROM at 2-0058 | Same sensor addresses, actuator/EEPROM arrangement can vary | Confirm camera models and regulators from DTB |
+| Device's boot security (current output) | `ro.boot.flash.locked=1`; `ro.boot.vbmeta.device_state=locked`; `ro.boot.verifiedbootstate=green`; `ro.boot.warranty_bit=0` | Upstream T570 used unlocked, orange verified boot | **Critical discrepancy** with owner's earlier successful Magisk/unlock test: do NOT flash; recheck current Download-mode status and Magisk state before any invasive action |
+| Storage | `sda` has 31 partitions, BOOT position `sda12` (60,416 KiB), DTBO `sda10` (8,192 KiB), userdata `sda31` | T570 notes list the same partition indices; sizes need strict check | Promising but **not** proof of interchangeable boot images |
+| LTE modem | Not enumerated by the present I2C/SPI-only inventory | Wi-Fi model has no LTE port | Modem transport and firmware remain unknown; investigate separately |
+
+### Immediate gate
+
+The currently reported **locked/green** state contradicts the earlier unlock/root observations. Even if `su` works, Magisk authorization alone does not establish the device's *current* Download-mode flashing permission. No bootloader, AVB, recovery, erase or flash instructions should be executed until that is resolved.
+
+### Next read-only evidence
+
+- On the Mac, inspect `adb shell getprop ro.boot.flash.locked`, `adb shell getprop ro.boot.vbmeta.device_state`, `adb shell getprop ro.boot.verifiedbootstate`, `adb shell su -c id` to confirm the discrepancy (no flashing).
+- Extract the **live device tree** with `adb exec-out su -c 'cat /sys/firmware/fdt'` to a **local private file** (if readable). Do not publish raw DTB; some paths may include identifiers.
+- Compare decompiled SM-T575 and upstream SM-T570 DTBs/DTBOs locally before drafting an LTE DTS. Verify actual amplifier regulator/GPIO routing and modem interfaces.
+- Continue refusing the inherited T570 installer on the LTE device.
