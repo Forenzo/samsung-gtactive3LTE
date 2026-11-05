@@ -61,13 +61,13 @@ Source: owner-supplied output of `scripts/t575-inventory.sh --root`. **Only non-
 | Touchscreen | `sec_touchscreen`, SPI 21 alias `hxcommon` | Himax touchscreen on SPI 21 | Candidate reuse; need actual DT sensor ID and reset/IRQ pins |
 | NFC / PMIC / MUIC | `sec-nfc`, `s2mps18mfd`, `max77705`, `sm5504_muic_pogo` | Same families documented | Likely shared drivers, but wiring still must be checked |
 | Camera | camera sensor on 0-002d, 1-0037; actuator at 2-000c; EEPROM at 2-0058 | Same sensor addresses, actuator/EEPROM arrangement can vary | Confirm camera models and regulators from DTB |
-| Device's boot security (current output) | `ro.boot.flash.locked=1`; `ro.boot.vbmeta.device_state=locked`; `ro.boot.verifiedbootstate=green`; `ro.boot.warranty_bit=0` | Upstream T570 used unlocked, orange verified boot | **Critical discrepancy** with owner's earlier successful Magisk/unlock test: do NOT flash; recheck current Download-mode status and Magisk state before any invasive action |
+| Device's boot security (current output) | `ro.boot.flash.locked=1`; `ro.boot.vbmeta.device_state=locked`; `ro.boot.verifiedbootstate=green`; `ro.boot.warranty_bit=0` | Upstream T570 used unlocked, orange verified boot | **Possibly masked Android properties**: prior Magisk unlock/root succeeded and owner confirms OEM unlocking enabled and device unlocked. Integrity-spoofing modules may explain locked/green getprop values; these properties alone cannot establish actual bootloader lock. Verify through Download mode before any flash |
 | Storage | `sda` has 31 partitions, BOOT position `sda12` (60,416 KiB), DTBO `sda10` (8,192 KiB), userdata `sda31` | T570 notes list the same partition indices; sizes need strict check | Promising but **not** proof of interchangeable boot images |
 | LTE modem | Not enumerated by the present I2C/SPI-only inventory | Wi-Fi model has no LTE port | Modem transport and firmware remain unknown; investigate separately |
 
 ### Immediate gate
 
-The currently reported **locked/green** state contradicts the earlier unlock/root observations. Even if `su` works, Magisk authorization alone does not establish the device's *current* Download-mode flashing permission. No bootloader, AVB, recovery, erase or flash instructions should be executed until that is resolved.
+The current Android **locked/green** properties conflict with the earlier successful unlock/root test and the owner's direct confirmation of an unlocked device. The tablet has run Magisk, TrickyStore and Play Integrity Fix, making property spoofing a possibility, not a verified explanation. Android getprop results alone should not be used to label the bootloader locked. Verify actual Download-mode state before any invasive action; no need to repeat unlocking or disrupt the working Magisk setup.
 
 ### Next read-only evidence
 
