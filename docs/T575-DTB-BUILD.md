@@ -55,3 +55,24 @@ peripheral node `reg` addresses. Independently confirm the actual TAS2562
 mainline driver/bindings; don't guess. Keep the inherited installer and
 automated release workflow for SM-T570 only until the LTE boot chain is
 separately verified.
+
+## Automatic build on GitHub Actions (recommended)
+
+This fork also has a **separate compile-only** workflow:
+[.github/workflows/t575-dtb-compile.yml](../.github/workflows/t575-dtb-compile.yml).
+It is scoped to `port/sm-t575-bringup` and source changes. It downloads the
+pinned kernel base from `patches/linux/BASE`, applies the numbered kernel
+patches, runs the native arm64 `defconfig` DTB target and uploads **only the
+DTB** for inspection. It does not build/flash Android BOOT or produce a
+Duranium image.
+
+To see progress, open your fork's **Actions** tab and look for
+`t575-dtb-compile`. New forks can have Actions disabled: enable them from
+the GitHub Actions page if GitHub offers the prompt. The workflow must be
+allowed to run on the branch. A successful green job means **DTB compiles**
+only, not that it is boot-safe. If it fails, retain the logs and fix the
+patch/DTB build failures before trying any device boot.
+
+This workflow has *not been verified as successful* yet. Its source download
+depends on GitHub archive availability. No output is presently cleared for
+flashing to the SM-T575.
