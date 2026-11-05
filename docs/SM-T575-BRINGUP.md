@@ -560,3 +560,29 @@ and read permissions have not been demonstrated.
 **Stage 12 hardware gate remains open** until the private results are
 reviewed and a T575-specific, tested restoration path is established.
 The LTE DTB must remain compile-only. Do not flash or alter Android.
+
+
+### Stage 12 first Android metadata report and diagnostic correction (2026-11-05)
+
+The owner ran the first read-only report successfully, but some probes were
+incomplete: Android reported two `/proc/fb` indices (`0` and `1`),
+while sysfs framebuffer attributes returned permission denied; the DT
+directory loop failed with `unexpected 'do'`. The script had passed its
+multiword `su -c` command without preserving shell argument quoting.
+The subsequent revision quotes the entire remote command, logs the SELinux
+context/permissions for diagnosis, and selects **early** display log lines
+instead of unrelated late SysMMU activity. Rerun before interpreting missing
+or inaccessible data.
+
+The first `/proc/iomem` report exposed active Android claims for
+DECON-F at `0x16030000–0x1603ffff`, DECON-T at
+`0x16050000–0x1605ffff`, dual DSIM at `0x16080000`
+and `0x16090000`, and several display SysMMUs. These confirm
+Android's present driver resource declarations only—not S-Boot window
+selection, actual IDMA scanout address, or the Linux simpledrm handover.
+Do not infer boot safety. The displayed kernel log tail contained only
+periodic SysMMU allocator messages with zero recorded faults in those
+lines, not useful initial display initialization evidence.
+
+The private original report remains on the owner's Mac. No identifying
+boot parameters or complete local reports are committed to GitHub.
