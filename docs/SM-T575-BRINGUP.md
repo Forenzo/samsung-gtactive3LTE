@@ -90,3 +90,22 @@ The owner checked `/proc/cmdline` with Magisk root. The live kernel boot argumen
 This is strong evidence that **the tablet is unlocked**, consistent with successful patched-boot tests and the owner's confirmation. The Android `ro.boot.*` properties in the earlier inventory instead reported green/locked/warranty 0; they conflict with the kernel cmdline and may be altered by the device's Play Integrity configuration. The specific cause has not been established. Do not interpret the earlier properties as proof of a locked bootloader. This does **not** establish that a new Linux image will boot correctly; preserve restoration procedures and do not flash yet.
 
 The owner has also extracted a **269 KiB live device tree** locally. Its validity/content has not been inspected yet. Raw DTBs and boot parameters may contain unique device identifiers; do not commit them to the public repository. The raw kernel command line included identifying fields that have deliberately been omitted here.
+
+## Validated live FDT examination (2026-11-05)
+
+The owner supplied a 275,783-byte FDT v17 with valid `0xd00dfeed` magic and parsable structure (1,289 nodes, 9,499 properties). This is the **running Android DT**, not a compiled mainline Linux DTS. It is deliberately **not stored in Git**.
+
+Confirmed high-value findings:
+
+- Board root `model = "Samsung GTACTIVE3 EUR OPEN 04 based on EXYNOS9810"`; root compatibles `samsung,armv8`, `samsung,exynos9810`. Kernel cmdline reports revision 5 and DTBO index 5. Model text is Samsung's board label and is not a Linux compatible string.
+- `/hsi2c@108C0000/tas2562@4c`: `compatible = "ti,tas2562"`, address `0x4c`, `status = "ok"`. The sibling `rt5510@34` is **disabled**. The tested SM-T570 rev4 upstream DTS currently enables RT5510, while upstream HARDWARE.md already notes that its revision 5 uses TAS2562. **Mainline audio board integration must select TAS2562 and validate reset/IRQ/supplies/DAI before enabling sound.**
+- `/sound`: `compatible = "samsung,exynos9810-audio-TI"`, rather than the Wi-Fi board's RT5510-oriented routes. Inspect TAS2562's audio link and upstream kernel driver coverage before constructing audio bindings.
+- `/hsi2c@10910000/wacom@56`: `wacom,w90xx` at 0x56 (Wacom S Pen).
+- `/reserved-memory/modem_if`: `compatible = "exynos,modem_if"`, reserved region base 0xf0000000, length 0x09200000; `/mif_pdata`: `compatible = "sec_modem,modem_pdata"`. **These prove Android describes a modem interface, not that mainline modem driver support exists.**
+- `/pcie0@116A0000`: enabled; `/pcie1@116B0000`: disabled in the running Android DT. The upstream T570 docs use PCIe1 for BCM4375. **Do not blindly copy Wi-Fi PCIe assignments**. Determine actual Wi-Fi/modem bus ownership and pinctrl from the T575 DT and runtime before enabling either port.
+- `/decon_board_hx83102e` exists, supporting the Himax panel-family identification, though panel timing/power sequencing still needs explicit comparison.
+- Live inventory previously confirmed RT5665, MAX77705, S2MPS18, SM5504, and the other listed shared hardware families.
+
+**Porting impact:** The first LTE-specific DTS should be based on a careful comparison of the fully assembled upstream Linux DTS to the sanitized Android hardware mapping, with LTE-specific audio, PCIe and modem sections disabled until supported. No T575 boot image, build test or flash is validated yet. The raw FDT may contain serial/identity properties and must remain private.
+
+Next: extract the **merged effective** T570 mainline DTS from the assembled upstream Linux tree (the patch series alone is not the complete final DTS); confirm the T575 TAS2562 driver/bindings and PCIe dependencies, and create a compile-only LTE target. Keep the upstream installer blocked on SM-T575 pending separate boot-chain verification.
