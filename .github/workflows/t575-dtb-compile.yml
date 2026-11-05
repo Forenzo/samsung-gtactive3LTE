@@ -81,6 +81,7 @@ jobs:
           file kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-memory.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-boot-basics.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          python3 scripts/audit-t575-peripherals.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
 
       - name: Save compile-only output
         if: success()
