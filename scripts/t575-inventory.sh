@@ -33,7 +33,7 @@ if [ "$MODEL" != SM-T575 ]; then
 fi
 if [ "$USE_ROOT" -eq 1 ]; then
   echo "Checking Magisk root authorization on the SM-T575..."
-  UID_ROOT=$(adb shell "su -c 'id -u'" 2>/dev/null | tr -d '\\r' | tr -d '\\n' || true)
+  UID_ROOT=$(adb shell "su -c 'id -u'" 2>/dev/null | tr -d '\r' | tr -d '\n' || true)
   if [ "$UID_ROOT" != 0 ]; then
     echo "Magisk root not granted. Allow the ADB shell superuser request on the tablet, then rerun." >&2
     exit 1
@@ -68,17 +68,17 @@ umask 077
   echo
   echo "## Input device driver names (avoid unique strings)"
   if [ "$USE_ROOT" -eq 1 ]; then
-    adb shell "su -c 'cat /proc/bus/input/devices'" 2>/dev/null | tr -d '\\r' | grep -E '^(N: Name=|H: Handlers=)' || true
+    adb shell "su -c 'cat /proc/bus/input/devices'" 2>/dev/null | tr -d '\r' | grep -E '^(N: Name=|H: Handlers=)' || true
   else
-    adb shell 'cat /proc/bus/input/devices 2>/dev/null' | tr -d '\\r' | grep -E '^(N: Name=|H: Handlers=)' || true
+    adb shell 'cat /proc/bus/input/devices 2>/dev/null' | tr -d '\r' | grep -E '^(N: Name=|H: Handlers=)' || true
   fi
   echo
   echo "## Device bus driver names"
   BUS_CMD='for d in /sys/bus/i2c/devices/* /sys/bus/spi/devices/*; do [ -d "$d" ] || continue; n=${d##*/}; if [ -r "$d/name" ]; then v=$(cat "$d/name" 2>/dev/null) && echo "$n: $v"; fi; if [ -r "$d/modalias" ]; then v=$(cat "$d/modalias" 2>/dev/null) && echo "$n alias: $v"; fi; done'
   if [ "$USE_ROOT" -eq 1 ]; then
-    adb shell "su -c '$BUS_CMD'" 2>/dev/null | tr -d '\\r'
+    adb shell "su -c '$BUS_CMD'" 2>/dev/null | tr -d '\r'
   else
-    adb shell "$BUS_CMD" 2>/dev/null | tr -d '\\r'
+    adb shell "$BUS_CMD" 2>/dev/null | tr -d '\r'
   fi
 
 } > "$OUT/inventory.txt"
@@ -95,4 +95,6 @@ For live DTB and hardware-register comparisons, a separate reviewed rooted
 snapshot may be necessary; preserve it OFF GitHub.
 EOF
 echo "Created $OUT/inventory.txt — local-only. Review carefully before sharing."
-[ "$USE_ROOT" -eq 1 ] && echo "Protected hardware fields were requested through Magisk root."
+if [ "$USE_ROOT" -eq 1 ]; then
+  echo "Protected hardware fields were requested through Magisk root."
+fi
