@@ -131,3 +131,12 @@
 &{/sound} {
 	status = "disabled";
 };
+
+/*
+ * The T575 stock DTBO overlay 5 limits the Himax touchscreen on SPI21
+ * to 7 MHz; the inherited T570 DTS described 10 MHz. Match the measured
+ * vendor board configuration without changing GPIOs, firmware or power.
+ */
+&{/soc@0/usi@13ae00c0/spi@13ae0000/touchscreen@0} {
+	spi-max-frequency = <7000000>;
+};
