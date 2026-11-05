@@ -76,6 +76,9 @@ jobs:
         run: |
           set -euo pipefail
           make -C kernel ARCH=arm64 defconfig
+          # Diagnostic-only config: built-in simpledrm, no LTE DECON takeover.
+          kernel/scripts/config --file kernel/.config -e DRM -e DRM_SIMPLEDRM
+          make -C kernel ARCH=arm64 olddefconfig
           bash scripts/build-t575-dtb.sh kernel
           test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           file kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
@@ -86,6 +89,7 @@ jobs:
           python3 scripts/audit-t575-display-input.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-display-handover.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-decon-source.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          python3 scripts/audit-t575-simpledrm.py kernel/.config kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
 
       - name: Save compile-only output
         if: success()
