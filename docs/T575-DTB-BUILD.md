@@ -135,3 +135,53 @@ The next phase is a *complete* audit of other stock reserved-memory nodes
 (secure camera, RKP/TIMA, camera CMA, TrustZone, debug) and boot chain, then
 a reversible non-flashing diagnostic boot strategy if the hardware allows.
 Plasma Mobile remains the target environment after kernel bring-up.
+
+## Stage 3: Stock SM-T575 fixed memory reservations
+
+The privately supplied stock SM-T575 Android FDT was decoded locally. It
+contains **15 fixed direct-child** `/reserved-memory` ranges; the latest
+LTE Linux DTS conservatively describes each using `no-map`, and the CI
+audit verifies the compiled binary contains the matching `reg` values.
+
+| Origin | Start | Size |
+| --- | --- | --- |
+| Samsung secure debug magic | `0x80000000` | 4 KiB |
+| Samsung KASLR marker | `0x80001000` | 4 KiB |
+| Camera contiguous pool | `0x95000000` | 10 MiB |
+| RKP | `0xaf600000` | 36 MiB |
+| TIMA | `0xb8000000` | 2 MiB |
+| Secure log | `0xc0000000` | 512 KiB |
+| Bootloader framebuffer | `0xca000000` | 20 MiB |
+| Secure camera | `0xe1900000` | 32 MiB |
+| Teegris | `0xed310000` | 8 KiB |
+| Modem interface | `0xf0000000` | 146 MiB |
+| CP RAM logging | `0xf9200000` | 32 MiB |
+| A-Box firmware | `0xfb200000` | 40 MiB |
+| Exynos snapshot/debug parent | `0xfda00000` | `0x01c08000` bytes |
+| FIMC-IS firmware library | `0xff780000` | 8.5 MiB |
+| Camera pool, high RAM | `0x880000000` | 180 MiB |
+
+The stock snapshot/debug node has eight nested log nodes, which are
+contained within its parent range. Linux needs only the parent-level
+reservation for the overlap check; adding overlapping child reservations
+would be counterproductive. The vendor DTB's `/memreserve/` header table
+was empty.
+
+**Two more stock nodes are dynamic allocations, not fixed reservations:**
+`/reserved-memory/video_stream` (108 MiB requested with allocation
+constraints) and `/reserved-memory/crypto` (24 MiB requested).
+Because neither provides a physical `reg` address, the CI does not invent
+one or claim to preserve their Android dynamic allocation behavior.
+
+**Limits of this audit:** These carveouts protect known fixed Android RAM
+regions from general Linux allocation. They do not prove the secure monitor
+or coprocessors tolerate Linux boot, that the memory owner/firmware states
+are correct, or that the T570 driver/bus initialization is safe for T575.
+Future drivers may require proper `memory-region` phandles and supported
+reserved-memory bindings rather than blanket `no-map`; revisit them when
+those drivers are ported.
+
+The current image is **compile-only and must not be flashed**. Next check
+the boot chain, U-Boot / uniLoader entry path, kernel load addresses,
+recovery strategy and powered-off USB debugging before any real boot test.
+Plasma Mobile remains the end-user goal.
