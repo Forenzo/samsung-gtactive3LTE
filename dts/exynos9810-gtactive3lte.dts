@@ -22,6 +22,69 @@
 		#size-cells = <1>;
 		ranges;
 
+
+		/*
+		 * Additional fixed carveouts from the live SM-T575 Android FDT.
+		 * Preserve all of these during *diagnostic* bring-up, even though
+		 * the corresponding Samsung proprietary drivers aren't enabled.
+		 * The dynamic ION video_stream and crypto pools have no fixed
+		 * physical addresses and must be audited separately.
+		 */
+		t575_sec_debug: sec-debug@80000000 {
+			reg = <0x0 0x80000000 0x00001000>;
+			no-map;
+		};
+
+		t575_kaslr: kaslr@80001000 {
+			reg = <0x0 0x80001000 0x00001000>;
+			no-map;
+		};
+
+		t575_camera_contig: camera-contig@95000000 {
+			reg = <0x0 0x95000000 0x00a00000>;
+			no-map;
+		};
+
+		t575_rkp: rkp@af600000 {
+			reg = <0x0 0xaf600000 0x02400000>;
+			no-map;
+		};
+
+		t575_tima: tima@b8000000 {
+			reg = <0x0 0xb8000000 0x00200000>;
+			no-map;
+		};
+
+		t575_secure_log: secure-log@c0000000 {
+			reg = <0x0 0xc0000000 0x00080000>;
+			no-map;
+		};
+
+		t575_secure_camera: secure-camera@e1900000 {
+			reg = <0x0 0xe1900000 0x02000000>;
+			no-map;
+		};
+
+		t575_teegris: teegris@ed310000 {
+			reg = <0x0 0xed310000 0x00002000>;
+			no-map;
+		};
+
+		t575_exynos_ss: exynos-ss@fda00000 {
+			reg = <0x0 0xfda00000 0x01c08000>;
+			no-map;
+		};
+
+		t575_fimc_lib: fimc-lib@ff780000 {
+			reg = <0x0 0xff780000 0x00880000>;
+			no-map;
+		};
+
+		t575_camera: camera-pool@880000000 {
+			reg = <0x8 0x80000000 0x0b400000>;
+			no-map;
+		};
+
 		/*
 		 * Samsung stock FDT reserves the entire 20 MiB S-Boot handover
 		 * framebuffer, not just the 1200x1920x4 visible pixel bytes.
