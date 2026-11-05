@@ -404,3 +404,39 @@ Do not flash or enable the panel on this evidence alone. The next gates
 are controller GPIO polarity verification, Wacom enable-line mapping,
 the boot framebuffer handover implementation, and suitable native
 panel binding/DSI timing design.
+
+
+## Stage 9: Linux display-handover validation (compile-only)
+
+CI now runs `scripts/audit-t575-display-handover.py` against the compiled
+SM-T575 DTS to verify the **description** of the bootloader framebuffer:
+
+- `/chosen/framebuffer-0` uses `simple-framebuffer`,
+  1200×1920, 4800 bytes/line, `x8r8g8b8`: visible data
+  occupies 9,216,000 bytes.
+- The `memory-region` phandle must point to
+  `/reserved-memory/framebuffer@ca000000`, whose stock
+  handover reservation is `0xca000000` + `0x01400000`
+  (20 MiB), with `no-map`. The visible surface must fit.
+- The Linux simple-framebuffer **YAML binding explicitly permits
+  `memory-region` instead of `reg`**: its region overrides any
+  `reg` property. Hence lack of `reg` by itself is not a
+  correctness failure. Reference:
+  https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/display/simple-framebuffer.yaml
+- `/soc@0/display-controller@16030000` must describe
+  `samsung,exynos9810-decon-takeover`; `/panel` must
+  stay disabled while native HX83102E driver, DSI timings, regulator
+  supplies, GPIO polarity and sequence are unresolved.
+
+**LIMITATIONS:** This verifies only the compiled device-tree metadata,
+not whether the kernel's actual DECON driver supports seamless
+handover, whether the framebuffer address is what the bootloader
+scans out, or whether display clocks/power survive Linux initialization.
+No native panel/DSI power-up is authorized. The vendor overlay's
+`resolution=<600 1920>` and the 1200×1920 framebuffer remain
+unreconciled.
+
+**Before considering any boot:** inspect the pinned kernel's
+`exynos9810-decon-takeover` driver and simple framebuffer interaction,
+verify bootloader scanout and display clock ownership, and establish
+a tested, reversible restoration method. Do not flash the present DTB.
