@@ -46,6 +46,37 @@ def survey(dtb):
             if len(matches) > 45:
                 print(f"  ... {len(matches)-45} additional matches omitted")
 
+    # Safety gates for the T575, not a claim of driver functionality.
+    # The Wi-Fi-model amplifier is definitely wrong for the selected LTE overlay.
+    expected = {
+        "/soc@0/usi@108c00c0/i2c@108c0000/amplifier@34": ("richtek,rt5510", "disabled"),
+        "/sound": ("samsung,gtactive3-audio", "disabled"),
+        "/soc@0/usi@13ae00c0/spi@13ae0000/touchscreen@0": ("himax,hx83102e", "okay"),
+        "/soc@0/usi@109100c0/i2c@10910000/digitizer@56": ("wacom,w9019", "okay"),
+        "/panel": (None, "disabled"),
+    }
+    problems = []
+    print("\\n== T575 STATIC INVARIANTS ==")
+    for path, (compatible, status) in expected.items():
+        props = nodes.get(path)
+        if props is None:
+            problems.append(f"{path}: node absent")
+            continue
+        got_status = state(props)
+        got_comp = strings(props.get("compatible", b""))
+        if got_status != status:
+            problems.append(f"{path}: status {got_status}, expected {status}")
+        if compatible and compatible not in got_comp.split(", "):
+            problems.append(f"{path}: unexpected compatible {got_comp}")
+        print(f"  [{got_status}] {path}")
+    # Do not mistake a missing TAS2562 Linux node for supported audio.
+    active_tas = [(p, v) for p, v in nodes.items()
+                  if "ti,tas2562" in strings(v.get("compatible", b"")) and state(v) == "okay"]
+    if active_tas:
+        problems.append("TAS2562 is enabled without a validated LTE ASoC configuration")
+    for item in problems:
+        print("ERROR: " + item, file=sys.stderr)
+
     # Report non-equivalence; never auto-enable these based on matching names.
     print("\nRequired manual checks before any T575 boot or driver enablement:")
     print(" - Panel GPIO polarity, regulators and reset order, and 600x1920-vs-1200x1920 timings")
@@ -54,6 +85,9 @@ def survey(dtb):
     print(" - rt5510 disabled and tas2562 codec/ASoC bindings verified")
     print(" - Confirm active DT status with parents and aliases, not child status alone")
     print(" - Modem stays disabled; this is NOT a boot-tested DTB")
+    if problems:
+        return 1
+    print("PASS: T575 compile-only audio isolation and inherited touch/pen paths verified.")
     return 0
 
 if __name__ == "__main__":
