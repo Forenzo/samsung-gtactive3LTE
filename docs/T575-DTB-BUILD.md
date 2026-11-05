@@ -107,3 +107,31 @@ world, camera and debug reservations which have not been fully reconciled
 against the assembled Linux DTB. This is **not approved for flashing or a
 boot test**; other reservations must be audited, and device-specific
 bootloader and memory placement need separate verification.
+
+## Stage 2: USB / UFS / display static checks
+
+Samsung's private SM-T575 FDT confirms:
+- USB DWC3 parent at `0x10c00000`
+- UFS host at `0x11120000`
+- Himax panel / boot display geometry `1200x1920`
+- S-Boot framebuffer reserved span `0xca000000..0xcb400000`
+  (**20 MiB**, versus the earlier 8.79 MiB Linux pixel buffer carveout).
+
+The LTE DTS now **extends** the inherited framebuffer reservation to the
+full stock 20 MiB. `scripts/audit-t575-memory.py` asserts that span, checks
+the three LTE/A-Box carveouts, and rejects overlapping direct-child
+`/reserved-memory` regions.
+
+The new `scripts/audit-t575-boot-basics.py` runs against the actual built
+DTB, checking the controller node addresses, DWC3 compatible, simple
+framebuffer geometry and memory-region phandle, and LTE model compatible.
+
+**Scope:** this validates node presence and basic addresses only. It does not
+prove USB enumerates, that UFS can read safely, that display timing is
+correct, or that peripheral clocks and regulators are wired for the LTE
+hardware revision. Do not flash this DTB.
+
+The next phase is a *complete* audit of other stock reserved-memory nodes
+(secure camera, RKP/TIMA, camera CMA, TrustZone, debug) and boot chain, then
+a reversible non-flashing diagnostic boot strategy if the hardware allows.
+Plasma Mobile remains the target environment after kernel bring-up.
