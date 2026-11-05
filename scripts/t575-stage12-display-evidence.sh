@@ -15,15 +15,19 @@ out="${1:-./t575-stage12-$(date -u +%Y%m%dT%H%M%SZ)}"
 mkdir -m 700 "$out"
 probe() {
   local filename="$1"; shift
-  if ! adb shell su -c "$*" > "$out/$filename" 2>&1; then
+  # ADB otherwise splits the su -c argument and Android sh parses loops incorrectly.
+  local quoted
+  printf -v quoted "%q" "$*"
+  if ! adb shell "su -c $quoted" > "$out/$filename" 2>&1; then
     printf '\n(probe unavailable on this kernel)\n' >> "$out/$filename"
   fi
 }
 probe 01-framebuffer.txt 'cat /proc/fb 2>&1; for x in /sys/class/graphics/fb*/name /sys/class/graphics/fb*/virtual_size /sys/class/graphics/fb*/stride /sys/class/graphics/fb*/bits_per_pixel /sys/class/graphics/fb*/modes; do if [ -f "$x" ]; then echo "=== $x"; cat "$x"; fi; done'
 probe 02-memory-mapping.txt 'cat /proc/iomem; cat /proc/meminfo | head -n 10'
-probe 03-display-logs.txt 'dmesg | grep -i -E "decon|display|dpu|dsim|framebuffer|simpledrm|simplefb|fb0|iommu|sysmmu" | tail -n 180'
+probe 03-display-logs.txt 'dmesg | grep -i -E "decon|display|dpu|dsim|framebuffer|simpledrm|simplefb|fb0|iommu|sysmmu" | head -n 180'
 probe 04-boot-metadata.txt 'cat /proc/cmdline; cat /proc/device-tree/model 2>/dev/null; echo; getprop ro.boot.bootloader; getprop ro.boot.dtbo_idx; getprop ro.boot.verifiedbootstate'
 probe 05-dt-display.txt 'for x in /proc/device-tree/chosen/framebuffer-0 /sys/firmware/devicetree/base/chosen/framebuffer-0 /proc/device-tree/reserved-memory/bootloader_fb; do if [ -d "$x" ]; then echo "=== $x"; ls -l "$x"; fi; done'
+probe 06-access-check.txt 'id; id -Z 2>/dev/null; ls -ld /sys/class/graphics /sys/class/graphics/fb0 /sys/class/graphics/fb0/name /proc/fb'
 cat > "$out/README.txt" <<'END'
 SM-T575 Stage 12 read-only display/boot ownership evidence.
 The output may contain device identifiers, addresses, kernel command-line
