@@ -126,11 +126,12 @@ def main():
     else:
         print("PASS: BOOT FDT candidates and selected DTBO structurally validated.")
     print("UNVERIFIED: correct revision, actual Android overlay selection, merged DT, boot restoration.")
-    print("NO BOOT/FLASH APPROVAL. No file changes or device access.")\n    return 0 if found else 2
+    print("NO BOOT/FLASH APPROVAL. No file changes or device access.")
+    return 0 if found else 2
 
 if __name__ == "__main__":
     try:
-        main()
+        sys.exit(main())
     except (OSError, ValueError, struct.error) as exc:
         print(f"Stage 25 FAIL: {exc}", file=sys.stderr)
         sys.exit(1)
