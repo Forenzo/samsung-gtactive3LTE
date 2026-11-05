@@ -7,7 +7,7 @@ on:
     branches:
       - port/sm-t575-bringup
     paths:
-      - "dts/**"
+      - "dts/**"\n      - "scripts/audit-t575-*.py"
       - "scripts/build-t575-dtb.sh"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
@@ -79,6 +79,7 @@ jobs:
           test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           file kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-memory.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          python3 scripts/audit-t575-boot-basics.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
 
       - name: Save compile-only output
         if: success()
