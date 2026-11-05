@@ -65,7 +65,7 @@ jobs:
           [[ ${#patches[@]} -gt 100 ]] || { echo "Patch series incomplete" >&2; exit 1; }
           for patch in "${patches[@]}"; do
             echo "::group::Applying $patch"
-            git -C kernel am --quiet "../$patch"
+            git -C kernel am --3way --quiet "../$patch"
             echo "::endgroup::"
           done
 
