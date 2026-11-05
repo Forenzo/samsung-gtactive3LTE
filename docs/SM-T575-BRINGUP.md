@@ -262,3 +262,52 @@ compatible bindings. Inspect panel timing and reset polarity; do not
 enable touchscreen/S Pen/audio on an unverified kernel. Keep LTE modem
 driver off for first-stage bring-up. No T575 boot testing/flash is
 authorized by these findings.
+
+
+## Stage 5 CI: Linux peripheral inventory (2026-11-05)
+
+[Run 42045638678](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/42045638678)
+completed successfully. The advisory audit `scripts/audit-t575-peripherals.py`
+enumerated the compiled, T570-derived T575 Linux DTB. Its output
+is **static evidence only** and must not be interpreted as driver probe,
+device communication or proof of safe power sequencing.
+
+Key observed compiled Linux nodes:
+
+| Area | Compiled Linux DT path | Status / compatible |
+| --- | --- | --- |
+| Touch | `/soc@0/usi@13ae00c0/spi@13ae0000/touchscreen@0` | okay / `himax,hx83102e` |
+| Wacom | `/soc@0/usi@109100c0/i2c@10910000/digitizer@56` | okay / `wacom,w9019` |
+| Display controller | `/soc@0/display-controller@16030000` | okay / `samsung,exynos9810-decon-takeover` |
+| Boot framebuffer | `/chosen/framebuffer-0` | `simple-framebuffer` |
+| Native panel node | `/panel` | **disabled** |
+| Headset codec | `/soc@0/usi@104800c0/i2c@10480000/audio-codec@1b` | okay / `realtek,rt5665` |
+| Wi-Fi-derived amp | `/soc@0/usi@108c00c0/i2c@108c0000/amplifier@34` | **okay / `richtek,rt5510`** |
+| Wacom supply | `/regulator-wacom` | okay / `regulator-fixed` |
+| A-Box controller | `/soc@0/audio-controller@17c50000` | okay / `samsung,exynos9810-abox` |
+
+**Important hardware mismatch**: The selected stock SM-T575 overlay 5
+declares `ti,tas2562` at I²C address `0x4c` and explicitly disables
+`rt5510@34` in a later fragment. The inherited Linux DTB still
+describes RT5510 as enabled. **Do not assume the current Linux audio
+configuration is safe to boot or can successfully probe the LTE hardware.**
+Audit whether the appropriate TAS2562 binding and ASoC topology are
+available; if any early test image is considered, explicitly exclude
+or disable unverified amp probing before testing.
+
+**Display prerequisite**: The Linux panel node remains disabled; the
+current `simple-framebuffer` plus DECON takeover is not proof that
+Linux can natively reinitialize HX83102E. Validate display handover,
+power sequencing, resolution mismatch (600×1920 panel vendor field
+vs 1200×1920 effective framebuffer/touch), and GPIO polarity.
+
+**Touch/pen prerequisite**: Paths suggest Linux descriptions already
+exist for Himax on SPI `0x13ae0000` and Wacom on I²C `0x10910000`.
+Confirm Samsung's SPI21/HSI2C23 aliases map to those addresses, compare
+GPIO pinctrl and supplies and verify firmware loading before assuming
+device operation. The advisory audit's `okay` status reflects the
+device-tree property, not actual hardware behavior.
+
+The next step is to inspect the inherited T570 DTS/pinctrl/ASoC
+binding and make **targeted compile-only LTE overrides** where
+fully justified. Do not flash the current DTB.
