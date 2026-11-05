@@ -202,3 +202,63 @@ Before proposing even a reversible boot attempt, still required:
 
 **Do not flash or boot with the current compile-only DTB.** Following a
 successful kernel bring-up, the intended GUI remains **Plasma Mobile**.
+
+
+## Stock DTBO overlay 5: verified peripherals (2026-11-05)
+
+Owner extracted the selected Samsung overlay index 5 (Android DT table version
+0, six entries; overlay at `0x900e0`, size 119332 bytes) from the private
+T575 DTBO partition and decompiled it locally. These are *stock Android*
+device-tree values, **not** validation of mainline driver compatibility or
+permission to flash. The raw DTBO and decompiled firmware are deliberately
+excluded from the public repository.
+
+### Panel power and transport
+
+- `hx83102e` display node: four DSI lanes, 60 Hz, power GPIO LDO
+  `gpg2-2`, buck `gph1-4`, reset `gpa3-4`, `gpio_con` on `gpa2-5`.
+- Stock power-up description asserts LDO, delays 2000 microseconds,
+  asserts buck, delays 2000 microseconds; reset sequence is high 2000,
+  low 1000, high 6000 microseconds. Do **not** transcribe vendor
+  string-programmed sequences directly to Linux standard GPIO/regulator
+  properties without checking polarity, voltage and sequencing.
+- Panel node `resolution = <0x258 0x780>` (600×1920) while touch
+  coordinates are 1200×1920, and inherited T570 simple framebuffer is
+  1200×1920. Determine why the values differ before writing DRM timings.
+- Framebuffer handover is 20 MiB at `0xca000000`, already reserved by
+  compile-only DTS.
+
+### Touch and stylus
+
+- Himax `himax,hxcommon` at `spi_21`, `reg = <0>`,
+  `spi-max-frequency = <0x6acfc0>` (7 MHz), IRQ `gpa1-0`,
+  reset `gpg0-6`, controller-data CS `gph0-7`.
+  Touch/display coordinates 1200×1920; firmware path
+  `tsp_himax/hx83102e_gtactive3.bin`.
+- Wacom `wacom,w90xx` at `hsi2c_23`, address `0x56`,
+  IRQ `gpa3-3`, pen detect `gpa3-7`, FW enable `gpm41-0`,
+  supply `wacom_ldo_en` (3.3 V, boot-on), firmware path
+  `epen/w9019_gtactive3.bin`. Calibration and axis invert still
+  require driver work.
+
+### Audio amplifier selection resolved
+
+- Earlier fragment 19 declares Richtek `rt5510@34` as enabled.
+- **Later fragment 101 explicitly sets `rt5510@34 status = "disabled"`**
+  and declares `ti,tas2562` at address `0x4c`, `status = "ok"`,
+  reset `gpm40-0`, IRQ `gpa1-1`, `#sound-dai-cells = <1>`.
+- Thus the selected overlay intends TAS2562, not RT5510. Its ASoC
+  machine description also names `samsung,exynos9810-audio-TI` and
+  references the `tas2562` DAI.
+- **No active Linux TAS2562 device was proven by this static reading.**
+  Keep inherited T570 audio disabled during any future initial boot
+  bring-up until driver, supply, pinctrl and codec routing are audited.
+
+### Important next gates
+
+Compare parent/controller paths, pinctrl labels, and regulator supply
+names to the compiled T570-derived Linux DTB; translate only verified
+compatible bindings. Inspect panel timing and reset polarity; do not
+enable touchscreen/S Pen/audio on an unverified kernel. Keep LTE modem
+driver off for first-stage bring-up. No T575 boot testing/flash is
+authorized by these findings.
