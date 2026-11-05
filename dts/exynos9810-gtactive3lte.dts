@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/*
+ * Samsung Galaxy Tab Active3 LTE (SM-T575), first-stage DTS.
+ *
+ * COMPILE-ONLY / NEVER FLASH: this extends the assembled upstream SM-T570
+ * device tree; inherited peripherals have NOT been validated on SM-T575.
+ * The include provides /dts-v1/, the base SoC and shared board definitions.
+ *
+ * Evidence: owner SM-T575 live Android FDT, hw revision 5, DTBO index 5.
+ * TAS2562 is enabled in that FDT, RT5510 disabled, WLAN PCIe0 enabled.
+ *
+ * The first pass disables the unverified I/O and Wi-Fi/BT paths. Actual
+ * TAS2562 amplifier node and LTE modem support need separate verified DT
+ * bindings and driver work; do not simply enable the RT5510 sound card.
+ */
+#include "exynos9810-gtactive3wifi.dts"
+
+/ {
+	model = "Samsung Galaxy Tab Active3 LTE (SM-T575)";
+	compatible = "samsung,gtactive3lte", "samsung,exynos9810";
+
+	/*
+	 * Wi-Fi version's card describes RT5510, but our revision-5
+	 * stock firmware enables TI TAS2562 at I2C 0x4c instead.
+	 * Leave the card disabled until the codec/amp DAI graph is rebuilt.
+	 */
+	sound {
+		status = "disabled";
+	};
+};
+
+/*
+ * Inherited SM-T570 RT5510 amp (stock SM-T575 says status disabled).
+ * Keep phandle node available because the inherited sound-card
+ * references it, but ensure neither amp nor card binds.
+ */
+&hsi2c_18 {
+	amplifier@34 {
+		status = "disabled";
+	};
+};
+
+/*
+ * Both stock T575 FDT and upstream T570 describe PCIe controller 0
+ * (ELBI at 0x116a0000) as the WLAN path. The earlier conjecture that
+ * the T570 used PCIe1 was incorrect. Temporarily disable PCIe0 and
+ * Bluetooth until GPIO/regulator/firmware comparisons are complete.
+ */
+&pcie_0 {
+	status = "disabled";
+};
+
+&serial_1 {
+	status = "disabled";
+};
