@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 EXPECTED = {
+    "framebuffer@ca000000": (0xCA000000, 0x01400000),
     "modem@f0000000": (0xF0000000, 0x09200000),
     "modem-log@f9200000": (0xF9200000, 0x02000000),
     "abox@fb200000": (0xFB200000, 0x02800000),
@@ -98,7 +99,7 @@ def main(dtb):
         for err in errors:
             print("ERROR:", err, file=sys.stderr)
         return 1
-    print("PASS: SM-T575 modem/A-Box carveouts present, no direct-child reserved-memory overlaps")
+    print("PASS: SM-T575 framebuffer/modem/A-Box carveouts present, no direct-child reserved-memory overlaps")
     return 0
 
 if __name__ == "__main__":
