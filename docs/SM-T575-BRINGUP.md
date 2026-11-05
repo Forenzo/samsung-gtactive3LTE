@@ -521,3 +521,42 @@ S-Boot scanout address and framebuffer ownership via safe read-only
 methods, and prove a T575-specific reliable recovery path. No changes
 to `efs`, `sec_efs`, modem identity partitions or working Android.
 Do not flash this DTB.
+
+
+## Stage 12: read-only Android framebuffer/boot ownership evidence (2026-11-05)
+
+The owner reported Stage 11 finished. The connector did not expose a
+successful GitHub Actions conclusion (combined commit statuses and PR-run
+lookup both returned empty lists), so **Stage 11 CI success is not
+independently verified here**. Stage 12 proceeds only with non-invasive work.
+
+Added `scripts/t575-stage12-display-evidence.sh` for the owner's Mac.
+It refuses anything other than exactly one authorized Android ADB device
+whose `ro.product.model` is `SM-T575`, requires working Magisk `su`,
+and captures read-only framebuffer/sysfs descriptions, `/proc/iomem`,
+selected boot-time display logs, and boot metadata. It writes into a
+private, newly created local directory. No raw partition contents, MMIO
+reads, sysfs writes, reboot, flash, boot-image generation, unlock or
+module load are performed.
+
+Run from the Mac while the existing rooted Android is booted:
+
+```bash
+bash scripts/t575-stage12-display-evidence.sh
+```
+
+**Privacy:** The results may include serial-like boot parameters or other
+unique identifiers. Do not commit or paste the unredacted directory into
+this public repository. Inspect/redact before sharing selected excerpts.
+
+**Interpretation boundary:** This snapshot describes **Android's** current
+framebuffer and memory mapping. It does not necessarily reveal S-Boot's
+pre-Linux scanout state, nor prove that the Linux `simpledrm` path can
+keep the panel lit. Android may mask `/proc/iomem`; absent or zeroed
+addresses are inconclusive. Directly reading live DECON MMIO registers
+is deliberately *not* attempted, because safe clock/power-domain access
+and read permissions have not been demonstrated.
+
+**Stage 12 hardware gate remains open** until the private results are
+reviewed and a T575-specific, tested restoration path is established.
+The LTE DTB must remain compile-only. Do not flash or alter Android.
