@@ -16,12 +16,6 @@ mk="$dtsdir/Makefile"
   echo "Missing patched T570 kernel DTS / Makefile: $dtsdir" >&2
   exit 1
 }
-for token in 'pcie_0:' 'serial_1:' 'hsi2c_18:' 'rt5510:'; do
-  if ! grep -Fq "$token" "$upstream"; then
-    echo "Cannot find upstream label $token; update the LTE overlay first." >&2
-    exit 1
-  fi
-done
 if [[ -e "$target" ]] && ! cmp -s "$source_dts" "$target"; then
   echo "Refusing to replace existing LTE DTS with different content: $target" >&2
   exit 1
@@ -30,6 +24,6 @@ cp "$source_dts" "$target"
 if ! grep -Fq 'exynos9810-gtactive3lte.dtb' "$mk"; then
   printf '\ndtb-$(CONFIG_ARCH_EXYNOS) += exynos9810-gtactive3lte.dtb\n' >> "$mk"
 fi
-echo "Compiling SM-T575 DTB only (no kernel image, no flash)..."
+echo "Compiling SM-T575 identity-only prototype DTB (no kernel image, no flash)..."
 make -C "$kernel" ARCH=arm64 exynos/exynos9810-gtactive3lte.dtb
 echo "DTB compile completed; hardware validation and reversible boot procedure still REQUIRED."
