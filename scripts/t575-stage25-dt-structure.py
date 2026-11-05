@@ -6,6 +6,7 @@ No ADB, writes, extracted files, device identifiers or flashing.
 Index 5 is a previously observed Android boot argument, not freshly verified.
 """
 import argparse
+import io
 from pathlib import Path
 import struct
 import sys
@@ -74,7 +75,31 @@ def main():
         if not dtb or offset + dtb > boot.stat().st_size:
             raise ValueError("BOOT embedded DTB outside image bounds")
         print(f"  embedded BOOT DTB segment: offset={offset}, length={dtb}")
-        fdt_header(handle, offset, dtb, "BOOT FDT")
+        handle.seek(offset)
+        payload = handle.read(dtb)
+        print(f"  BOOT DTB segment prefix (hex): {payload[:16].hex()}")
+        # A BOOT v2 DTB segment may be vendor-packaged rather than a
+        # single raw FDT. Locate and validate candidates without exporting
+        # the proprietary DT data or presuming a format.
+        marker = bytes.fromhex("d00dfeed")
+        found = []
+        cursor = 0
+        while True:
+            relative = payload.find(marker, cursor)
+            if relative < 0:
+                break
+            cursor = relative + 4
+            try:
+                fdt_header(io.BytesIO(payload), relative, len(payload) - relative,
+                           f"BOOT FDT candidate at segment offset {relative}")
+                found.append(relative)
+            except ValueError:
+                continue
+        if not found:
+            print("  BOOT segment is NOT a validated raw FDT or located FDT sequence.")
+            print("  This does not imply the byte-matched Android BOOT backup is corrupt.")
+        else:
+            print(f"  validated embedded FDT offsets: {found}")
     with dtbo.open("rb") as handle:
         b = handle.read(32)
         if len(b) != 32:
@@ -96,9 +121,12 @@ def main():
         print(f"  selected DTBO index (historical): {args.overlay}/{count - 1}")
         print(f"  DTBO payload: offset={offset}, length={length}")
         fdt_header(handle, offset, length, "selected overlay FDT")
-    print("PASS: BOOT DTB and selected DTBO headers/regions are structurally consistent.")
+    if not found:
+        print("PARTIAL: selected DTBO validates, BOOT DTB packaging remains unresolved.")
+    else:
+        print("PASS: BOOT FDT candidates and selected DTBO structurally validated.")
     print("UNVERIFIED: correct revision, actual Android overlay selection, merged DT, boot restoration.")
-    print("NO BOOT/FLASH APPROVAL. No file changes or device access.")
+    print("NO BOOT/FLASH APPROVAL. No file changes or device access.")\n    return 0 if found else 2
 
 if __name__ == "__main__":
     try:
