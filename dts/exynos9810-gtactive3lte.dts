@@ -15,4 +15,27 @@
 / {
 	model = "Samsung Galaxy Tab Active3 LTE (SM-T575)";
 	compatible = "samsung,gtactive3lte", "samsung,exynos9810";
+
+	/* Exclude LTE modem / coprocessor RAM even while their drivers are off. */
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+
+		t575_modem_mem: modem@f0000000 {
+			reg = <0x0 0xf0000000 0x09200000>;
+			no-map;
+		};
+
+		t575_modem_log: modem-log@f9200000 {
+			reg = <0x0 0xf9200000 0x02000000>;
+			no-map;
+		};
+
+		/* Vendor A-Box firmware region: DT node name differs from reg. */
+		t575_abox_mem: abox@fb200000 {
+			reg = <0x0 0xfb200000 0x02800000>;
+			no-map;
+		};
+	};
 };
