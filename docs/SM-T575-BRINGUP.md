@@ -367,3 +367,40 @@ and **not** a guarantee of driver, pinmux or regulator compatibility.
 No T575 peripheral is newly enabled. Native panel and the inherited
 RT5510/AsoC board audio remain disabled until separate physical and
 driver compatibility validation. Do not flash Linux binaries.
+
+
+## Stage 8 results: resolved Linux phandles (2026-11-05)
+
+[GitHub Actions run 42051671853](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/42051671853) **passed** its compile-only checks.
+
+- Himax `/soc@0/usi@13ae00c0/spi@13ae0000/touchscreen@0`:
+  interrupt-parent resolves to `/soc@0/pinctrl@14050000/gpa1-gpio-bank`;
+  `interrupts=<0 2>`; `reset-gpios=<phandle 6 1>`
+  resolves to `/soc@0/pinctrl@10430000/gpg0-gpio-bank`.
+  Pinctrl references resolve to `touch-irq-pins` and
+  `touch-rst-pins`. The SPI speed is 7 MHz.
+  The numeric final GPIO/IRQ cells' precise polarity semantics
+  remain dependent on the binding and driver.
+- Wacom `/soc@0/usi@109100c0/i2c@10910000/digitizer@56`:
+  interrupt-parent resolves to `gpa3-gpio-bank`, `interrupts=<3 8>`,
+  `vdd-supply` resolves to `/regulator-wacom`, and pinctrl points to
+  `epen-irq-pins`.
+- Wacom supply `/regulator-wacom`: `regulator-name=wacom_3.3v`,
+  minimum and maximum both 3,300,000 microvolts.
+  The control `gpio=<phandle 0 0>` has not yet been traced to a bank.
+- Simple framebuffer `/chosen/framebuffer-0`: width 1200, height
+  1920, stride 4800 bytes, `x8r8g8b8`. It lacks a direct `reg` but
+  has `memory-region` linked to
+  `/reserved-memory/framebuffer@ca000000`. Confirm boot framebuffer
+  driver/hand-over binding handles that representation before boot.
+- Native `/panel` stays disabled, lacks `compatible`,
+  reset/enable GPIO and supply properties, and references a
+  `/soc@0/backlight@16080000` provider. Thus **native HX83102E
+  initialization is not implemented** by the current DTB.
+
+All findings are static phandle resolutions from a **compiled Linux
+DTB**, not observations of live Linux drivers or validated pin polarity.
+Do not flash or enable the panel on this evidence alone. The next gates
+are controller GPIO polarity verification, Wacom enable-line mapping,
+the boot framebuffer handover implementation, and suitable native
+panel binding/DSI timing design.
