@@ -113,3 +113,21 @@
 		};
 	};
 };
+
+/*
+ * SM-T575 stock overlay 5 selects TI TAS2562 at 0x4c and explicitly
+ * disables the Richtek RT5510 at 0x34. The inherited SM-T570 audio
+ * machine and amplifier topology therefore cannot be used unchanged.
+ *
+ * Keep the wrong amp and board sound card disabled in this compile-only
+ * prototype. Do NOT enable TAS2562 until its controller mapping, supplies,
+ * reset/IRQ polarity, codec driver and ASoC DAI topology are validated.
+ * No physical probe or boot test has been performed.
+ */
+&{/soc@0/usi@108c00c0/i2c@108c0000/amplifier@34} {
+	status = "disabled";
+};
+
+&{/sound} {
+	status = "disabled";
+};
