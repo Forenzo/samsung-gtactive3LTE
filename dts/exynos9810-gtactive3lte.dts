@@ -128,6 +128,26 @@
 	status = "disabled";
 };
 
+/*
+ * LTE-specific TAS2562 speaker amplifier, verified from Android DTBO #5:
+ *  - same HSI2C controller as disabled T570 RT5510
+ *  - 7-bit address 0x4c, compatible "ti,tas2562"
+ *  - sound-dai = <&tas2562 0> referenced by vendor /sound/uaif@1/codec
+ *  - #sound-dai-cells = <1>
+ *
+ * Deliberately DISABLED: Linux driver binding, audio supplies, shutdown
+ * and reset handling, pinctrl, ABOX UAIF1 clocks and machine-card routing
+ * have not been validated together. DO NOT make okay or enable sound yet.
+ */
+&{/soc@0/usi@108c00c0/i2c@108c0000} {
+	t575_tas2562: amplifier@4c {
+		compatible = "ti,tas2562";
+		reg = <0x4c>;
+		#sound-dai-cells = <1>;
+		status = "disabled";
+	};
+};
+
 &{/sound} {
 	status = "disabled";
 };
