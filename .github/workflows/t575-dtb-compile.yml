@@ -85,6 +85,12 @@ jobs:
           python3 -m py_compile scripts/t575-stage34-static-dts-safety-audit.py
           python3 scripts/t575-stage34-static-dts-safety-audit.py
 
+      - name: Stage 44 — cross-compile TAS2562 codec object only
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/t575-stage44-compile-tas2562.sh "$PWD/kernel" "$PWD/t575-audio-build"
+
       - name: Configure arm64 kernel and compile T575 DTB
         shell: bash
         run: |
@@ -105,12 +111,6 @@ jobs:
           python3 scripts/audit-t575-decon-source.py kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-simpledrm.py kernel/.config kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-simpledrm-source.py kernel
-
-      - name: Stage 44 — cross-compile TAS2562 codec object only
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/t575-stage44-compile-tas2562.sh "$PWD/kernel" "$PWD/t575-audio-build"
 
       - name: Save compile-only output
         if: success()
