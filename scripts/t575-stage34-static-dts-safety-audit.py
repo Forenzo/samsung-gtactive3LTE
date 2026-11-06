@@ -46,6 +46,21 @@ def main():
         text = block(uncommented, sel)
         safe = text is not None and re.search(r'\bstatus\s*=\s*"disabled"\s*;', text) is not None
         ok &= check(label, safe, "explicitly disabled" if safe else "safety gate missing")
+    # The LTE TAS2562 prototype must NEVER become enabled by an
+    # accidental DTS edit. Keep the codec, inherited T570 sound card and
+    # wrong RT5510 all explicitly disabled until an approved bring-up.
+    codec_parent = block(uncommented, "/soc@0/usi@108c00c0/i2c@108c0000")
+    codec = re.search(
+        r'amplifier@4c\\s*\\{([^{}]*)\\};',
+        codec_parent or "", flags=re.S)
+    codec_body = codec.group(1) if codec else ""
+    ok &= check("LTE TAS2562 codec remains disabled",
+                bool(codec) and
+                bool(re.search(r'\\bstatus\\s*=\\s*"disabled"\\s*;', codec_body)) and
+                bool(re.search(r'\\breg\\s*=\\s*<0x4c>\\s*;', codec_body)) and
+                'compatible = "ti,tas2562"' in codec_body and
+                bool(re.search(r'#sound-dai-cells\\s*=\\s*<1>\\s*;', codec_body)),
+                "address/binding pinned, prototype disabled")
     for label, addr in (("modem carveout", "0xf0000000"),
                         ("modem logging carveout", "0xf9200000"),
                         ("S-Boot framebuffer reservation", "0xca000000")):
