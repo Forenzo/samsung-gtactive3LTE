@@ -49,17 +49,18 @@ def main():
     # The LTE TAS2562 prototype must NEVER become enabled by an
     # accidental DTS edit. Keep the codec, inherited T570 sound card and
     # wrong RT5510 all explicitly disabled until an approved bring-up.
-    codec_parent = block(uncommented, "/soc@0/usi@108c00c0/i2c@108c0000")
+    parent_sel = "&{/soc@0/usi@108c00c0/i2c@108c0000}"
+    parent_idx = uncommented.find(parent_sel)
     codec = re.search(
-        r'amplifier@4c\\s*\\{([^{}]*)\\};',
-        codec_parent or "", flags=re.S)
+        r'amplifier@4c\s*\{([^{}]*)\};',
+        uncommented[parent_idx:] if parent_idx >= 0 else "", flags=re.S)
     codec_body = codec.group(1) if codec else ""
     ok &= check("LTE TAS2562 codec remains disabled",
-                bool(codec) and
-                bool(re.search(r'\\bstatus\\s*=\\s*"disabled"\\s*;', codec_body)) and
-                bool(re.search(r'\\breg\\s*=\\s*<0x4c>\\s*;', codec_body)) and
+                parent_idx >= 0 and bool(codec) and
+                bool(re.search(r'\bstatus\s*=\s*"disabled"\s*;', codec_body)) and
+                bool(re.search(r'\breg\s*=\s*<0x4c>\s*;', codec_body)) and
                 'compatible = "ti,tas2562"' in codec_body and
-                bool(re.search(r'#sound-dai-cells\\s*=\\s*<1>\\s*;', codec_body)),
+                bool(re.search(r'#sound-dai-cells\s*=\s*<1>\s*;', codec_body)),
                 "address/binding pinned, prototype disabled")
     for label, addr in (("modem carveout", "0xf0000000"),
                         ("modem logging carveout", "0xf9200000"),
