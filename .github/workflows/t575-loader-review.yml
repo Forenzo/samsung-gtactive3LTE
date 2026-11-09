@@ -11,6 +11,7 @@ on:
       - "scripts/t575-stage47d-uniloader-memory-audit.py"
       - "scripts/t575-loader-postlink-audit.py"
       - "scripts/t575-stock-boot-metadata.py"
+      - "scripts/t575-boot-v2-research.py"
       - "bootchain/uniLoader/**"
       - ".github/workflows/t575-loader-review.yml"
   workflow_dispatch:
@@ -136,6 +137,7 @@ jobs:
             scripts/t575-stage47c-boot-component-audit.py \
             scripts/t575-stage47d-uniloader-memory-audit.py \
             scripts/t575-loader-postlink-audit.py \
-            scripts/t575-stock-boot-metadata.py
+            scripts/t575-stock-boot-metadata.py \
+            scripts/t575-boot-v2-research.py
       - name: Review inherited loader hardware assumptions
         run: python3 scripts/t575-loader-source-review.py
