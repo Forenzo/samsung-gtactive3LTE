@@ -119,10 +119,24 @@ jobs:
           python3 scripts/audit-t575-simpledrm.py kernel/.config kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           python3 scripts/audit-t575-simpledrm-source.py kernel
 
+      - name: Stage 47 — compile diagnostic ARM64 kernel Image (never flashable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This Image is NOT an Android BOOT image and is NOT approved for
+          # Samsung S-Boot loading. T575 DECON takeover stays disabled.
+          make -C kernel ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+            -j2 Image
+          test -s kernel/arch/arm64/boot/Image
+          file kernel/arch/arm64/boot/Image
+          echo "Stage 47: kernel Image compiled; no BOOT packaging or flashing."
+
       - name: Save compile-only output
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: sm-t575-dtb-compile-only
-          path: kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+          name: sm-t575-kernel-dtb-compile-only
+          path: |
+            kernel/arch/arm64/boot/Image
+            kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
           retention-days: 7
