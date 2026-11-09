@@ -1,6 +1,9 @@
 # SM-T575 passive uniLoader board prototype; compile-only / NOT FLASHABLE
 # Inherited addresses are hypotheses pending DRAM, S-Boot and memory-owner audit.
 CONFIG_POSITION_INDEPENDENT=y
+# Standard AArch64 Image header at BOOT kernel payload offset 0x38.
+# S-Boot acceptance is still unknown; this is a compatibility prerequisite.
+CONFIG_LINUX_KRNL_HEADER_IMG=y
 CONFIG_EXYNOS_9810=y
 CONFIG_SAMSUNG_GTACTIVE3LTE=y
 CONFIG_TEXT_BASE=0x87000000
