@@ -42,9 +42,12 @@ jobs:
             echo "Unsafe inherited chainload enabled" >&2
             exit 1
           fi
-          make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- \
-            board/samsung/board-gtactive3lte.o
+          # The top-level Makefile exposes the 'board' directory target,
+          # not individual board/samsung/*.o targets. Kbuild compiles its
+          # configured lib-y objects while producing board/lib.a.
+          make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- board
           test -s board/samsung/board-gtactive3lte.o
+          test -s board/lib.a
           aarch64-linux-gnu-nm board/samsung/board-gtactive3lte.o | grep -q ' board_ops'
           echo "LTE board object compiled; no Linux rebuild, no BOOT image."
       - name: Check Python audits compile
