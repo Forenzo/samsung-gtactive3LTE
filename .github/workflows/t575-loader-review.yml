@@ -50,6 +50,27 @@ jobs:
           test -s board/lib.a
           aarch64-linux-gnu-nm board/samsung/board-gtactive3lte.o | grep -q ' board_ops'
           echo "LTE board object compiled; no Linux rebuild, no BOOT image."
+      - name: Link complete LTE uniLoader with deliberately invalid test payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd bootchain/uniLoader
+          # Link-time placeholders ONLY: non-bootable test bytes, never
+          # sourced from a real kernel, never packaged, never uploaded.
+          mkdir -p blob
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ("Image", "dtb", "ramdisk"):
+              Path("blob", name).write_bytes(
+                  b"T575-LINK-TEST-NOT-BOOTABLE-" + name.encode() + b"\n")
+          PY
+          make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- -j2 uniLoader
+          test -s uniLoader
+          test -s uniLoader.o
+          aarch64-linux-gnu-nm uniLoader.o | grep -q ' board_ops'
+          echo "PASS: SM-T575 uniLoader linked with non-bootable placeholders."
+          echo "NOT a BOOT image; no flash, no Android device operations."
+          rm -f blob/Image blob/dtb blob/ramdisk uniLoader uniLoader.gz uniLoader.o
       - name: Check Python audits compile
         run: |
           python3 -m py_compile \
