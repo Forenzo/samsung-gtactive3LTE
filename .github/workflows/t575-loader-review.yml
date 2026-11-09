@@ -50,26 +50,65 @@ jobs:
           test -s board/lib.a
           aarch64-linux-gnu-nm board/samsung/board-gtactive3lte.o | grep -q ' board_ops'
           echo "LTE board object compiled; no Linux rebuild, no BOOT image."
-      - name: Link complete LTE uniLoader with deliberately invalid test payloads
+      - name: Retrieve last successful T575 kernel build artifacts (NO kernel rebuild)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Pull only our previously compiled Linux files from this branch.
+          # Never invoke the T570 installer or its image packager.
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow t575-dtb-compile.yml \
+            --branch port/sm-t575-bringup --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId')"
+          [[ "$run_id" =~ ^[0-9]+$ ]] || {
+            echo "No successful saved kernel run; do not build or flash." >&2
+            exit 1
+          }
+          echo "Reusing successful kernel run: $run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+            --name sm-t575-kernel-dtb-compile-only \
+            --dir "$RUNNER_TEMP/t575-components"
+          base="$RUNNER_TEMP/t575-components"
+          test -s "$base/kernel/arch/arm64/boot/Image"
+          test -s "$base/kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb"
+          test -s "$base/t575-initramfs/t575-diagnostic-initramfs.cpio.gz"
+          python3 scripts/t575-stage47c-boot-component-audit.py \
+            --kernel "$base/kernel/arch/arm64/boot/Image" \
+            --dtb "$base/kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb" \
+            --initramfs "$base/t575-initramfs/t575-diagnostic-initramfs.cpio.gz"
+          python3 scripts/t575-stage47d-uniloader-memory-audit.py \
+            --config bootchain/uniLoader/configs/gtactive3lte_defconfig \
+            --kernel "$base/kernel/arch/arm64/boot/Image" \
+            --dtb "$base/kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb" \
+            --initramfs "$base/t575-initramfs/t575-diagnostic-initramfs.cpio.gz"
+      - name: Link LTE uniLoader with real previously compiled Linux components
         shell: bash
         run: |
           set -euo pipefail
+          base="$RUNNER_TEMP/t575-components"
           cd bootchain/uniLoader
-          # Link-time placeholders ONLY: non-bootable test bytes, never
-          # sourced from a real kernel, never packaged, never uploaded.
+          # Reuse the board configuration created earlier in this job.
+          grep -qx 'CONFIG_SAMSUNG_GTACTIVE3LTE=y' .config
+          ! grep -qx 'CONFIG_SAMSUNG_GTACTIVE3WIFI=y' .config
+          ! grep -qx 'CONFIG_CHAINLOAD=y' .config
           mkdir -p blob
-          python3 - <<'PY'
-          from pathlib import Path
-          for name in ("Image", "dtb", "ramdisk"):
-              Path("blob", name).write_bytes(
-                  b"T575-LINK-TEST-NOT-BOOTABLE-" + name.encode() + b"\n")
-          PY
+          cp "$base/kernel/arch/arm64/boot/Image" blob/Image
+          cp "$base/kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb" blob/dtb
+          cp "$base/t575-initramfs/t575-diagnostic-initramfs.cpio.gz" blob/ramdisk
           make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- -j2 uniLoader
           test -s uniLoader
           test -s uniLoader.o
           aarch64-linux-gnu-nm uniLoader.o | grep -q ' board_ops'
-          echo "PASS: SM-T575 uniLoader linked with non-bootable placeholders."
-          echo "NOT a BOOT image; no flash, no Android device operations."
+          aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .kernel '
+          aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .dtb '
+          aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .ramdisk '
+          echo "PASS: real kernel, LTE DTB and diagnostic initramfs linked."
+          echo "The output is a raw loader, NOT a Samsung BOOT image."
+          echo "No run-time safety, S-Boot handover or flashability implied."
+          echo "RESTORE/BOOT/FLASH GATE: BLOCKED"
+          # CI does not upload executable loader or a flashable package.
           rm -f blob/Image blob/dtb blob/ramdisk uniLoader uniLoader.gz uniLoader.o
       - name: Check Python audits compile
         run: |
