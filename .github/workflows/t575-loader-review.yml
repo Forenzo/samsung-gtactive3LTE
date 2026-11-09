@@ -19,9 +19,34 @@ permissions:
 jobs:
   loader-source:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - name: Install standalone bootloader cross-compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gcc-aarch64-linux-gnu bison flex
+      - name: Configure and compile passive LTE board only (no Linux build)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd bootchain/uniLoader
+          make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- gtactive3lte_defconfig
+          grep -qx 'CONFIG_SAMSUNG_GTACTIVE3LTE=y' .config
+          if grep -qx 'CONFIG_SAMSUNG_GTACTIVE3WIFI=y' .config; then
+            echo "Wrong Wi-Fi board selector enabled" >&2
+            exit 1
+          fi
+          if grep -qx 'CONFIG_CHAINLOAD=y' .config; then
+            echo "Unsafe inherited chainload enabled" >&2
+            exit 1
+          fi
+          make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- \
+            board/samsung/board-gtactive3lte.o
+          test -s board/samsung/board-gtactive3lte.o
+          aarch64-linux-gnu-nm board/samsung/board-gtactive3lte.o | grep -q ' board_ops'
+          echo "LTE board object compiled; no Linux rebuild, no BOOT image."
       - name: Check Python audits compile
         run: |
           python3 -m py_compile \
