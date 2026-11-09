@@ -1,5 +1,7 @@
 # Experimental SM-T575 DTB syntax/compile check only.
 # Never generates or publishes a boot image, firmware or release.
+# Audits and loader configuration changes use separate lightweight checks;
+# they must not trigger a full kernel rebuild.
 name: t575-dtb-compile
 
 on:
@@ -8,7 +10,6 @@ on:
       - port/sm-t575-bringup
     paths:
       - "dts/**"
-      - "scripts/audit-t575-*.py"
       - "scripts/t575-stage34-static-dts-safety-audit.py"
       - "scripts/t575-stage43-audio-compile-config.py"
       - "scripts/t575-stage44-compile-tas2562.sh"
@@ -17,9 +18,6 @@ on:
       - "configs/gtactive3lte-tas2562-compileonly.config"
       - "scripts/build-t575-dtb.sh"
       - "scripts/t575-stage47-build-initramfs.sh"
-      - "scripts/t575-stage47c-boot-component-audit.py"
-      - "scripts/t575-stage47d-uniloader-memory-audit.py"
-      - "bootchain/uniLoader/configs/gtactive3wifi_defconfig"
       - "initramfs/t575-minimal-init.c"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
