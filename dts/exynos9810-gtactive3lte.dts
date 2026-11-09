@@ -153,6 +153,29 @@
 };
 
 /*
+ * Stage 45 speaker-only ASoC MACHINE PROTOTYPE. This is not the active
+ * /sound device from T570; it is a new, distinct disabled root node.
+ * The T575 vendor tree confirms UAIF1 -> TAS2562 DAI 0. I2S clock,
+ * amplifier supplies and speaker DAPM routing remain to be verified.
+ */
+/ {
+	t575_audio_prototype: sound-t575-prototype {
+		compatible = "samsung,gtactive3lte-tas2562-audio";
+		status = "disabled";
+
+		speaker-dai-link {
+			cpu {
+				sound-dai = <&abox 1>;
+			};
+			codec {
+				sound-dai = <&t575_tas2562 0>;
+			};
+		};
+	};
+};
+
+
+/*
  * The T575 stock DTBO overlay 5 limits the Himax touchscreen on SPI21
  * to 7 MHz; the inherited T570 DTS described 10 MHz. Match the measured
  * vendor board configuration without changing GPIOs, firmware or power.
