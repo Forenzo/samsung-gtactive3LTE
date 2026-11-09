@@ -17,6 +17,7 @@ on:
       - "configs/gtactive3lte-tas2562-compileonly.config"
       - "scripts/build-t575-dtb.sh"
       - "scripts/t575-stage47-build-initramfs.sh"
+      - "scripts/t575-stage47c-boot-component-audit.py"
       - "initramfs/t575-minimal-init.c"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
@@ -141,6 +142,16 @@ jobs:
           file t575-initramfs/init
           test -s t575-initramfs/t575-diagnostic-initramfs.cpio.gz
           echo "Kernel/DTB and diagnostic initramfs exist as separate offline artifacts."
+
+      - name: Stage 47C — audit separate boot components (no image packaging)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/t575-stage47c-boot-component-audit.py
+          python3 scripts/t575-stage47c-boot-component-audit.py \
+            --kernel kernel/arch/arm64/boot/Image \
+            --dtb kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb \
+            --initramfs t575-initramfs/t575-diagnostic-initramfs.cpio.gz
 
       - name: Save compile-only output
         if: success()
