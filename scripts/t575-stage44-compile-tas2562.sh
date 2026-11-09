@@ -31,15 +31,24 @@ esac
 echo "Stage 44: ARM64 TAS2562 codec object compile-only"
 make -C "$kernel" O="$output" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
 "$kernel/scripts/config" --file "$output/.config" \
-    -e I2C -e SOUND -e SND -e SND_SOC -m SND_SOC_TAS2562
+    -e I2C -e SOUND -e SND -e SND_SOC -m SND_SOC_TAS2562 \
+    -m SND_SOC_SAMSUNG -m SND_SOC_SAMSUNG_EXYNOS9810_ABOX \
+    -m SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562
 make -C "$kernel" O="$output" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
 grep -qx 'CONFIG_SND_SOC_TAS2562=m' "$output/.config" || {
   echo "TAS2562 option was not retained by Kconfig"; exit 1;
 }
+grep -qx 'CONFIG_SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562=m' "$output/.config" || {
+  echo "T575 experimental machine-driver option was not retained by Kconfig"; exit 1;
+}
 make -C "$kernel" O="$output" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j2 sound/soc/codecs/tas2562.o
+make -C "$kernel" O="$output" ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j2 sound/soc/samsung/gtactive3lte_tas2562.o
 object="$output/sound/soc/codecs/tas2562.o"
 test -s "$object"
+test -s "$output/sound/soc/samsung/gtactive3lte_tas2562.o"
 file "$object"
+file "$output/sound/soc/samsung/gtactive3lte_tas2562.o"
+file "$output/sound/soc/samsung/gtactive3lte_tas2562.o" | grep -Eq 'ARM aarch64|ARM64|AArch64'
 file "$object" | grep -Eq 'ARM aarch64|ARM64|AArch64'
-echo "PASS: TAS2562 AArch64 object compiled; not linked into a module/boot image"
+echo "PASS: TAS2562 codec and T575 ASoC machine AArch64 objects compiled; no boot image"
 echo "No hardware accessed. RESTORE/BOOT/FLASH GATE: BLOCKED"
