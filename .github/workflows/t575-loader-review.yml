@@ -1,0 +1,32 @@
+# Fast, source-only LTE bootloader review; deliberately never builds Linux.
+name: t575-loader-review
+
+on:
+  push:
+    branches:
+      - port/sm-t575-bringup
+    paths:
+      - "scripts/t575-loader-source-review.py"
+      - "scripts/t575-stage47c-boot-component-audit.py"
+      - "scripts/t575-stage47d-uniloader-memory-audit.py"
+      - "bootchain/uniLoader/**"
+      - ".github/workflows/t575-loader-review.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loader-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check Python audits compile
+        run: |
+          python3 -m py_compile \
+            scripts/t575-loader-source-review.py \
+            scripts/t575-stage47c-boot-component-audit.py \
+            scripts/t575-stage47d-uniloader-memory-audit.py
+      - name: Review inherited loader hardware assumptions
+        run: python3 scripts/t575-loader-source-review.py
