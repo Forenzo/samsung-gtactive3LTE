@@ -44,6 +44,22 @@ ENTRY_ALIAS( _reloc_entry)
 	beq	_entry
 	ldr	x6, _rel_stack_size
 
+	/* Reject source/destination overlap instead of executing through a
+	 * self-overwriting copy. This is an emergency stop, NOT proof that
+	 * Samsung's source address or the destination DRAM is usable.
+	 *
+	 * Source: [x4, x4+x6); destination: [x5, x5+x6).
+	 * Reject overflow rather than allowing wrapped range comparisons.
+	 */
+	adds	x8, x4, x6
+	b.cs	_dead
+	adds	x9, x5, x6
+	b.cs	_dead
+	cmp	x4, x9
+	b.hs	_copy16
+	cmp	x5, x8
+	b.lo	_dead
+
 	/* Fast 16-byte copies followed by exact byte tail (if any). */
 _copy16:
 	cmp	x6, #16
