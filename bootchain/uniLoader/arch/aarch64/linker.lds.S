@@ -74,11 +74,19 @@ SECTIONS
 	.data ALIGN(8) : {
 		*(.data)
 		*(.data.*)
+		/* The AArch64 linker can otherwise place .got/.got.plt as
+		 * orphan file-backed sections after our copy-end marker.
+		 * Include all initialized relocation data before that marker.
+		 */
+		*(.data.rel.ro)
+		*(.data.rel.ro.*)
+		*(.got)
+		*(.got.*)
 	}
 
 #ifdef CONFIG_POSITION_INDEPENDENT
-	/* The flat binary ends here. BSS and stack occupy memory but are
-	 * NOT present in the raw file delivered by Samsung S-Boot.
+	/* End of ALL initialized file-backed sections. BSS and stack are
+	 * memory-only and are not copied from the incoming boot payload.
 	 */
 	_reloc_file_end = .;
 	_reloc_copy_size = _reloc_file_end - _reloc_start;
