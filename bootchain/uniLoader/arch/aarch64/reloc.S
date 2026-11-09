@@ -8,7 +8,7 @@
 #include "linux-kernel-image-header.h"
 #endif
 
-.extern _reloc_size
+.extern _reloc_copy_size
 .extern _reloc_start
 .extern _start
 
@@ -30,25 +30,35 @@ ENTRY_ALIAS(_rel_stack_entry)
 	.quad _start
 
 ENTRY_ALIAS(_rel_stack_size)
-	.quad _reloc_size
+	.quad _reloc_copy_size
 
 ENTRY_ALIAS( _reloc_entry)
 	adr	x7, _head		/* where we were loaded, for main() */
-	/* Copy exactly [_reloc_start, _reloc_end): source starts at
-	 * _head, including the header/preamble. The old code copied from
-	 * _start with the larger _reloc_size and overran the source.
+	/* Copy ONLY the initialized raw file. BSS and stack are absent from
+	 * the input image and must never be read as source bytes.
+	 * BSS is initialized in start.S after relocation.
 	 */
 	adr	x4, _head
 	ldr	x5, _rel_stack_base
 	cmp	x4, x5
 	beq	_entry
-	ldr	x6,  _rel_stack_size
+	ldr	x6, _rel_stack_size
 
-_copy:
+	/* Fast 16-byte copies followed by exact byte tail (if any). */
+_copy16:
+	cmp	x6, #16
+	b.lo	_copy_tail
 	ldp	x2, x3, [x4], #16
 	stp	x2, x3, [x5], #16
-	subs	x6, x6, #16
-	b.ne	_copy
+	sub	x6, x6, #16
+	b	_copy16
+
+_copy_tail:
+	cbz	x6, _entry
+	ldrb	w2, [x4], #1
+	strb	w2, [x5], #1
+	sub	x6, x6, #1
+	b	_copy_tail
 _entry:
 	/* Branch to code entry, not the beginning of the Image header. */
 	ldr	x5, _rel_stack_entry
