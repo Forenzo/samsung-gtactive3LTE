@@ -45,6 +45,7 @@ lib-$(CONFIG_SAMSUNG_LUCKY7) += samsung/board-lucky7.o
 lib-$(CONFIG_SAMSUNG_NOBLELTE) += samsung/board-noblelte.o
 lib-$(CONFIG_SAMSUNG_R0Q) += samsung/board-r0q.o
 lib-$(CONFIG_SAMSUNG_R8S) += samsung/board-r8s.o
+lib-$(CONFIG_SAMSUNG_GTACTIVE3LTE) += samsung/board-gtactive3lte.o
 lib-$(CONFIG_SAMSUNG_GTACTIVE3WIFI) += samsung/board-gtactive3wifi.o
 lib-$(CONFIG_SAMSUNG_STARLTE) += samsung/board-starlte.o
 lib-$(CONFIG_SAMSUNG_X1S) += samsung/board-x1s.o
