@@ -76,6 +76,14 @@ SECTIONS
 		*(.data.*)
 	}
 
+#ifdef CONFIG_POSITION_INDEPENDENT
+	/* The flat binary ends here. BSS and stack occupy memory but are
+	 * NOT present in the raw file delivered by Samsung S-Boot.
+	 */
+	_reloc_file_end = .;
+	_reloc_copy_size = _reloc_file_end - _reloc_start;
+#endif
+
 	.bss ALIGN(8) : {
 		__bss_start = .;
 		*(.bss)
