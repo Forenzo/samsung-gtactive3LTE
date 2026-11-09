@@ -9,6 +9,7 @@ on:
       - "scripts/t575-loader-source-review.py"
       - "scripts/t575-stage47c-boot-component-audit.py"
       - "scripts/t575-stage47d-uniloader-memory-audit.py"
+      - "scripts/t575-loader-postlink-audit.py"
       - "bootchain/uniLoader/**"
       - ".github/workflows/t575-loader-review.yml"
   workflow_dispatch:
@@ -104,6 +105,11 @@ jobs:
           aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .kernel '
           aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .dtb '
           aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .ramdisk '
+          python3 "$GITHUB_WORKSPACE/scripts/t575-loader-postlink-audit.py" \
+            --elf uniLoader.o \
+            --kernel blob/Image \
+            --initramfs blob/ramdisk \
+            --config .config
           echo "PASS: real kernel, LTE DTB and diagnostic initramfs linked."
           echo "The output is a raw loader, NOT a Samsung BOOT image."
           echo "No run-time safety, S-Boot handover or flashability implied."
@@ -115,6 +121,7 @@ jobs:
           python3 -m py_compile \
             scripts/t575-loader-source-review.py \
             scripts/t575-stage47c-boot-component-audit.py \
-            scripts/t575-stage47d-uniloader-memory-audit.py
+            scripts/t575-stage47d-uniloader-memory-audit.py \
+            scripts/t575-loader-postlink-audit.py
       - name: Review inherited loader hardware assumptions
         run: python3 scripts/t575-loader-source-review.py
