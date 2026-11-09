@@ -74,8 +74,10 @@ def assemble(args):
     if len(raw_loader) < 64 or raw_loader[0x38:0x3c] != b"ARM\x64":
         raise ValueError("LTE uniLoader lacks ARM64 Image header; old research artifact is obsolete")
     declared_size = struct.unpack_from("<Q", raw_loader, 0x10)[0]
-    if not 0 < declared_size <= len(raw_loader):
-        raise ValueError("LTE loader ARM64 Image declared size invalid")
+    # The ARM64 header advertises the full in-memory footprint, including
+    # NOBITS/BSS and stack, while the raw file contains only initialized data.
+    if not len(raw_loader) <= declared_size < 256 * 1024 * 1024:
+        raise ValueError("LTE loader ARM64 Image memory footprint invalid")
     if raw_loader[:8] == b"ANDROID!":
         raise ValueError("loader already contains an Android BOOT image header")
     if b"T575-LINK-TEST-NOT-BOOTABLE-" in raw_loader[:4096]:
