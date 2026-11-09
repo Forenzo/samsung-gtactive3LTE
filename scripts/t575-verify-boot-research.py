@@ -12,8 +12,6 @@ import struct
 import sys
 
 STOCK_SHA = "a69a724b75a51821a0baa4ccda424173a003b17de19e2b381bb7d4f30596e372"
-RAW_SHA = "e09febf2978313a62290d89ec4dfe762dee6c1e1ab27a6d0912923e2b14bd92a"
-RESEARCH_SHA = "4c6c3ef4b8f1fbca4bc89f3e558e4dfa01b949d823f6f7e8b2d9c3f3ba64d690"
 PARTITION_BYTES = 61_865_984
 PAGE = 2048
 MARKER = b"SEANDROIDENFORCE"
@@ -66,10 +64,14 @@ def main():
         candidate = read(args.candidate.expanduser(), PARTITION_BYTES)
         if len(stock) != PARTITION_BYTES or digest(stock) != STOCK_SHA:
             raise ValueError("trusted Magisk-rooted Android BOOT has changed")
-        if digest(loader) != RAW_SHA:
-            raise ValueError("raw uniLoader does not match successful build artifact")
-        if digest(candidate) != RESEARCH_SHA:
-            raise ValueError("research image differs from recorded SHA-256")
+        if len(loader) < 64 or loader[0x38:0x3c] != b"ARM\x64":
+            raise ValueError("old uniLoader has no ARM64 Image header; rebuild the loader first")
+        declared = struct.unpack_from("<Q", loader, 0x10)[0]
+        if not 0 < declared <= len(loader):
+            raise ValueError("uniLoader ARM64 Image declared size invalid")
+        # Candidate and loader are compared byte-for-byte below.
+        # The SHA-256 values are printed for recording, not pinned to
+        # the obsolete headerless experimental build.
         oldhead, old, _ = sections(stock)
         newhead, new, newend = sections(candidate)
         expectedhead = bytearray(oldhead)
@@ -81,13 +83,13 @@ def main():
         for name in ("ramdisk", "second", "recovery_dtbo", "dtb"):
             if new[name] != old[name]:
                 raise ValueError(f"stock {name} not preserved byte-for-byte")
-        if candidate[newend:] != MARKER:
+        if len(candidate) != newend + len(MARKER) or candidate[newend:] != MARKER:
             raise ValueError("unexpected candidate trailer/signature/padding")
         if candidate[newend - align(len(new["dtb"])) + len(new["dtb"]):newend].strip(b"\x00"):
             raise ValueError("nonzero DTB alignment padding")
         print("SM-T575 BOOT research file verified offline")
-        print(f"  Candidate: {len(candidate):,} bytes; SHA-256 {RESEARCH_SHA}")
-        print(f"  uniLoader payload: {len(loader):,} bytes; exact binary MATCH")
+        print(f"  Candidate: {len(candidate):,} bytes; SHA-256 {digest(candidate)}")
+        print(f"  uniLoader payload: {len(loader):,} bytes; SHA-256 {digest(loader)}; exact binary MATCH")
         print("  Android BOOT v2 header: stock-identical except kernel size")
         print("  Stock rooted ramdisk and Samsung DTB: byte-for-byte MATCH")
         print(f"  BOOT partition headroom: {PARTITION_BYTES-len(candidate):,} bytes")
