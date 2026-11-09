@@ -18,6 +18,8 @@ on:
       - "scripts/build-t575-dtb.sh"
       - "scripts/t575-stage47-build-initramfs.sh"
       - "scripts/t575-stage47c-boot-component-audit.py"
+      - "scripts/t575-stage47d-uniloader-memory-audit.py"
+      - "bootchain/uniLoader/configs/gtactive3wifi_defconfig"
       - "initramfs/t575-minimal-init.c"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
@@ -149,6 +151,16 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/t575-stage47c-boot-component-audit.py
           python3 scripts/t575-stage47c-boot-component-audit.py \
+            --kernel kernel/arch/arm64/boot/Image \
+            --dtb kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb \
+            --initramfs t575-initramfs/t575-diagnostic-initramfs.cpio.gz
+
+      - name: Stage 47D — audit inherited uniLoader memory destinations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/t575-stage47d-uniloader-memory-audit.py
+          python3 scripts/t575-stage47d-uniloader-memory-audit.py \
             --kernel kernel/arch/arm64/boot/Image \
             --dtb kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb \
             --initramfs t575-initramfs/t575-diagnostic-initramfs.cpio.gz
