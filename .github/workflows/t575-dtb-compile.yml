@@ -12,6 +12,8 @@ on:
       - "scripts/t575-stage34-static-dts-safety-audit.py"
       - "scripts/t575-stage43-audio-compile-config.py"
       - "scripts/t575-stage44-compile-tas2562.sh"
+      - "scripts/t575-stage45-install-machine-source.py"
+      - "drv/audio/t575/**"
       - "configs/gtactive3lte-tas2562-compileonly.config"
       - "scripts/build-t575-dtb.sh"
       - "patches/linux/**"
@@ -85,7 +87,12 @@ jobs:
           python3 -m py_compile scripts/t575-stage34-static-dts-safety-audit.py
           python3 scripts/t575-stage34-static-dts-safety-audit.py
 
-      - name: Stage 44 — cross-compile TAS2562 codec object only
+      - name: Stage 45 — install LTE-only machine driver in CI kernel
+        run: |
+          python3 -m py_compile scripts/t575-stage45-install-machine-source.py
+          python3 scripts/t575-stage45-install-machine-source.py kernel
+
+      - name: Stage 45 — cross-compile TAS2562 codec and T575 machine objects
         shell: bash
         run: |
           set -euo pipefail
