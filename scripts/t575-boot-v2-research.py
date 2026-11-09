@@ -22,7 +22,9 @@ PAGE = 2048
 HEADER_SIZE = 1660
 HEADER_VERSION = 2
 SEANDROID = b"SEANDROIDENFORCE"
-MAX_LOADER = 50 * 1024 * 1024
+# Do not impose an arbitrary 50 MiB kernel-payload limit: uniLoader embeds
+# the complete Linux Image, DTB and initramfs. The computed BOOT v2 layout
+# below enforces the actual partition size instead.
 
 def checksum(data):
     return hashlib.sha256(data).hexdigest()
@@ -64,8 +66,8 @@ def assemble(args):
     if old_end > len(original):
         raise ValueError("original segment sizes exceed trusted BOOT partition")
     loader_size = loader.stat().st_size
-    if not 0 < loader_size <= MAX_LOADER:
-        raise ValueError("raw LTE loader size outside review limit")
+    if not 0 < loader_size < BOOT_PARTITION:
+        raise ValueError(f"raw LTE loader size {loader_size:,} exceeds BOOT partition bounds")
     raw_loader = loader.read_bytes()
     if raw_loader[:8] == b"ANDROID!":
         raise ValueError("loader already contains an Android BOOT image header")
@@ -77,7 +79,8 @@ def assemble(args):
     struct.pack_into("<I", h, 8, loader_size)
     after, new_end = layout(h)
     if new_end + len(SEANDROID) > BOOT_PARTITION:
-        raise ValueError("unsigned candidate cannot fit within BOOT partition")
+        raise ValueError(f"candidate layout needs {new_end + len(SEANDROID):,} bytes; "
+                         f"BOOT partition has only {BOOT_PARTITION:,} bytes")
     print("SM-T575 unsigned research image — offline only")
     print(f"  Verified rooted BOOT SHA-256: {BOOT_SHA}")
     print(f"  Board identifier: {h[48:64].split(bytes([0]),1)[0]!r}")
