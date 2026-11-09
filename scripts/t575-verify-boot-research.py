@@ -67,8 +67,9 @@ def main():
         if len(loader) < 64 or loader[0x38:0x3c] != b"ARM\x64":
             raise ValueError("old uniLoader has no ARM64 Image header; rebuild the loader first")
         declared = struct.unpack_from("<Q", loader, 0x10)[0]
-        if not 0 < declared <= len(loader):
-            raise ValueError("uniLoader ARM64 Image declared size invalid")
+        # Image size includes zero-initialized memory omitted from the file.
+        if not len(loader) <= declared < 256 * 1024 * 1024:
+            raise ValueError("uniLoader ARM64 Image memory footprint invalid")
         # Candidate and loader are compared byte-for-byte below.
         # The SHA-256 values are printed for recording, not pinned to
         # the obsolete headerless experimental build.
