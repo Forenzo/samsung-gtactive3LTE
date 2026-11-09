@@ -103,6 +103,16 @@ jobs:
           make ARCH=aarch64 CROSS_COMPILE=aarch64-linux-gnu- -j2 uniLoader
           test -s uniLoader
           test -s uniLoader.o
+          grep -qx 'CONFIG_LINUX_KRNL_HEADER_IMG=y' .config
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          p = Path("uniLoader").read_bytes()
+          assert p[0x38:0x3c] == b"ARM\x64", "missing ARM64 Image magic at offset 0x38"
+          image_size = struct.unpack_from("<Q", p, 0x10)[0]
+          assert 0 < image_size <= len(p), (image_size, len(p))
+          print(f"ARM64 loader header PASS: magic=ARM\\x64 image_size={image_size:,} bytes, file={len(p):,} bytes")
+          PY
           aarch64-linux-gnu-nm uniLoader.o | grep -q ' board_ops'
           aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .kernel '
           aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .dtb '
