@@ -110,8 +110,21 @@ jobs:
           p = Path("uniLoader").read_bytes()
           assert p[0x38:0x3c] == b"ARM\x64", "missing ARM64 Image magic at offset 0x38"
           image_size = struct.unpack_from("<Q", p, 0x10)[0]
-          assert 0 < image_size <= len(p), (image_size, len(p))
-          print(f"ARM64 loader header PASS: magic=ARM\\x64 image_size={image_size:,} bytes, file={len(p):,} bytes")
+          # The ARM64 Image header reports the memory footprint, including
+          # zero-initialized BSS and stack, which OBJCOPY omits from the file.
+          # Validate against the linked ELF rather than the raw file length.
+          import subprocess
+          symbols = {}
+          for line in subprocess.check_output(
+              ["aarch64-linux-gnu-nm", "-P", "uniLoader.o"], text=True
+          ).splitlines():
+              fields = line.split()
+              if len(fields) >= 3 and fields[0] in ("_reloc_start", "_reloc_end"):
+                  symbols[fields[0]] = int(fields[2], 16)
+          footprint = symbols["_reloc_end"] - symbols["_reloc_start"]
+          assert 0 < len(p) <= image_size == footprint < 256 * 1024 * 1024, (
+              len(p), image_size, footprint)
+          print(f"ARM64 loader header PASS: file={len(p):,} bytes, linked memory={footprint:,} bytes, BSS/stack delta={footprint-len(p):,} bytes")
           PY
           aarch64-linux-gnu-nm uniLoader.o | grep -q ' board_ops'
           aarch64-linux-gnu-readelf -SW uniLoader.o | grep -q ' .kernel '
