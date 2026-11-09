@@ -10,6 +10,7 @@ on:
       - "scripts/t575-stage47c-boot-component-audit.py"
       - "scripts/t575-stage47d-uniloader-memory-audit.py"
       - "scripts/t575-loader-postlink-audit.py"
+      - "scripts/t575-stock-boot-metadata.py"
       - "bootchain/uniLoader/**"
       - ".github/workflows/t575-loader-review.yml"
   workflow_dispatch:
@@ -114,14 +115,27 @@ jobs:
           echo "The output is a raw loader, NOT a Samsung BOOT image."
           echo "No run-time safety, S-Boot handover or flashability implied."
           echo "RESTORE/BOOT/FLASH GATE: BLOCKED"
-          # CI does not upload executable loader or a flashable package.
+          # Preserve only the raw loader as a clearly labelled development
+          # artifact. It has NO Android BOOT header, Samsung DTB, AVB footer,
+          # or flashable partition layout.
+          mkdir -p "$RUNNER_TEMP/t575-offline-loader"
+          cp uniLoader "$RUNNER_TEMP/t575-offline-loader/t575-uniloader-RAW-NOT-FLASHABLE.bin"
+          sha256sum "$RUNNER_TEMP/t575-offline-loader/t575-uniloader-RAW-NOT-FLASHABLE.bin"
           rm -f blob/Image blob/dtb blob/ramdisk uniLoader uniLoader.gz uniLoader.o
+      - name: Save verified raw LTE loader for local OFFLINE analysis
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-RAW-UNILOADER-NOT-FLASHABLE
+          path: ${{ runner.temp }}/t575-offline-loader/t575-uniloader-RAW-NOT-FLASHABLE.bin
+          retention-days: 7
       - name: Check Python audits compile
         run: |
           python3 -m py_compile \
             scripts/t575-loader-source-review.py \
             scripts/t575-stage47c-boot-component-audit.py \
             scripts/t575-stage47d-uniloader-memory-audit.py \
-            scripts/t575-loader-postlink-audit.py
+            scripts/t575-loader-postlink-audit.py \
+            scripts/t575-stock-boot-metadata.py
       - name: Review inherited loader hardware assumptions
         run: python3 scripts/t575-loader-source-review.py
