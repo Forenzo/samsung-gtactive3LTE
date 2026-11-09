@@ -119,11 +119,13 @@ jobs:
               ["aarch64-linux-gnu-nm", "-P", "uniLoader.o"], text=True
           ).splitlines():
               fields = line.split()
-              if len(fields) >= 3 and fields[0] in ("_reloc_start", "_reloc_end"):
+              if len(fields) >= 3 and fields[0] in ("_reloc_start", "_reloc_end", "_reloc_file_end", "_reloc_copy_size"):
                   symbols[fields[0]] = int(fields[2], 16)
           footprint = symbols["_reloc_end"] - symbols["_reloc_start"]
-          assert 0 < len(p) <= image_size == footprint < 256 * 1024 * 1024, (
-              len(p), image_size, footprint)
+          assert 0 < len(p) == symbols["_reloc_copy_size"] < image_size == footprint < 256 * 1024 * 1024, (
+              len(p), symbols["_reloc_copy_size"], image_size, footprint)
+          assert symbols["_reloc_file_end"] == symbols["_reloc_start"] + len(p)
+          assert symbols["_reloc_file_end"] < symbols["_reloc_end"]
           print(f"ARM64 loader header PASS: file={len(p):,} bytes, linked memory={footprint:,} bytes, BSS/stack delta={footprint-len(p):,} bytes")
           PY
           aarch64-linux-gnu-nm uniLoader.o | grep -q ' board_ops'
