@@ -106,7 +106,15 @@ SECTIONS
 	_reloc_size = _reloc_end - _reloc_start;
 #endif
 #ifdef CONFIG_LINUX_KRNL_HEADER_IMG
+#ifdef CONFIG_POSITION_INDEPENDENT
+	/* Header starts at _head/_reloc_start, not _start. The previous
+	 * formula omitted the header/preamble (192 bytes on SM-T575).
+	 * ARM64 image_size covers the complete loaded memory footprint.
+	 */
+	_kernel_size = _reloc_end - _reloc_start;
+#else
 	_kernel_size = _stack_end - _start;
+#endif
 #endif
 
 	/* size optimization for flat binaries */
