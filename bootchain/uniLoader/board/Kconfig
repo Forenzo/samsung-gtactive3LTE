@@ -351,6 +351,14 @@ menu "Device Support"
 		help
 		  Say Y if you want to include support for Samsung Galaxy S20 FE
 
+	config SAMSUNG_GTACTIVE3LTE
+		bool "Support for Samsung Galaxy Tab Active3 LTE (SM-T575), compile-only"
+		default n
+		depends on EXYNOS_9810
+		help
+		  Passive SM-T575 board prototype, no display register writes,
+		  modem access or watchdog/reset hooks. NOT approved for boot.
+
 	config SAMSUNG_GTACTIVE3WIFI
 		bool "Support for Samsung Galaxy Tab Active3 (Wi-Fi)"
 		default n
