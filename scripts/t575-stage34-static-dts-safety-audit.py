@@ -62,6 +62,13 @@ def main():
                 'compatible = "ti,tas2562"' in codec_body and
                 bool(re.search(r'#sound-dai-cells\s*=\s*<1>\s*;', codec_body)),
                 "address/binding pinned, prototype disabled")
+    proto = re.search(r'\bsound-t575-prototype\s*\{([^{}]*\bstatus\s*=\s*"disabled"\s*;[^{}]*)speaker-dai-link\s*\{', uncommented, re.S)
+    link_cpu = re.search(r'\bsound-t575-prototype\s*\{.*?\bspeaker-dai-link\s*\{\s*cpu\s*\{\s*sound-dai\s*=\s*<&abox 1>\s*;', uncommented, re.S)
+    link_codec = re.search(r'\bsound-t575-prototype\s*\{.*?\bspeaker-dai-link\s*\{.*?\bcodec\s*\{\s*sound-dai\s*=\s*<&t575_tas2562 0>\s*;', uncommented, re.S)
+    ok &= check("LTE-only prototype card disabled",
+                bool(proto) and bool(link_cpu) and bool(link_codec) and
+                '"samsung,gtactive3lte-tas2562-audio"' in proto.group(1),
+                "isolated ABOX1 to TAS2562 DAI0, explicitly disabled")
     for label, addr in (("modem carveout", "0xf0000000"),
                         ("modem logging carveout", "0xf9200000"),
                         ("S-Boot framebuffer reservation", "0xca000000")):
