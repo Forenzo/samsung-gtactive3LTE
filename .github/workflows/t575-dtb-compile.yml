@@ -16,6 +16,8 @@ on:
       - "drv/audio/t575/**"
       - "configs/gtactive3lte-tas2562-compileonly.config"
       - "scripts/build-t575-dtb.sh"
+      - "scripts/t575-stage47-build-initramfs.sh"
+      - "initramfs/t575-minimal-init.c"
       - "patches/linux/**"
       - ".github/workflows/t575-dtb-compile.yml"
   workflow_dispatch:
@@ -40,7 +42,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libssl-dev libelf-dev \
-            device-tree-compiler python3 git gcc-aarch64-linux-gnu
+            device-tree-compiler python3 git gcc-aarch64-linux-gnu libc6-dev-arm64-cross
 
       - name: Retrieve exact upstream Linux base
         shell: bash
@@ -131,6 +133,15 @@ jobs:
           file kernel/arch/arm64/boot/Image
           echo "Stage 47: kernel Image compiled; no BOOT packaging or flashing."
 
+      - name: Stage 47 — assemble isolated diagnostic initramfs, no device writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/t575-stage47-build-initramfs.sh "$PWD/kernel" "$PWD/t575-initramfs"
+          file t575-initramfs/init
+          test -s t575-initramfs/t575-diagnostic-initramfs.cpio.gz
+          echo "Kernel/DTB and diagnostic initramfs exist as separate offline artifacts."
+
       - name: Save compile-only output
         if: success()
         uses: actions/upload-artifact@v4
@@ -139,4 +150,5 @@ jobs:
           path: |
             kernel/arch/arm64/boot/Image
             kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3lte.dtb
+            t575-initramfs/t575-diagnostic-initramfs.cpio.gz
           retention-days: 7
