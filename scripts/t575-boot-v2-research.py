@@ -69,6 +69,13 @@ def assemble(args):
     if not 0 < loader_size < BOOT_PARTITION:
         raise ValueError(f"raw LTE loader size {loader_size:,} exceeds BOOT partition bounds")
     raw_loader = loader.read_bytes()
+    # Samsung compatibility still needs runtime proof, but a raw AArch64
+    # Image kernel payload must carry the standard magic at offset 0x38.
+    if len(raw_loader) < 64 or raw_loader[0x38:0x3c] != b"ARM\\x64":
+        raise ValueError("LTE uniLoader lacks ARM64 Image header; old research artifact is obsolete")
+    declared_size = struct.unpack_from("<Q", raw_loader, 0x10)[0]
+    if not 0 < declared_size <= len(raw_loader):
+        raise ValueError("LTE loader ARM64 Image declared size invalid")
     if raw_loader[:8] == b"ANDROID!":
         raise ValueError("loader already contains an Android BOOT image header")
     if b"T575-LINK-TEST-NOT-BOOTABLE-" in raw_loader[:4096]:
