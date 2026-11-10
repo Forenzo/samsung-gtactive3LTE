@@ -17,7 +17,8 @@ TRUSTED_KEY=${GTA3_TRUSTED_KEY:-$GTA3_REPO/pmos/sysupdate-public-key.asc}
 TRUSTED_FPR=${GTA3_TRUSTED_FPR:-$PROJECT_FPR}
 BOOTCHAIN_TAG=$(cfg bootchain.tag)
 
-PY_REL() { python3 -I "$INST/py/releases.py" "$@"; }
+# the channels of the connected tablet's variant (android.sh VARIANT)
+PY_REL() { GTA3_VARIANT=$VARIANT python3 -I "$INST/py/releases.py" "$@"; }
 
 trust_note() {
 	if [ "$TRUSTED_FPR" != "$PROJECT_FPR" ]; then
@@ -173,6 +174,13 @@ fetch_image() {
 
 # ---------- boot-chain payload (uniLoader + U-Boot + our bring-up Linux) ----------
 
+# The boot-chain payload's loaders of this tablet's variant: the default
+# variant's are unsuffixed, every other one's end in -<codename>
+# (bootchain/build.sh)
+payload_suffix() {
+	[ "$VARIANT" = "$(cfg device.codename)" ] || printf -- '-%s' "$VARIANT"
+}
+
 # payload_acquire: sets PAYLOAD (a directory with uniLoader-chain,
 # uniLoader-linux, ramdisk.cpio.gz, MANIFEST)
 payload_acquire() {
@@ -191,7 +199,7 @@ payload_acquire() {
 		trust_note
 		d=$CACHE_DIR/payload
 		get_sums "$BOOTCHAIN_TAG" "$d"
-		name=$(awk '{ print $2 }' "$d/SHA256SUMS" | tr -d '*' | grep -E '^gtactive3wifi-bootchain_[0-9.]+\.tar\.gz$' |
+		name=$(awk '{ print $2 }' "$d/SHA256SUMS" | tr -d '*' | grep -E "^$(cfg device.family)-bootchain_[0-9.]+\\.tar\\.gz\$" |
 			sort -V | tail -1)
 		[ -n "$name" ] || die "the boot-chain release has no payload"
 		download "$GTA3_DL/$BOOTCHAIN_TAG/$name" "$d/$name" 0
@@ -204,7 +212,7 @@ payload_acquire() {
 			mv "$t" "$PAYLOAD"
 		fi
 	fi
-	for t in uniLoader-chain uniLoader-linux ramdisk.cpio.gz; do
+	for t in "uniLoader-chain$(payload_suffix)" "uniLoader-linux$(payload_suffix)" ramdisk.cpio.gz; do
 		[ -s "$PAYLOAD/$t" ] || die "the boot-chain payload has no $t"
 	done
 	state_set PAYLOAD_VERSION "$(sed -n 's/^version: //p' "$PAYLOAD/MANIFEST" 2>/dev/null | head -1)"

@@ -38,9 +38,11 @@ identity and boot security (EFS, PARAM, PERSISTENT, VBMETA, the bootloader,
 
 ## What you need
 
-- A Samsung Galaxy Tab Active3 **SM-T570** (Wi-Fi). Not the LTE models
-  (SM-T575/T577). Tested with firmware **T570XXSFEYI1** (bootloader revision
-  F), hardware revision 4.
+- A Samsung Galaxy Tab Active3 **SM-T570** (Wi-Fi). Tested with firmware
+  **T570XXSFEYI1** (bootloader revision F), hardware revision 4. The LTE
+  SM-T575/T575N is in bring-up: `./setup.sh --bring-up` accepts it, for
+  developers with a USB console only, and there are no images for it yet
+  (docs/VARIANTS.md). Not the US SM-T577U.
 - A Linux PC (Fedora, Debian, Ubuntu, Arch, Alpine, ...) with these tools;
   `./setup.sh doctor` checks them and prints the install command:
 

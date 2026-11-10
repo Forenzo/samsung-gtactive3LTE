@@ -65,7 +65,7 @@ pack_boot() {
 	local mode=$1 out=$2 stock ul
 	stock=$(state_get STOCK_BOOT)
 	[ -s "$stock" ] || die "no stock boot image"
-	ul=$PAYLOAD/uniLoader-$mode
+	ul=$PAYLOAD/uniLoader-$mode$(payload_suffix)
 	[ -s "$ul" ] || die "no $ul in the payload"
 	[ "$(stat -c %s "$stock")" = "$BOOT_PART_BYTES" ] ||
 		warn "the stock boot image is $(stat -c %s "$stock") bytes, BOOT is $BOOT_PART_BYTES"

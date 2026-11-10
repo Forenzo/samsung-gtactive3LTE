@@ -31,7 +31,8 @@ brcm/BCM.samsung,gtactive3wifi.hcd"
 STOCK_DIR() { echo "$STATE_DIR/stock"; }
 
 # version in a Samsung file name: AP_T570XXSFEYI1_... -> T570XXSFEYI1
-fw_version_of() { basename "$1" | grep -oE 'T570[A-Z0-9]{8}' | head -1; }
+# (the variant's android.firmware_pattern)
+fw_version_of() { basename "$1" | grep -oE "$(vcfg android.firmware_pattern)" | head -1; }
 
 check_fw_matches() {
 	local v=$1 pda
@@ -124,11 +125,11 @@ stock_download() {
 	region=$(aprop ro.csc.sales_code)
 	[ -n "$serial" ] && [ -n "$region" ] || die "the download needs the tablet in Android (serial and region)"
 	need_space "$d" $((12 << 30)) "the firmware download (~5 GB) and its decrypted copy" || die "not enough space"
-	info "downloading the newest SM-T570 firmware for region $region from Samsung (about 5 GB)..."
+	info "downloading the newest $(vcfg android.fus_model) firmware for region $region from Samsung (about 5 GB)..."
 	info "(the tablet's serial number is sent to Samsung only, as Samsung's own tools do)"
 	# not through act: its log line would carry the serial number
-	dry && { act "download the stock firmware (tools/fusdl.py SM-T570 $region <serial>)" true; return 0; }
-	"$py" -I "$GTA3_REPO/tools/fusdl.py" SM-T570 "$region" "$serial" "$d" || die "the download failed"
+	dry && { act "download the stock firmware (tools/fusdl.py $(vcfg android.fus_model) $region <serial>)" true; return 0; }
+	"$py" -I "$GTA3_REPO/tools/fusdl.py" "$(vcfg android.fus_model)" "$region" "$serial" "$d" || die "the download failed"
 	stock_from_zip "$(find "$d" -maxdepth 1 -name '*.zip' -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)"
 }
 

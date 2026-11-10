@@ -2,8 +2,17 @@
 # Stock Android over adb: find the tablet, check it, guide Developer
 # options / OEM unlocking / the bootloader unlock, back up files.
 
-TESTED_BL_REV=F           # T570XXSFEYI1: bootloader revision F (15)
-TESTED_PDA=T570XXSFEYI1
+# The variant (config.toml [[variant]]) of the connected tablet, from its
+# model number; the tested firmware and bootloader revision are that
+# variant's. Before a tablet is seen: the default variant.
+VARIANT=$("$GTA3_REPO/scripts/config" get device.codename)
+vcfg() { "$GTA3_REPO/scripts/config" get "variants.$VARIANT.$1"; }
+set_variant() {
+	VARIANT=$1
+	TESTED_BL_REV=$(vcfg android.tested_bootloader_rev)
+	TESTED_PDA=$(vcfg android.tested_firmware)
+}
+set_variant "$VARIANT"
 
 # adb_devices: "serial state" lines (state: device, unauthorized, offline,
 # recovery, sideload, no-permissions)
@@ -93,12 +102,18 @@ android_inspect() {
 	A_OEM_ALLOWED=$(aprop sys.oem_unlock_allowed)
 	A_DEVOPT=$(asetting development_settings_enabled)
 	A_KG=$(kg_state)
-	case $A_MODEL:$A_DEVICE in
-		SM-T570:gtactive3wifi) ;;
-		SM-T575*|SM-T577*)
-			die "this is a $A_MODEL (LTE): only the Wi-Fi model SM-T570 is supported" ;;
-		*) die "this is not a Galaxy Tab Active3 Wi-Fi (model '$A_MODEL', device '$A_DEVICE')" ;;
-	esac
+	local v
+	v=$("$GTA3_REPO/scripts/config" variant-of "$A_MODEL") ||
+		die "this is not a supported Galaxy Tab Active3 (model '$A_MODEL', device '$A_DEVICE'; supported: $("$GTA3_REPO/scripts/config" get device.models | paste -sd' ' -))"
+	set_variant "$v"
+	[ "$A_DEVICE" = "$(vcfg android.product_device)" ] ||
+		die "model $A_MODEL reports device '$A_DEVICE', expected '$(vcfg android.product_device)'"
+	if [ "$(vcfg status)" = bring-up ]; then
+		warn "the $A_MODEL ($(vcfg name)) is in bring-up: Linux has not been booted on it yet"
+		[ "${OPT_BRING_UP:-}" = 1 ] ||
+			die "only with --bring-up (a developer with a USB console and a way back to Android)"
+	fi
+	state_set VARIANT "$VARIANT"
 	state_set DEVICE_ID "$(adb get-serialno 2>/dev/null | tr -d '\r\n' | sha256sum | cut -c1-16)"
 	state_set PDA "$A_PDA"
 	state_set BOOTLOADER "$A_BL"

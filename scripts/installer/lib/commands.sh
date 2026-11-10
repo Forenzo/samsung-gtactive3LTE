@@ -266,7 +266,7 @@ systemctl is-active gta3-setup-update 2>/dev/null || true' | grep -qvx 'active\|
 
 # what decides where the tablet updates from: must not change in a test update
 REMOTE_CFG='# gta3:remote
-cat /usr/lib/gtactive3wifi/update-channel 2>/dev/null
+cat /usr/lib/gtactive3wifi/update-channel /usr/lib/samsung-gtactive3/update-channel 2>/dev/null
 for d in /etc/sysupdate.d /usr/lib/sysupdate.d; do [ -d $d ] && find $d -type f | sort | xargs cat 2>/dev/null; done | sha256sum'
 
 # update --test [DIR] [VERSION]: a local build as a one-off A/B update.
@@ -276,16 +276,19 @@ for d in /etc/sysupdate.d /usr/lib/sysupdate.d; do [ -d $d ] && find $d -type f 
 # the next official update replaces it. The tablet's update channel is not
 # touched.
 update_test() {
-	local dir=${1:-$GTA3_REPO/build/wt/duranium/mkosi.output} ver=${2:-} ui name uki osv booted l before after stage f
+	local dir=${1:-$GTA3_REPO/build/wt/duranium/mkosi.output} ver=${2:-} ui name uki osv booted l before after stage f dev
 	step "Install a test build as an A/B update"
+	# the tablet's variant (recorded at install time): its images' IMAGE_ID
+	set_variant "$(state_get VARIANT "$VARIANT")"
+	dev=$(vcfg id)
 	# the build's UI: UI=, else the image directory given, else the booted
 	# one (a test build may switch UI, e.g. Phosh on a tablet running GNOME)
 	case ${dir%/} in
-		*/samsung-gtactive3wifi_*_edge) ui=${dir%/}; ui=${ui##*/samsung-gtactive3wifi_}; ui=${ui%_edge} ;;
+		*/"${dev}"_*_edge) ui=${dir%/}; ui=${ui##*/"${dev}"_}; ui=${ui%_edge} ;;
 		*) ui= ;;
 	esac
 	ui=${UI:-${ui:-$(con_probe | awk '{ print $3 }')}}
-	name=samsung-gtactive3wifi_${ui}_edge
+	name=${dev}_${ui}_edge
 	[ -d "$dir/$name" ] && dir=$dir/$name
 	if [ -z "$ver" ]; then
 		ver=$(find "$dir" -maxdepth 1 -name "${name}_*~test*.efi" -printf '%f\n' |
@@ -324,7 +327,7 @@ status_duranium() {
 	dur_sh status '# gta3:status
 . /usr/lib/os-release; echo "image:   $IMAGE_ID $IMAGE_VERSION ($VARIANT_ID)"
 echo "kernel:  $(uname -r)"
-echo "channel: $(cat /usr/lib/gtactive3wifi/update-channel 2>/dev/null)"
+echo "channel: $(cat /usr/lib/gtactive3wifi/update-channel /usr/lib/samsung-gtactive3/update-channel 2>/dev/null)"
 echo "slots:"; lsblk -no NAME,PARTLABEL,SIZE /dev/loop0 2>/dev/null | sed "s/^/  /"
 echo "boot entries:"; ls /boot/EFI/Linux 2>/dev/null | sed "s/^/  /"
 echo "firmware: $(find /var/lib/firmware -type f 2>/dev/null | wc -l) files"' || true
