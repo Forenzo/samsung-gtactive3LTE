@@ -1,6 +1,44 @@
 # SM-T575 LTE bring-up: previous-device evidence and safety plan
 
-Status: **compile-only DTB / static hardware validation**. A T575-specific DTB now builds in GitHub Actions, but it is not runtime validated and is not safe for flashing. No SM-T575 boot image exists in this branch. The upstream SM-T570 installer, release images and firmware packages **must not be used on the SM-T575**.
+Status (2026-11-10): **SM-T575 kernel Image/DTB and LTE uniLoader compile; static audits pass; an unsigned Android BOOT v2 research file was assembled and byte-verified offline. Linux has NOT booted on this SM-T575.** The research file has no proven Samsung trust/signature/footer and is NOT flashable. Never run the inherited SM-T570 installer, use Wi-Fi release images, or flash the research file to the LTE tablet.
+
+
+## SM-T570 Wi-Fi versus SM-T575 LTE: evidence and porting differences (2026-11-10)
+
+**Evidence types:** T575 observations below come from the owner's rooted Android inventory, private running FDT, selected Samsung DTBO #5, verified rooted BOOT backup, or the LTE source/build. The T570 reference is the upstream repository, hardware notes, and Linux source, **not a fresh physical T570 test**. A shared SoC does not guarantee identical board wiring.
+
+| Subsystem | Wi-Fi SM-T570 reference | LTE SM-T575 observed / implemented | Consequence and remaining uncertainty |
+| --- | --- | --- | --- |
+| SoC / CPU | Exynos 9810, Cortex-A55 + Mongoose M3 | Exynos 9810, universal9810 | Shared kernel SoC work reusable; boot environment remains unproven |
+| GPU | Mali-G72 / upstream Panfrost support | Same SoC/GPU family | No LTE Linux GPU test yet |
+| Display | 1200×1920 boot framebuffer; T570 DECON takeover | Android fb0 1200×1920×32bpp, stride 4800; fb1 640×960; S-Boot FB reservation 0xca000000 + 20 MiB | LTE early DECON takeover and native panel remain disabled; no proven screen output |
+| Panel / touch / pen | Himax HX83102E family, Wacom S Pen | Stock DTBO shows four DSI lanes and 60 Hz; Himax SPI touchscreen; W90xx S Pen at I2C address 0x56 | Verify GPIO/IRQ, pinctrl, supply and DSI sequencing; vendor 600×1920 panel property differs from 1200×1920 framebuffer |
+| Audio codec | RT5665 | RT5665 at 3-001b | Likely common driver; LTE audio not tested |
+| **Speaker amplifier** | Tested T570 rev4 uses RT5510; upstream notes TAS2562 on another T570 revision | **TAS2562** at 5-004c; stock RT5510 disabled; vendor sound machine names TI | **Hardware revision difference, not necessarily LTE-only**. LTE DTS disables inherited RT5510 and sound until TAS2562 supply/DAI/driver work |
+| Wi-Fi/Bluetooth | BCM4375 and T570 PCIe0-based Wi-Fi | T575 Android FDT enables PCIe0, disables PCIe1 | Shared bus controller does not prove identical regulators/firmware; early LTE DTS isolates inherited Wi-Fi/BT |
+| **Cellular** | Wi-Fi-only, no LTE modem functionality | Samsung modem_if, mif_pdata, reserved modem region 0xf0000000–0xf9200000 and CP log 0xf9200000–0xfb200000 | Genuine extra LTE subsystem; modem and GNSS deferred; never write EFS or identity/calibration partitions |
+| PMIC/USB / sensors | S2MPS18, MAX77705, SM5504 and other upstream drivers | Same families present in T575 rooted inventory | Wiring and power controls require independent verification |
+| DRAM | Four physical banks in T570 patched mainline DTS | Private T575 live FDT has **the same four bank boundaries** | Strong mapping agreement, NOT proof of S-Boot source address or ownership of all reservations |
+| Samsung BOOT header | T570 bootloader installer is model-specific; prior Wi-Fi board identifier SRPTF17A015 | Verified T575 rooted BOOT v2, 2048-byte pages, board SRPTE13A015, DTBO index 5 of 6 | Must use LTE-specific metadata; never reuse T570 image, installer or DTBO |
+| uniLoader board | Wi-Fi board writes DECON MMIO and registers simplefb; optional chainload/watchdog logic | Separate passive LTE board: no display MMIO, no devices, no chainload or watchdog | Intentional conservative isolation; does not imply the LTE panel cannot use those devices |
+
+### Shared-loader changes and why they happened
+
+The T575 loader configuration enables the standard AArch64 Image header; the inherited T570 defconfig does not. During the LTE port, the shared uniLoader linker and AArch64 relocation code was corrected to include the Image header/preamble in its memory footprint, copy only file-backed initialized bytes (including GOT), avoid reading absent BSS/stack bytes, handle a byte tail and stop if source/destination relocation ranges overlap. These are *general uniLoader fixes discovered during the LTE port*, not evidence of different processors. Build/static checks passed according to the owner, but **neither device model has been runtime-tested with these changes in this project**.
+
+### Compiled artifacts and offline BOOT findings
+
+- LTE kernel Image, LTE DTB and diagnostic initramfs were compiled with GitHub Actions. Subsequent lightweight uniLoader CI builds reuse those Linux components rather than rebuilding Linux.
+- The verified ARM64-header uniLoader research input is 53,561,240 bytes, SHA-256 6c32477cb05990175ccc56e7ddaa8c0969e9e3bc0b505659aa9083d3f7cc8d87. **Later relocation changes produce a newer loader; do not assume that hash describes the latest CI artifact.**
+- The owner's current **Magisk-rooted**, not independently verified pristine stock, Android BOOT backup is 61,865,984 bytes, SHA-256 a69a724b75a51821a0baa4ccda424173a003b17de19e2b381bb7d4f30596e372. It holds the Android kernel (32,194,592 bytes), Magisk-rooted ramdisk (1,549,209 bytes) and embedded Samsung DTB (189,700 bytes).
+- The unsigned offline BOOT v2 file t575-linux-boot-arm64.research is 55,304,208 bytes, SHA-256 f1717d54c3682b16a3583ae8530b60de7749f0f418dce50b1f1858f20351dc9b, leaving **6,561,776 bytes** within the BOOT partition. It passed exact-source binary/ramdisk/DTB verification. The retained rooted Android ramdisk serves only as a structural research source.
+- The original headerless research image is superseded. **Neither .research file is Samsung-authenticated or approved to flash.** File size and structure tests do not demonstrate S-Boot acceptance.
+- The updated uniLoader runtime relocation guard was subsequently reported as passing CI, but no post-change boot execution or regenerated research image has been verified.
+- Verified Android BOOT metadata includes kernel address 0x10008000, ramdisk address 0x11000000 and DTB address 0x10000000; these header fields **do not prove S-Boot's runtime physical placement**.
+- uniLoader uses provisional relocation address 0x87000000, Linux kernel destination 0x90000000 and initramfs destination 0x84000000. Static linked-address collision audits have passed, but actual DRAM occupancy, S-Boot load address, cache/MMU/EL state, Samsung signing/trust, and reliable non-wiping restoration are all **unverified**.
+
+**Next evidence collection, not flashing:** rooted Android read-only /proc/iomem, /proc/cmdline and /proc/device-tree memory/reserved-memory inspection. Redact unique boot/device identifiers before sharing. Android's map does not establish earlier S-Boot loading behavior. **RESTORE / BOOT / FLASH GATE: BLOCKED.**
+
 
 ## Previously established on the actual tablet (2026-09-30 to 2026-10-01)
 
@@ -36,9 +74,11 @@ Source: the device owner's earlier September 30–October 1, 2026 test sessions.
 
 - [x] Independent fork and LTE development branch
 - [x] Capture prior root/flash experience without private artifacts
-- [ ] New T575 read-only device snapshot and T570 comparison
-- [ ] New LTE device-tree source and compile-only build
-- [ ] T575-specific boot-chain analysis and recovery verification
+- [x] Rooted T575 inventory, live FDT, selected DTBO and T570 source comparison (some GPIO/power details still unverified)
+- [x] Separate LTE device-tree source, compiled Linux Image/DTB and compile-only audits
+- [x] LTE uniLoader and unsigned BOOT v2 research packaging validated offline
+- [ ] Runtime S-Boot loading/EL/cache and authentication conditions verified
+- [ ] Non-wiping Android restore independently demonstrated
 - [ ] BOOT-only test (explicitly approved, reversible)
 - [ ] GPU, display, touch, input and storage bring-up
 - [ ] Wireless, audio, charge, suspend and S Pen
