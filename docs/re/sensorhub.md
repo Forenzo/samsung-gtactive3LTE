@@ -3,7 +3,7 @@
 Our own description of the sensor path of the SM-T570 (Galaxy Tab Active3,
 board hw_rev 4 = `dtbo-4`, HARDWARE.md:84), written from:
 
-- Samsung's GPL driver `drivers/sensorhub/brcm/` in the T570-family kernel
+- Samsung's GPL driver `drivers/sensorhub/brcm/` in the Tab Active3 family kernel (the SM-T577U's tree, ../VARIANTS.md)
   (`build/ref/gtactive3cs`, defconfig `exynos9810-gtactive3ue_defconfig`),
   cross-checked against the Galaxy S9 copy in `src/samsung-9810-ref`
   (same bbdpl code, different patch blob);
