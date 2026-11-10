@@ -1,0 +1,372 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 10:10:04 +1100
+Subject: [PATCH 154/154] remoteproc: samsung_shannon_cp: sketch of the Exynos
+ 9810 modem driver
+
+The Galaxy Tab Active3 LTE (SM-T575) has the Exynos 9810's own LTE modem,
+a Shannon CP that shares DRAM with the AP, talks through the MCU_IPC
+mailbox, and is powered and started through PMU registers and EL3 (SMC
+0x82000700) after it has checked the firmware's signatures.
+
+This is the outline of a mainline-shaped driver for it: a remoteproc that
+maps the CP's reserved memory write-combined, checks and parses the
+firmware's table of contents and copies BOOT and MAIN into place. It
+cannot start the CP: prepare and start refuse unless experimental_boot
+is set, and start is a documented TODO list. Nothing enables it.
+
+Facts and sources: docs/re/modem.md in the port repository (Samsung's
+GPL modem_v1, mcu_ipc and pmu-cp drivers for the same SoC).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/remoteproc/Kconfig              |  11 +
+ drivers/remoteproc/Makefile             |   1 +
+ drivers/remoteproc/samsung_shannon_cp.c | 301 ++++++++++++++++++++++++
+ 3 files changed, 313 insertions(+)
+ create mode 100644 drivers/remoteproc/samsung_shannon_cp.c
+
+diff --git a/drivers/remoteproc/Kconfig b/drivers/remoteproc/Kconfig
+index 5b56b2dcc..0ffd1b5d1 100644
+--- a/drivers/remoteproc/Kconfig
++++ b/drivers/remoteproc/Kconfig
+@@ -324,6 +324,17 @@ config ST_REMOTEPROC
+ config ST_SLIM_REMOTEPROC
+ 	tristate
+ 
++config SAMSUNG_SHANNON_CP
++	tristate "Samsung Shannon CP (Exynos 9810 modem) remoteproc (sketch)"
++	depends on ARCH_EXYNOS || COMPILE_TEST
++	depends on HAVE_ARM_SMCCC
++	select MFD_SYSCON
++	help
++	  An outline of a driver for the LTE modem inside the Exynos 9810
++	  (Galaxy Tab Active3 LTE SM-T575): maps the CP's memory and loads its
++	  firmware images. It cannot start the CP yet. Not tested on hardware;
++	  say N unless you are working on it.
++
+ config STM32_RPROC
+ 	tristate "STM32 remoteproc support"
+ 	depends on ARCH_STM32 || COMPILE_TEST
+diff --git a/drivers/remoteproc/Makefile b/drivers/remoteproc/Makefile
+index 689686de0..23d5aa1b3 100644
+--- a/drivers/remoteproc/Makefile
++++ b/drivers/remoteproc/Makefile
+@@ -36,6 +36,7 @@ qcom_wcnss_pil-y			+= qcom_wcnss_iris.o
+ obj-$(CONFIG_RCAR_REMOTEPROC)		+= rcar_rproc.o
+ obj-$(CONFIG_ST_REMOTEPROC)		+= st_remoteproc.o
+ obj-$(CONFIG_ST_SLIM_REMOTEPROC)	+= st_slim_rproc.o
++obj-$(CONFIG_SAMSUNG_SHANNON_CP)	+= samsung_shannon_cp.o
+ obj-$(CONFIG_STM32_RPROC)		+= stm32_rproc.o
+ obj-$(CONFIG_TI_K3_DSP_REMOTEPROC)	+= ti_k3_dsp_remoteproc.o ti_k3_common.o
+ obj-$(CONFIG_TI_K3_M4_REMOTEPROC)	+= ti_k3_m4_remoteproc.o ti_k3_common.o
+diff --git a/drivers/remoteproc/samsung_shannon_cp.c b/drivers/remoteproc/samsung_shannon_cp.c
+new file mode 100644
+index 000000000..f05922c6f
+--- /dev/null
++++ b/drivers/remoteproc/samsung_shannon_cp.c
+@@ -0,0 +1,301 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Samsung Shannon CP (the Exynos 9810's own LTE modem) as a remote processor.
++ *
++ * SKETCH, NOT TESTED ON HARDWARE. It is the outline of the mainline-shaped
++ * driver for the Galaxy Tab Active3 LTE (SM-T575); nothing enables it (the
++ * Kconfig symbol defaults to n and no config sets it), and starting the CP
++ * is refused unless the experimental_boot parameter is set. The facts it
++ * uses (TOC layout, SMC ids, PMU and mailbox registers, the boot sequence)
++ * come from Samsung's GPL modem_v1/mcu_ipc/pmu-cp drivers for the same SoC
++ * and are collected, with their sources, in docs/re/modem.md of the
++ * samsung-gtactive3wifi port repository.
++ *
++ * What it does today: map the CP's shared memory (the no-map reserved
++ * region), parse the firmware's table of contents and copy the BOOT and MAIN
++ * images into place. What it does not do yet (TODO, in this order):
++ *
++ *  1. prepare: security request mode 2 (re-init) through SMC 0x82000700
++ *  2. load:    copy NV data (nv_data.bin, the owner's EFS, read once into
++ *              RAM by a helper; never written back) to its TOC load address
++ *  3. start:   security request mode 0 (EL3 checks the signatures) with the
++ *              SSS clock on, cal_cp_init if the CP is down, modem_on
++ *              (mailbox registers cleared, AP2CP_CFG bit 0), boot_on (boot
++ *              magic, poll the CP status), the boot-channel handshake
++ *  4. the SIPC link (SBD rings, SIPC5 framing) registering wwan ports and
++ *     netdevs: a separate driver on top of this one
++ *  5. stop, crash handling and the DUMP channel as rproc coredump
++ *
++ * Copyright (c) 2026 The samsung-gtactive3wifi contributors
++ */
++
++#include <linux/arm-smccc.h>
++#include <linux/io.h>
++#include <linux/mfd/syscon.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/platform_device.h>
++#include <linux/regmap.h>
++#include <linux/remoteproc.h>
++#include <linux/firmware.h>
++
++/* SMC to EL3 for the CP: secure boot requests and the secure PMU register */
++#define SHANNON_SMC_ID			0x82000700
++#define SHANNON_SMC_BOOT		0	/* verify BOOT+MAIN, configure the CP */
++#define SHANNON_SMC_DUMP		1	/* the dump goes to the IPC region */
++#define SHANNON_SMC_REINIT		2	/* before the images are copied */
++#define SHANNON_SMC_SSS_CLK		0x82001011	/* 0: on, 1: off */
++
++/* PMU (syscon) registers of the CP */
++#define PMU_CP_CTRL_NS			0x0030
++#define PMU_CP_STAT			0x0038
++#define PMU_RESET_SEQUENCER_STATUS	0x0504
++#define PMU_RESET_SEQ_MASK		0x7
++#define PMU_RESET_SEQ_CP_RUNNING	0x5
++
++/* AP2CP_CFG (reg 0): bit 0 lets the CP core run; EL3 set up the rest */
++#define AP2CP_CFG_DONE			BIT(0)
++
++/* Firmware layout: a 512-byte table of contents, 16 entries of 32 bytes */
++#define SHANNON_TOC_ENTRIES		16
++#define SHANNON_TOC_SIZE		(SHANNON_TOC_ENTRIES * 32)
++
++struct shannon_toc_entry {
++	char name[12];
++	__le32 offset;		/* in the firmware file */
++	__le32 loadaddr;	/* CP address; BOOT's is the base of the region */
++	__le32 size;
++	__le32 crc;
++	__le32 entryid;
++} __packed;
++
++static_assert(sizeof(struct shannon_toc_entry) == 32);
++
++struct shannon_cp {
++	struct device *dev;
++	void __iomem *ap2cp_cfg;
++	struct regmap *pmu;
++	void *mem;		/* the CP's memory, write-combined */
++	phys_addr_t mem_phys;
++	size_t mem_size;
++	u32 boot_size;		/* for the secure boot request */
++	u32 main_size;
++};
++
++static bool experimental_boot;
++module_param(experimental_boot, bool, 0444);
++MODULE_PARM_DESC(experimental_boot,
++		 "Allow starting the CP (untested sketch: only on a T575 under test)");
++
++static unsigned long shannon_smc(unsigned long id, unsigned long a1,
++				 unsigned long a2, unsigned long a3)
++{
++	struct arm_smccc_res res;
++
++	arm_smccc_smc(id, a1, a2, a3, 0, 0, 0, 0, &res);
++	return res.a0;
++}
++
++static bool shannon_cp_running(struct shannon_cp *cp)
++{
++	unsigned int val;
++
++	if (regmap_read(cp->pmu, PMU_RESET_SEQUENCER_STATUS, &val))
++		return false;
++	return (val & PMU_RESET_SEQ_MASK) == PMU_RESET_SEQ_CP_RUNNING;
++}
++
++static const struct shannon_toc_entry *
++shannon_toc_find(const struct firmware *fw, const char *name)
++{
++	const struct shannon_toc_entry *toc = (const void *)fw->data;
++	int i;
++
++	for (i = 0; i < SHANNON_TOC_ENTRIES; i++)
++		if (!strncmp(toc[i].name, name, sizeof(toc[i].name)))
++			return &toc[i];
++	return NULL;
++}
++
++static int shannon_sanity_check(struct rproc *rproc, const struct firmware *fw)
++{
++	struct shannon_cp *cp = rproc->priv;
++
++	if (fw->size < SHANNON_TOC_SIZE ||
++	    strncmp(((const struct shannon_toc_entry *)fw->data)->name, "TOC", 12)) {
++		dev_err(cp->dev, "no Shannon table of contents in %s\n",
++			rproc->firmware);
++		return -EINVAL;
++	}
++	if (!shannon_toc_find(fw, "BOOT") || !shannon_toc_find(fw, "MAIN")) {
++		dev_err(cp->dev, "firmware lacks BOOT or MAIN\n");
++		return -EINVAL;
++	}
++	return 0;
++}
++
++/* Copy one TOC entry to its place in the CP's memory, relative to BOOT's. */
++static int shannon_copy(struct shannon_cp *cp, const struct firmware *fw,
++			const struct shannon_toc_entry *e, u32 base)
++{
++	u32 off = le32_to_cpu(e->offset), size = le32_to_cpu(e->size);
++	u32 dst = le32_to_cpu(e->loadaddr) - base;
++
++	if (le32_to_cpu(e->loadaddr) < base || (u64)off + size > fw->size ||
++	    (u64)dst + size > cp->mem_size) {
++		dev_err(cp->dev, "%.12s does not fit (offset %#x, size %#x)\n",
++			e->name, off, size);
++		return -EINVAL;
++	}
++	memcpy(cp->mem + dst, fw->data + off, size);
++	return 0;
++}
++
++static int shannon_load(struct rproc *rproc, const struct firmware *fw)
++{
++	struct shannon_cp *cp = rproc->priv;
++	const struct shannon_toc_entry *boot, *main;
++	u32 base;
++	int ret;
++
++	boot = shannon_toc_find(fw, "BOOT");
++	main = shannon_toc_find(fw, "MAIN");
++	base = le32_to_cpu(boot->loadaddr);
++
++	ret = shannon_copy(cp, fw, boot, base);
++	if (ret)
++		return ret;
++	ret = shannon_copy(cp, fw, main, base);
++	if (ret)
++		return ret;
++	cp->boot_size = le32_to_cpu(boot->size);
++	cp->main_size = le32_to_cpu(main->size);
++
++	/* TODO: NV ("NV" entry's load address) from the helper's RAM copy */
++	return 0;
++}
++
++static int shannon_prepare(struct rproc *rproc)
++{
++	struct shannon_cp *cp = rproc->priv;
++	unsigned long ret;
++
++	if (!experimental_boot)
++		return -EPERM;
++
++	ret = shannon_smc(SHANNON_SMC_ID, SHANNON_SMC_REINIT, 0, 0);
++	/* stock cbd ignores a non-zero answer here (11 = CP not working) */
++	dev_info(cp->dev, "re-init request: %lu\n", ret);
++	return 0;
++}
++
++static int shannon_start(struct rproc *rproc)
++{
++	struct shannon_cp *cp = rproc->priv;
++
++	if (!experimental_boot)
++		return -EPERM;
++
++	/*
++	 * TODO (docs/re/modem.md, "CP boot sequence", steps 4-7): SSS clock on,
++	 * cal_cp_init() when !shannon_cp_running(), the secure boot request
++	 * (SHANNON_SMC_BOOT, boot_size, main_size) and its error code, SSS
++	 * clock off, clear the 64 mailbox registers, write the AP status,
++	 * AP2CP_CFG_DONE, the boot magic, poll the CP status, the boot-channel
++	 * handshake. None of it is run until each step has been checked
++	 * against a stock T575's logs.
++	 */
++	dev_err(cp->dev, "starting the CP is not implemented yet\n");
++	return -EOPNOTSUPP;
++}
++
++static int shannon_stop(struct rproc *rproc)
++{
++	/* TODO: the PMU reset sequence (cp_reset_assert) */
++	return -EOPNOTSUPP;
++}
++
++static void *shannon_da_to_va(struct rproc *rproc, u64 da, size_t len,
++			      bool *is_iomem)
++{
++	struct shannon_cp *cp = rproc->priv;
++
++	/* device addresses here are offsets into the CP's memory */
++	if (da + len > cp->mem_size)
++		return NULL;
++	return cp->mem + da;
++}
++
++static const struct rproc_ops shannon_ops = {
++	.prepare = shannon_prepare,
++	.start = shannon_start,
++	.stop = shannon_stop,
++	.da_to_va = shannon_da_to_va,
++	.sanity_check = shannon_sanity_check,
++	.load = shannon_load,
++};
++
++static int shannon_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *np = dev->of_node, *mem_np;
++	struct reserved_mem *rmem;
++	struct shannon_cp *cp;
++	struct rproc *rproc;
++
++	rproc = devm_rproc_alloc(dev, "shannon-cp", &shannon_ops,
++				 "shannon-cp.bin", sizeof(*cp));
++	if (!rproc)
++		return -ENOMEM;
++	/* user space assembles the firmware (RADIO's TOC, BOOT, MAIN) first */
++	rproc->auto_boot = false;
++	cp = rproc->priv;
++	cp->dev = dev;
++
++	cp->ap2cp_cfg = devm_platform_ioremap_resource(pdev, 0);
++	if (IS_ERR(cp->ap2cp_cfg))
++		return PTR_ERR(cp->ap2cp_cfg);
++
++	cp->pmu = syscon_regmap_lookup_by_phandle(np, "samsung,pmu-syscon");
++	if (IS_ERR(cp->pmu))
++		return dev_err_probe(dev, PTR_ERR(cp->pmu), "no PMU syscon\n");
++
++	mem_np = of_parse_phandle(np, "memory-region", 0);
++	if (!mem_np)
++		return dev_err_probe(dev, -EINVAL, "no memory-region\n");
++	rmem = of_reserved_mem_lookup(mem_np);
++	of_node_put(mem_np);
++	if (!rmem)
++		return dev_err_probe(dev, -EINVAL, "memory-region is not reserved\n");
++	cp->mem_phys = rmem->base;
++	cp->mem_size = rmem->size;
++	/* no-map region: write-combined, never through the linear map */
++	cp->mem = devm_memremap(dev, cp->mem_phys, cp->mem_size, MEMREMAP_WC);
++	if (IS_ERR(cp->mem))
++		return PTR_ERR(cp->mem);
++
++	dev_info(dev, "CP memory %pa + %#zx, CP %s\n", &cp->mem_phys,
++		 cp->mem_size, shannon_cp_running(cp) ? "running" : "down");
++
++	platform_set_drvdata(pdev, rproc);
++	return devm_rproc_add(dev, rproc);
++}
++
++static const struct of_device_id shannon_of_match[] = {
++	{ .compatible = "samsung,exynos9810-shannon-cp" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, shannon_of_match);
++
++static struct platform_driver shannon_driver = {
++	.probe = shannon_probe,
++	.driver = {
++		.name = "samsung-shannon-cp",
++		.of_match_table = shannon_of_match,
++	},
++};
++module_platform_driver(shannon_driver);
++
++MODULE_DESCRIPTION("Samsung Shannon CP (Exynos 9810 modem) remote processor (sketch)");
++MODULE_LICENSE("GPL");
+-- 
+2.53.0
+

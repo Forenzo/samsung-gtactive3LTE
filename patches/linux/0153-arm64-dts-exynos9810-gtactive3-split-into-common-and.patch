@@ -1,0 +1,4577 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 09:09:46 +1100
+Subject: [PATCH 153/154] arm64: dts: exynos9810: gtactive3: split into common
+ and per-variant files
+
+The Galaxy Tab Active3 is one board in two variants: the Wi-Fi SM-T570
+(gtactive3wifi) and the LTE SM-T575/T575N (gtactive3), which adds the
+SoC's own modem. Move everything into exynos9810-gtactive3-common.dtsi
+and keep only the identity in the board files, so both variants get
+every fix.
+
+exynos9810-gtactive3wifi.dts preprocesses to the same tree as before
+(model and compatible move to the end of the root node).
+
+exynos9810-gtactive3.dts is a bring-up board for the LTE variant, from
+the stock T575XXSFEYI1 tree of a hw_rev 5 unit: the CP shared memory
+and log carveouts are reserved (no-map), the RT5510 that hw_rev 5 does
+not fit is disabled, a disabled TAS2562 node marks the real amplifier,
+and the sound card stays off until the speaker link points at it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/exynos/Makefile           |    1 +
+ .../exynos/exynos9810-gtactive3-common.dtsi   | 2213 +++++++++++++++++
+ .../boot/dts/exynos/exynos9810-gtactive3.dts  |   88 +
+ .../dts/exynos/exynos9810-gtactive3wifi.dts   | 2202 +---------------
+ 4 files changed, 2306 insertions(+), 2198 deletions(-)
+ create mode 100644 arch/arm64/boot/dts/exynos/exynos9810-gtactive3-common.dtsi
+ create mode 100644 arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
+
+diff --git a/arch/arm64/boot/dts/exynos/Makefile b/arch/arm64/boot/dts/exynos/Makefile
+index 5587b2956..079360a7f 100644
+--- a/arch/arm64/boot/dts/exynos/Makefile
++++ b/arch/arm64/boot/dts/exynos/Makefile
+@@ -16,6 +16,7 @@ dtb-$(CONFIG_ARCH_EXYNOS) += \
+ 	exynos850-e850-96.dtb		\
+ 	exynos8855-smdk.dtb		\
+ 	exynos8895-dreamlte.dtb		\
++	exynos9810-gtactive3.dtb	\
+ 	exynos9810-gtactive3wifi.dtb	\
+ 	exynos9810-gtactive3wifi-i2cgpio.dtb \
+ 	exynos9810-gtactive3wifi-grip.dtb \
+diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3-common.dtsi b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3-common.dtsi
+new file mode 100644
+index 000000000..1ef1c3786
+--- /dev/null
++++ b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3-common.dtsi
+@@ -0,0 +1,2213 @@
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
++/*
++ * Samsung Galaxy Tab Active3 family (Exynos 9810): what every variant
++ * shares. The Wi-Fi SM-T570 (gtactive3wifi) and the LTE SM-T575/T575N
++ * (gtactive3) are one board design; the LTE one adds the SoC's modem
++ * (docs/VARIANTS.md in the port repository). Board files:
++ * exynos9810-gtactive3wifi.dts and exynos9810-gtactive3.dts.
++ *
++ * Based on exynos9810-starlte.dts:
++ * Copyright (c) 2024 Markuss Broks <markuss.broks@gmail.com>
++ * Copyright (c) 2024 Maksym Holovach <nergzd@nergzd723.xyz>
++ *
++ * Framebuffer base and key GPIOs are taken from the stock T570XXSFEYI1 DTBO
++ * (hw_rev 5+); the T575's stock tree has the same framebuffer carveout.
++ * TODO: the memory map is still copied from starlte and must be checked
++ * against /proc/iomem on the device.
++ */
++
++#include "exynos9810.dtsi"
++#include <dt-bindings/clock/samsung,exynos9810-acpm.h>
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/gpio-keys.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/leds/common.h>
++
++/ {
++	/* model and compatible: the board files */
++	chassis-type = "tablet";
++
++	/*
++	 * EB-BT575BBE, values from the stock sec-battery node (DTBO hw_rev 4):
++	 * battery_full_capacity 5000 mAh, chg_float_voltage 4260 mV,
++	 * max_charging_current 3100 mA, sw_v_empty_voltage 3200 mV.
++	 */
++	battery: battery {
++		compatible = "simple-battery";
++		charge-full-design-microamp-hours = <5000000>;
++		constant-charge-current-max-microamp = <3100000>;
++		constant-charge-voltage-max-microvolt = <4260000>;
++		voltage-max-design-microvolt = <4260000>;
++		voltage-min-design-microvolt = <3200000>;
++	};
++
++	/*
++	 * 32.768 kHz RTC clock (XrtcXTI) from the S2MPS18, always on; the
++	 * PMIC is read-only here, so it is not modelled as a PMIC clock.
++	 */
++	rtcclk: clock-rtcclk {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <32768>;
++		clock-output-names = "rtcclk";
++	};
++
++	chosen {
++		#address-cells = <2>;
++		#size-cells = <1>;
++		ranges;
++
++		/*
++		 * Scanned out by DECON_F window 5 in video mode, dual DSI
++		 * (2 x 600x1920). The window blends with PD_FUNC_COPY, so the
++		 * alpha byte is ignored and XRGB8888 needs no conversion.
++		 */
++		framebuffer0: framebuffer-0 {
++			compatible = "simple-framebuffer";
++			memory-region = <&fb_mem>;
++			width = <1200>;
++			height = <1920>;
++			stride = <(1200 * 4)>;
++			format = "x8r8g8b8";
++			panel = <&panel>;
++		};
++	};
++
++	/*
++	 * Himax HX83102E (BOE) TDDI, 1200x1920 portrait, on DSIM0 + DSIM1.
++	 * There is no DSI host driver yet: the bootloader initialises the
++	 * panel and this node only describes it for simpledrm (physical size,
++	 * mounting) and links the DCS backlight. Change "rotation" here if
++	 * userspace should treat another edge as the top.
++	 *
++	 * The node is disabled on purpose: "panel" is a fw_devlink supplier
++	 * property, and an enabled node that never becomes a device would
++	 * keep simpledrm in deferred probe forever ("wait for supplier
++	 * /panel"; this config has no deferred probe timeout). simpledrm
++	 * reads width-mm/height-mm/rotation regardless of the status.
++	 */
++	panel: panel {
++		status = "disabled";
++		width-mm = <108>;
++		height-mm = <172>;
++		rotation = <0>;
++		backlight = <&backlight>;
++	};
++
++	gpio-keys {
++		compatible = "gpio-keys";
++
++		pinctrl-0 = <&key_power &key_voldown &key_volup &key_home &key_hot
++			     &key_back &key_recent &hall_irq>;
++		pinctrl-names = "default";
++
++		power-key {
++			label = "Power";
++			linux,code = <KEY_POWER>;
++			gpios = <&gpa2 4 GPIO_ACTIVE_LOW>;
++			wakeup-source;
++		};
++
++		voldown-key {
++			label = "Volume Down";
++			linux,code = <KEY_VOLUMEDOWN>;
++			gpios = <&gpa0 4 GPIO_ACTIVE_LOW>;
++		};
++
++		volup-key {
++			label = "Volume Up";
++			linux,code = <KEY_VOLUMEUP>;
++			gpios = <&gpa0 3 GPIO_ACTIVE_LOW>;
++		};
++
++		home-key {
++			label = "Home";
++			linux,code = <KEY_HOMEPAGE>;
++			gpios = <&gpa3 5 GPIO_ACTIVE_LOW>;
++			wakeup-source;
++		};
++
++		/* "Active key" on the side, user-programmable in stock firmware */
++		hot-key {
++			label = "Active";
++			linux,code = <KEY_PROG1>;
++			gpios = <&gpa0 5 GPIO_ACTIVE_LOW>;
++			wakeup-source;
++		};
++
++		back-key {
++			label = "Back";
++			linux,code = <KEY_BACK>;
++			gpios = <&gpg3 0 GPIO_ACTIVE_LOW>;
++		};
++
++		recent-key {
++			label = "Recent apps";
++			/* KEY_APPSELECT (580) is beyond XKB keymaps: use the "expose" key */
++			linux,code = <KEY_SCALE>;
++			gpios = <&gpg3 1 GPIO_ACTIVE_LOW>;
++		};
++
++		/*
++		 * Book cover hall sensor, low while the cover is closed
++		 * (stock "hall" node: hall,gpio_flip_cover = gpa0-2; Samsung
++		 * hall.c reports !gpio_get_value() as the closed state).
++		 */
++		hall-sensor {
++			label = "Cover";
++			linux,input-type = <EV_SW>;
++			linux,code = <SW_LID>;
++			gpios = <&gpa0 2 GPIO_ACTIVE_LOW>;
++			debounce-interval = <15>;
++			wakeup-source;
++			/* wake when the cover opens, not when it closes */
++			wakeup-event-action = <EV_ACT_DEASSERTED>;
++		};
++	};
++
++	/* Coin DC motor, switched by the motor LDO enable (stock dc_vibrator) */
++	vibrator {
++		compatible = "gpio-vibrator";
++		enable-gpios = <&gpg3 6 GPIO_ACTIVE_HIGH>;
++		pinctrl-0 = <&mot_ldo_en>;
++		pinctrl-names = "default";
++	};
++
++	/*
++	 * Rear camera flash: RT8547, FLEN = gpg3-5, CTRL = gpg0-7 (stock
++	 * leds_rt8547: flash_en/flash_control). Stock currents: flash 1000 mA,
++	 * movie (torch) 150 mA.
++	 */
++	led-controller {
++		compatible = "richtek,rt8547";
++		flen-gpios = <&gpg3 5 GPIO_ACTIVE_HIGH>;
++		ctrl-gpios = <&gpg0 7 GPIO_ACTIVE_HIGH>;
++
++		led {
++			function = LED_FUNCTION_FLASH;
++			color = <LED_COLOR_ID_WHITE>;
++			flash-max-timeout-us = <512000>;
++			flash-max-microamp = <1000000>;
++			led-max-microamp = <150000>;
++		};
++	};
++
++	/* S Pen digitiser supply (stock wacom_ldo_en: gpm42-0, 3.3 V) */
++	vdd_wacom: regulator-wacom {
++		compatible = "regulator-fixed";
++		regulator-name = "wacom_3.3v";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&gpm42 0 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		regulator-boot-on;
++	};
++
++	/*
++	 * The AP ADC samples the NTCs ratiometrically; its reference is not
++	 * described in the stock DT and is assumed to be 1.8 V here. The
++	 * lookup tables below are the stock sec-battery ADC code tables
++	 * (DTBO hw_rev 4) converted to mV with the same 1.8 V, so only the
++	 * ratio matters.
++	 */
++	vref_adc: regulator-adc-vref {
++		compatible = "regulator-fixed";
++		regulator-name = "adc_vref";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		regulator-always-on;
++	};
++
++	/* Battery pack NTC (stock adc-temp, thermal_source ADC) */
++	batt_ntc: thermal-sensor-battery {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&adc 1>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-20000) 1603 (-19000) 1594 (-18000) 1585 (-17000) 1576
++			(-16000) 1567 (-15000) 1558 (-14000) 1546 (-13000) 1535
++			(-12000) 1523 (-11000) 1512 (-10000) 1500 (-9000) 1487
++			(-8000) 1472 (-7000) 1458 (-6000) 1444 (-5000) 1432
++			(-4000) 1419 (-3000) 1406 (-2000) 1393 (-1000) 1375
++			0 1358 1000 1340 2000 1320 3000 1302
++			4000 1284 5000 1267 6000 1248 7000 1230
++			8000 1212 9000 1194 10000 1175 11000 1156
++			12000 1136 13000 1116 14000 1097 15000 1077
++			16000 1056 17000 1036 18000 1015 19000 995
++			20000 974 21000 955 22000 935 23000 916
++			24000 896 25000 876 26000 855 27000 839
++			28000 826 29000 813 30000 800 31000 786
++			32000 773 33000 760 34000 747 35000 725
++			36000 703 37000 659 38000 625 39000 608
++			40000 590 41000 574 42000 559 43000 543
++			44000 527 45000 511 46000 497 47000 483
++			48000 474 49000 465 50000 457 51000 448
++			52000 439 53000 420 54000 403 55000 385
++			56000 367 57000 357 58000 346 59000 335
++			60000 324 61000 316 62000 309 63000 301
++			64000 293 65000 286 66000 278 67000 270
++			68000 263 69000 255 70000 247 71000 240
++			72000 233 73000 226 74000 219 75000 212
++			76000 206 77000 200 78000 194 79000 188
++			80000 182 81000 178 82000 173 83000 169
++			84000 164 85000 160 86000 156 87000 151
++			88000 147 89000 142 90000 138
++		>;
++	};
++
++	/* NTC next to the MAX77705 charger (stock adc-chg-temp) */
++	chg_ntc: thermal-sensor-charger {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&adc 3>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-20000) 1598 (-19000) 1589 (-18000) 1579 (-17000) 1570
++			(-16000) 1560 (-15000) 1551 (-14000) 1539 (-13000) 1527
++			(-12000) 1516 (-11000) 1504 (-10000) 1492 (-9000) 1478
++			(-8000) 1464 (-7000) 1449 (-6000) 1435 (-5000) 1421
++			(-4000) 1406 (-3000) 1390 (-2000) 1375 (-1000) 1360
++			0 1345 1000 1327 2000 1309 3000 1290
++			4000 1272 5000 1254 6000 1236 7000 1218
++			8000 1200 9000 1181 10000 1163 11000 1143
++			12000 1123 13000 1103 14000 1083 15000 1063
++			16000 1043 17000 1022 18000 1001 19000 981
++			20000 960 21000 941 22000 922 23000 902
++			24000 883 25000 864 26000 843 27000 821
++			28000 800 29000 778 30000 757 31000 739
++			32000 721 33000 703 34000 685 35000 667
++			36000 650 37000 632 38000 614 39000 596
++			40000 578 41000 562 42000 545 43000 528
++			44000 512 45000 495 46000 482 47000 469
++			48000 457 49000 444 50000 431 51000 419
++			52000 407 53000 394 54000 382 55000 369
++			56000 359 57000 348 58000 338 59000 327
++			60000 316 61000 309 62000 301 63000 294
++			64000 286 65000 278 66000 271 67000 263
++			68000 255 69000 248 70000 240 71000 234
++			72000 227 73000 220 74000 213 75000 207
++			76000 200 77000 194 78000 188 79000 182
++			80000 176 81000 172 82000 167 83000 163
++			84000 159 85000 154 86000 150 87000 145
++			88000 141 89000 137 90000 132
++		>;
++	};
++
++	/* NTC at the USB-C connector (stock adc-usb-temp) */
++	usb_ntc: thermal-sensor-usb {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&adc 4>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			(-20000) 1603 (-19000) 1594 (-18000) 1585 (-17000) 1576
++			(-16000) 1567 (-15000) 1557 (-14000) 1546 (-13000) 1534
++			(-12000) 1523 (-11000) 1512 (-10000) 1501 (-9000) 1487
++			(-8000) 1472 (-7000) 1458 (-6000) 1444 (-5000) 1430
++			(-4000) 1415 (-3000) 1400 (-2000) 1385 (-1000) 1370
++			0 1356 1000 1338 2000 1320 3000 1302
++			4000 1284 5000 1266 6000 1248 7000 1230
++			8000 1212 9000 1193 10000 1175 11000 1156
++			12000 1136 13000 1116 14000 1096 15000 1076
++			16000 1056 17000 1036 18000 1015 19000 994
++			20000 974 21000 954 22000 934 23000 915
++			24000 895 25000 876 26000 854 27000 833
++			28000 812 29000 791 30000 769 31000 751
++			32000 733 33000 714 34000 696 35000 678
++			36000 660 37000 642 38000 625 39000 607
++			40000 589 41000 574 42000 558 43000 541
++			44000 526 45000 510 46000 496 47000 482
++			48000 468 49000 453 50000 439 51000 427
++			52000 414 53000 402 54000 390 55000 378
++			56000 367 57000 356 58000 345 59000 334
++			60000 323 61000 316 62000 308 63000 300
++			64000 292 65000 285 66000 277 67000 269
++			68000 261 69000 254 70000 247 71000 240
++			72000 232 73000 225 74000 218 75000 211
++			76000 205 77000 199 78000 193 79000 187
++			80000 181 81000 177 82000 172 83000 168
++			84000 163 85000 159 86000 155 87000 150
++			88000 146 89000 141 90000 137
++		>;
++	};
++
++	/*
++	 * No trips: the MAX77705 charger driver reads battery-thermal and
++	 * charger-thermal itself and throttles or stops charging at the stock
++	 * thresholds.
++	 */
++	thermal-zones {
++		battery-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&batt_ntc>;
++		};
++
++		charger-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&chg_ntc>;
++		};
++
++		usb-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&usb_ntc>;
++		};
++	};
++
++	/*
++	 * Stock routing (dtbo-4.dts sound node, samsung,routing): headset mic
++	 * on IN1 with MICBIAS1, main mic on IN3 with MICBIAS2, sub mic on IN4
++	 * with MICBIAS3, headphones on HPOL/HPOR, speaker on the RT5510.
++	 */
++	sound {
++		compatible = "samsung,gtactive3-audio";
++		model = "Galaxy Tab Active3";
++		audio-routing = "Headphones", "HPOL",
++				"Headphones", "HPOR",
++				"Speaker", "OUTP",
++				"Speaker", "OUTN",
++				"IN1P", "Headset Mic",
++				"IN1N", "Headset Mic",
++				"Headset Mic", "MICBIAS1",
++				"IN3P", "Main Mic",
++				"IN3N", "Main Mic",
++				"Main Mic", "MICBIAS2",
++				"IN4P", "Sub Mic",
++				"IN4N", "Sub Mic",
++				"Sub Mic", "MICBIAS3";
++
++		headset-dai-link {
++			cpu {
++				sound-dai = <&abox 0>;
++			};
++			codec {
++				sound-dai = <&rt5665 0>;
++			};
++		};
++
++		speaker-dai-link {
++			cpu {
++				sound-dai = <&abox 1>;
++			};
++			codec {
++				sound-dai = <&rt5510>;
++			};
++		};
++	};
++
++	memory@80000000 {
++		device_type = "memory";
++		reg = <0x0 0x80000000 0x3c800000>,
++		      <0x0 0xc0000000 0x20000000>,
++		      <0x0 0xe1900000 0x1e700000>,
++		      <0x8 0x80000000 0x80000000>;
++	};
++
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <1>;
++		ranges;
++
++		fb_mem: framebuffer@ca000000 {
++			reg = <0x0 0xca000000 (1200 * 1920 * 4)>;
++			no-map;
++		};
++
++		/* bring-up: keep the previous boot's kernel log across resets */
++		ramoops@8ff000000 {
++			compatible = "ramoops";
++			reg = <0x8 0xff000000 0x100000>;
++			console-size = <0x80000>;
++			record-size = <0x20000>;
++			pmsg-size = <0x10000>;
++		};
++
++		/* bring-up: U-Boot's console log (CONFIG_EXYNOS_MOBILE_RAMLOG) */
++		uboot-log@8ff100000 {
++			reg = <0x8 0xff100000 0x100000>;
++			no-map;
++		};
++	};
++};
++
++&oscclk {
++	clock-frequency = <26000000>;
++};
++
++&rtc {
++	clocks = <&cmu_apm CLK_GOUT_APM_APBIF_RTC_PCLK>, <&rtcclk>;
++	clock-names = "rtc", "rtc_src";
++	status = "okay";
++};
++
++&abox {
++	pinctrl-0 = <&aud_i2s0_bus &aud_i2s1_bus>;
++	pinctrl-names = "default";
++	/* no CMU_AUD clock driver yet: let the A-Box driver set PLL_AUD up */
++	samsung,cmu-bringup;
++	status = "okay";
++};
++
++&adc {
++	vdd-supply = <&vref_adc>;
++	status = "okay";
++};
++
++&pinctrl_alive {
++	/* RT5665 GPIO1 = IRQ (jack detection, headset buttons) */
++	rt5665_irq: rt5665-irq-pins {
++		samsung,pins = "gpa2-2";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++
++	key_power: key-power-pins {
++		samsung,pins = "gpa2-4";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	key_voldown: key-voldown-pins {
++		samsung,pins = "gpa0-4";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	key_volup: key-volup-pins {
++		samsung,pins = "gpa0-3";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	key_home: key-home-pins {
++		samsung,pins = "gpa3-5";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	key_hot: key-hot-pins {
++		samsung,pins = "gpa0-5";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	hall_irq: hall-irq-pins {
++		samsung,pins = "gpa0-2";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	max77705_irq: max77705-irq-pins {
++		samsung,pins = "gpa1-6";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	touch_irq: touch-irq-pins {
++		samsung,pins = "gpa1-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	nfc_irq: nfc-irq-pins {
++		samsung,pins = "gpa1-2";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	sm5504_irq: sm5504-irq-pins {
++		samsung,pins = "gpa1-4";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	grip_irq: grip-irq-pins {
++		samsung,pins = "gpa1-7";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++
++	/* microSD card detect: low = card inserted (external pull-up) */
++	sd2_cd: sd2-cd-pins {
++		samsung,pins = "gpa1-5";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	/* gpa3-3 = pen interrupt, gpa3-7 = pen detect (PDCT) */
++	epen_irq: epen-irq-pins {
++		samsung,pins = "gpa3-3", "gpa3-7";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++};
++
++&pinctrl_peric0 {
++	touch_rst: touch-rst-pins {
++		samsung,pins = "gpg0-6";
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++
++	nfc_pd: nfc-pd-pins {
++		samsung,pins = "gpg1-0";
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	nfc_firm: nfc-firm-pins {
++		samsung,pins = "gpg1-6";
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++};
++
++&pinctrl_peric1 {
++	/* CIS_CLK0/1 out (function 2), as the stock fimc_is_mclk*_fn states */
++	cam0_mclk: cam0-mclk-pins {
++		samsung,pins = "gpc1-4";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	cam1_mclk: cam1-mclk-pins {
++		samsung,pins = "gpc1-5";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	key_back: key-back-pins {
++		samsung,pins = "gpg3-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	key_recent: key-recent-pins {
++		samsung,pins = "gpg3-1";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++
++	mot_ldo_en: mot-ldo-en-pins {
++		samsung,pins = "gpg3-6";
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
++	};
++};
++
++&pmu_system_controller {
++	/* Boot reason for S-Boot, values from Samsung's sec_reboot.c */
++	reboot-mode {
++		compatible = "syscon-reboot-mode";
++		offset = <0x080c>; /* INFORM3 */
++		mode-normal = <0x12345670>;
++		mode-download = <0x12345671>;
++		mode-recovery = <0x12345674>;
++		mode-bootloader = <0x1234567d>;
++	};
++};
++
++&soc {
++	/*
++	 * USB 2.0 device mode. There is no Exynos9810 clock driver yet: the
++	 * bootloader leaves CMU_FSYS0 running (UFS lives there too) and init
++	 * forces the two USB gates on before loading these drivers, so the
++	 * 26 MHz oscillator stands in for every clock here.
++	 */
++	usbdrd: usb@10c00000 {
++		compatible = "samsung,exynos9810-dwusb3", "samsung,exynos850-dwusb3";
++		ranges = <0x0 0x10c00000 0x10000>;
++		clocks = <&oscclk>, <&oscclk>;
++		clock-names = "bus_early", "ref";
++		#address-cells = <1>;
++		#size-cells = <1>;
++
++		usbdrd_dwc3: usb@0 {
++			compatible = "snps,dwc3";
++			reg = <0x0 0x10000>;
++			interrupts = <GIC_SPI 244 IRQ_TYPE_LEVEL_HIGH>;
++			phys = <&usbdrd_phy 0>;
++			phy-names = "usb2-phy";
++			dr_mode = "peripheral";
++			maximum-speed = "high-speed";
++		};
++	};
++
++	usbdrd_phy: phy@11100000 {
++		compatible = "samsung,exynos9810-usbdrd-phy";
++		reg = <0x11100000 0x200>;
++		clocks = <&oscclk>, <&oscclk>;
++		clock-names = "phy", "ref";
++		samsung,pmu-syscon = <&pmu_system_controller>;
++		#phy-cells = <1>;
++	};
++};
++
++&gpg3 {
++	/* USB D+/D- mux: low = USB-C port, high = pogo connector */
++	usb-mux-sel-hog {
++		gpio-hog;
++		gpios = <2 GPIO_ACTIVE_HIGH>;
++		output-low;
++		line-name = "usb-mux-sel";
++	};
++};
++
++/ {
++	/*
++	 * USI / HSI2C clocks as programmed by the bootloader (no clock driver
++	 * yet). PLL_SHARED2 = 26 MHz * 400 / 13 = 800 MHz; CLKCMU_CMGP_BUS,
++	 * CLKCMU_PERIC0_IP and CLKCMU_PERIC1_IP = PLL_SHARED2 / 2 / 2 = 200 MHz.
++	 * USI_CMGP00/03, PERIC0/1 USI_I2C and I2C_CAM0-3 are undivided from
++	 * those (200 MHz), PERIC1 USI07/08_USI are divided by 4 (50 MHz).
++	 * The bus clocks are only gated, their rate does not matter.
++	 */
++	clk_usi_200m: clock-usi-200m {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <200000000>;
++		clock-output-names = "usi_200m";
++	};
++
++	clk_usi_50m: clock-usi-50m {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <50000000>;
++		clock-output-names = "usi_50m";
++	};
++
++	aliases {
++		/* the debug console's i2cr/i2cw use /dev/i2c-0 */
++		i2c0 = &hsi2c_40;
++		bluetooth0 = &bluetooth;
++		wifi0 = &wifi;
++		/* same numbers as the stock kernel: rt5665 3-001b, rt5510 4-0034 */
++		i2c3 = &hsi2c_7;
++		i2c4 = &hsi2c_18;
++		/* touchscreen stays spi0.0, sensor hub spi1.0 */
++		spi0 = &spi_21;
++		spi1 = &spi_20;
++	};
++};
++
++/* Camera I2C: S5K3L6 rear sensor @2d */
++&hsi2c_0 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/*
++	 * Power sequence of the stock module (fimc-is-device-module-3l6):
++	 * reset low, IO 1.8 V, analogue 2.8 V, core 1.05 V, AF 2.8 V, reset
++	 * high, then the 26 MHz CIS_CLK0 on gpc1-4.
++	 */
++	rear_camera: camera@2d {
++		compatible = "samsung,s5k3l6";
++		reg = <0x2d>;
++		clocks = <&cmu_top CLK_DOUT_CMU_CIS_CLK0>;
++		pinctrl-0 = <&cam0_mclk>;
++		pinctrl-names = "default";
++		reset-gpios = <&gpg2 6 GPIO_ACTIVE_LOW>;
++		vddio-supply = <&s2mps18_ldo44>;
++		vdda-supply = <&s2mps18_ldo32>;
++		vddd-supply = <&s2mps18_ldo34>;
++		afvdd-supply = <&s2mps18_ldo45>;
++		lens-focus = <&rear_lens>;
++		orientation = <1>;	/* back */
++		/* measured: upright in portrait (Snapshot on Phosh) */
++		rotation = <270>;
++
++		port {
++			rear_camera_out: endpoint {
++				remote-endpoint = <&csis0_in>;
++				data-lanes = <1 2 3 4>;
++				link-frequencies = /bits/ 64 <598000000>;
++			};
++		};
++	};
++};
++
++&csis0 {
++	status = "okay";
++
++	port {
++		csis0_in: endpoint {
++			remote-endpoint = <&rear_camera_out>;
++			data-lanes = <1 2 3 4>;
++		};
++	};
++};
++
++/* Camera I2C: GC5035 front sensor @37 */
++&hsi2c_1 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/*
++	 * Stock power sequence (fimc-is-device-module-gc5035): reset low,
++	 * IO 1.8 V, core 1.2 V, analogue 2.8 V, reset high, then the 26 MHz
++	 * CIS_CLK1 on gpc1-5.
++	 */
++	front_camera: camera@37 {
++		compatible = "galaxycore,gc5035";
++		reg = <0x37>;
++		clocks = <&cmu_top CLK_DOUT_CMU_CIS_CLK1>;
++		pinctrl-0 = <&cam1_mclk>;
++		pinctrl-names = "default";
++		reset-gpios = <&gpg2 5 GPIO_ACTIVE_LOW>;
++		vddio-supply = <&s2mps18_ldo44>;
++		vddd-supply = <&s2mps18_ldo39>;
++		vdda-supply = <&s2mps18_ldo28>;
++		orientation = <0>;	/* front */
++		/* measured: upright in portrait (Snapshot on Phosh) */
++		rotation = <90>;
++
++		port {
++			front_camera_out: endpoint {
++				remote-endpoint = <&csis2_in>;
++				data-lanes = <1 2>;
++				link-frequencies = /bits/ 64 <448500000 224000000>;
++			};
++		};
++	};
++};
++
++&csis2 {
++	status = "okay";
++
++	port {
++		csis2_in: endpoint {
++			remote-endpoint = <&front_camera_out>;
++			data-lanes = <1 2>;
++		};
++	};
++};
++
++/* Camera I2C: unused */
++&hsi2c_2 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++};
++
++/* Camera I2C: DW9808 actuator @0c, rear camera EEPROM @58 */
++&hsi2c_3 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/* rear camera autofocus voice coil (stock fimc-is-actuator-dw9808) */
++	rear_lens: lens@c {
++		compatible = "dongwoon,dw9808-vcm", "dongwoon,dw9807-vcm";
++		reg = <0x0c>;
++		vdd-supply = <&s2mps18_ldo45>;
++		vio-supply = <&s2mps18_ldo44>;
++		nvmem-cells = <&rear_af_pan>;
++		nvmem-cell-names = "af-pan";
++	};
++
++	/*
++	 * Rear camera module EEPROM, 16 KiB (stock rear_eeprom@58): AF
++	 * infinity/macro DAC codes and AWB calibration, read-only. Its supply
++	 * is the AF rail: stock's READ_ROM sequence (fimc-is-device-module-
++	 * 3l6.c) turns on VDD_RCAM_AF_2P8, then VDD_CAM_IO_1P8 for the bus
++	 * (always on here). Without the AF rail it never answers.
++	 */
++	eeprom@58 {
++		compatible = "atmel,24c128";
++		reg = <0x58>;
++		vcc-supply = <&s2mps18_ldo45>;
++		read-only;
++
++		nvmem-layout {
++			compatible = "fixed-layout";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			/* stock rom_af_cal_pan_addr: pan focus DAC code, s32 */
++			rear_af_pan: af-pan@3314 {
++				reg = <0x3314 0x4>;
++			};
++		};
++	};
++};
++
++/* RT5665 audio codec @1b */
++&usi01_i2c {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "pclk", "ipclk";
++	status = "okay";
++};
++
++&hsi2c_7 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++	status = "okay";
++
++	/*
++	 * Jack detection as in the stock dtbo-4: JD1 + JD2 (realtek,jd-src
++	 * = <2>), the codec's GPIO1 interrupt output on gpa2-2.
++	 * Supplies (stock realtek,regulator_1v8/_3v3): S2MPS18 LDO33 (1.8 V)
++	 * is on from boot and stays as S-Boot left it. LDO36 (3.3 V, for the
++	 * microphone bias; the codec is its only consumer in the stock DT) is
++	 * off at boot: the codec switches it, as the stock driver does.
++	 */
++	rt5665: audio-codec@1b {
++		compatible = "realtek,rt5665";
++		reg = <0x1b>;
++		#sound-dai-cells = <1>;
++		MICVDD-supply = <&s2mps18_ldo36>;
++		interrupt-parent = <&gpa2>;
++		interrupts = <2 IRQ_TYPE_EDGE_BOTH>;
++		pinctrl-0 = <&rt5665_irq>;
++		pinctrl-names = "default";
++		realtek,in1-differential;
++		realtek,in3-differential;
++		realtek,in4-differential;
++		realtek,jd-src = <2>;
++		/* the main mic path thumps for ~100 ms after power-up */
++		realtek,amic-delay-ms = <150>;
++	};
++};
++
++/* RT5510 speaker amplifier @34 (hw_rev 4) */
++&usi07_usi {
++	clocks = <&clk_usi_200m>, <&clk_usi_50m>;
++	clock-names = "pclk", "ipclk";
++	status = "okay";
++};
++
++&hsi2c_18 {
++	clocks = <&clk_usi_50m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++	clock-frequency = <400000>;
++	status = "okay";
++
++	/* hw_rev 4 only (dtbo-4); hw_rev 5+ has a TAS2562 here instead */
++	rt5510: amplifier@34 {
++		compatible = "richtek,rt5510";
++		reg = <0x34>;
++		#sound-dai-cells = <0>;
++	};
++};
++
++/* S.LSI NFC @27 */
++&usi08_usi {
++	clocks = <&clk_usi_200m>, <&clk_usi_50m>;
++	clock-names = "pclk", "ipclk";	status = "okay";
++};
++
++&hsi2c_20 {
++	clocks = <&clk_usi_50m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";	status = "okay";
++};
++
++/* Wacom W90xx S Pen digitiser @56 */
++&usi09_i2c {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "pclk", "ipclk";	status = "okay";
++};
++
++&hsi2c_23 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";	status = "okay";
++};
++
++/* A96T3X6 grip sensor @20 */
++&usi_cmgp00 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "pclk", "ipclk";	status = "okay";
++};
++
++&hsi2c_34 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";	status = "okay";
++};
++
++/* MAX77705 PMIC @66 (+ USB-C @25, fuel gauge @36, ...), SM5504 MUIC @14 */
++&usi_cmgp03 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "pclk", "ipclk";
++	status = "okay";
++};
++
++&hsi2c_40 {
++	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
++	clock-names = "hsi2c", "hsi2c_pclk";
++	clock-frequency = <100000>;
++	status = "okay";
++};
++
++/ {
++	/*
++	 * UFS clocks as programmed by the bootloader (no clock driver yet):
++	 * PLL_SHARED4 = 26 MHz * 205 / 8 = 666.25 MHz;
++	 * FSYS0 bus = PLL_SHARED4 / 2, UFS_EMBD (UniPro) = PLL_SHARED4 / 2 / 2.
++	 */
++	ufs_core_clk: clock-ufs-core {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <333125000>;
++	};
++
++	ufs_unipro_clk: clock-ufs-unipro {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <166562500>;
++	};
++};
++
++&soc {
++	ufs_phy: phy@11124000 {
++		compatible = "samsung,exynos9810-ufs-phy";
++		reg = <0x11124000 0x800>;
++		reg-names = "phy-pma";
++		samsung,pmu-syscon = <&pmu_system_controller>;
++		clocks = <&oscclk>;
++		clock-names = "ref_clk";
++		#phy-cells = <0>;
++	};
++
++	ufs: ufs@11120000 {
++		compatible = "samsung,exynos9810-ufs";
++		reg = <0x11120000 0x200>,
++		      <0x11121100 0x200>,
++		      <0x11110000 0x8000>,
++		      <0x11130000 0x100>;
++		reg-names = "hci", "vs_hci", "unipro", "ufsp";
++		interrupts = <GIC_SPI 242 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&ufs_core_clk>, <&ufs_unipro_clk>;
++		clock-names = "core_clk", "sclk_unipro_main";
++		freq-table-hz = <0 0>, <0 0>;
++		phys = <&ufs_phy>;
++		phy-names = "ufs-phy";
++	};
++};
++
++/*
++ * Only the cluster 0 (A55) watchdog: the cluster 1 counter does not run while
++ * the M3 cores are off (WTCNT stays at WTDAT).
++ */
++/*
++ * microSD slot (stock dwmmc2, DTBO fragment@72): 4-bit, UHS-I up to
++ * SDR104, card detect on gpa1-5, card power LDO31 (2.95 V), signalling
++ * LDO2 (2.95 V, 1.8 V for UHS-I).
++ */
++&mmc_2 {
++	bus-width = <4>;
++	card-detect-delay = <200>;
++	cd-gpios = <&gpa1 5 GPIO_ACTIVE_LOW>;
++	cap-sd-highspeed;
++	disable-wp;
++	sd-uhs-sdr50;
++	sd-uhs-sdr104;
++	vmmc-supply = <&s2mps18_ldo31>;
++	vqmmc-supply = <&s2mps18_ldo2>;
++	pinctrl-0 = <&sd2_clk &sd2_cmd &sd2_bus1 &sd2_bus4 &sd2_cd>;
++	pinctrl-names = "default";
++	status = "okay";
++};
++
++&watchdog_cl0 {
++	status = "okay";
++};
++
++&soc {
++	/*
++	 * The HX83102E takes its brightness as DCS 0x51 (12 bits, two bytes)
++	 * on both DSI links and drives the LED PWM itself; there is no
++	 * backlight IC on I2C. Samsung's table tops out at 2437 in normal
++	 * use and 3977 in outdoor mode, 928 is its default.
++	 */
++	backlight: backlight@16080000 {
++		compatible = "samsung,exynos9810-dsim-backlight";
++		reg = <0x16080000 0x100>, <0x16090000 0x100>;
++		max-brightness = <3977>;
++		default-brightness = <928>;
++		/* Night Light: the DPU gamma LUT in the panel's digital gamma */
++		samsung,hx83102e-dgc;
++		/*
++		 * Panel power (stock decon_board_hx83102e: gpio_lcd_rst,
++		 * gpio_ldo_en, gpio_buck_en), for power_off_level 3.
++		 */
++		reset-gpios = <&gpa3 4 GPIO_ACTIVE_LOW>;
++		ldo-enable-gpios = <&gpg2 2 GPIO_ACTIVE_HIGH>;
++		buck-enable-gpios = <&gph1 4 GPIO_ACTIVE_HIGH>;
++	};
++};
++
++/*
++ * S2MPS18 main PMIC, reached through ACPM IPC channel 2 (stock
++ * s2mps18mfd node, DTBO hw_rev 4). The driver is read-only for now, so
++ * the regulators carry no voltage constraints: the stock ranges are
++ * kept as comments for when voltage control is enabled. The PMIC IRQ is
++ * gpa0-1 (not used yet).
++ */
++&acpm_ipc {
++	pmic-1 {
++		compatible = "samsung,s2mps18-pmic";
++
++		regulators {
++			s2mps18_buck1: BUCK1 {
++				regulator-name = "vdd_mif";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_buck2: BUCK2 {
++				regulator-name = "vdd_cpucl1";
++				regulator-always-on;
++				/* stock: 450-1300 mV */
++			};
++
++			s2mps18_buck3: BUCK3 {
++				regulator-name = "vdd_cpucl0";
++				regulator-always-on;
++				/* stock: 450-1300 mV */
++			};
++
++			s2mps18_buck4: BUCK4 {
++				regulator-name = "vdd_int";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_buck5: BUCK5 {
++				regulator-name = "vdd_cam";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_buck6: BUCK6 {
++				regulator-name = "vdd_g3d";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_buck7: BUCK7 {
++				regulator-name = "vdd_cpucl1_m";
++				regulator-always-on;
++				/* stock: 450-1300 mV */
++			};
++
++			s2mps18_buck8: BUCK8 {
++				regulator-name = "vdd2_mem";
++				regulator-always-on;
++				/* stock: 900-1300 mV */
++			};
++
++			s2mps18_buck9: BUCK9 {
++				regulator-name = "vddq_mem";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_buck10: BUCK10 {
++				regulator-name = "vdd_lldo1";
++				regulator-always-on;
++				/* stock: 750-1150 mV */
++			};
++
++			s2mps18_buck11: BUCK11 {
++				regulator-name = "vdd_lldo2";
++				regulator-always-on;
++				/* stock: 900-1300 mV */
++			};
++
++			s2mps18_buck12: BUCK12 {
++				regulator-name = "vdd_lldo3";
++				regulator-always-on;
++				/* stock: 1100-1500 mV */
++			};
++
++			s2mps18_buck13: BUCK13 {
++				regulator-name = "vdd_mldo";
++				regulator-always-on;
++				/* stock: 1750-2150 mV */
++			};
++
++			s2mps18_ldo1: LDO1 {
++				regulator-name = "vdd_ldo1";
++				regulator-always-on;
++				/* stock: 700-950 mV */
++			};
++
++			s2mps18_ldo2: LDO2 {
++				regulator-name = "vqmmc";
++				/* stock: 1700-2950 mV, the LDO starts at 1800 mV */
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <2950000>;
++			};
++
++			s2mps18_ldo3: LDO3 {
++				regulator-name = "vdd_ldo3";
++				regulator-always-on;
++				/* stock: 1600-1950 mV */
++			};
++
++			s2mps18_ldo4: LDO4 {
++				regulator-name = "vdd_ldo4";
++				regulator-always-on;
++				/* stock: 700-1100 mV */
++			};
++
++			s2mps18_ldo5: LDO5 {
++				regulator-name = "vdd_ldo5";
++				regulator-always-on;
++				/* stock: 1600-1950 mV */
++			};
++
++			s2mps18_ldo6: LDO6 {
++				regulator-name = "vdd_ldo6";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_ldo7: LDO7 {
++				regulator-name = "vdd_ldo7";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_ldo8: LDO8 {
++				regulator-name = "vdd_ldo8";
++				regulator-always-on;
++				/* stock: 700-1300 mV */
++			};
++
++			s2mps18_ldo9: LDO9 {
++				regulator-name = "vdd_ldo9";
++				regulator-always-on;
++				/* stock: 1600-1950 mV */
++			};
++
++			s2mps18_ldo10: LDO10 {
++				regulator-name = "vdd_ldo10";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_ldo11: LDO11 {
++				regulator-name = "vdd_ldo11";
++				regulator-always-on;
++				/* stock: 450-950 mV */
++			};
++
++			s2mps18_ldo12: LDO12 {
++				regulator-name = "vdd_ldo12";
++				regulator-always-on;
++				/* stock: 700-1100 mV */
++			};
++
++			s2mps18_ldo13: LDO13 {
++				regulator-name = "vdd_ldo13";
++				regulator-always-on;
++				/* stock: 1600-1950 mV */
++			};
++
++			s2mps18_ldo14: LDO14 {
++				regulator-name = "vdd_ldo14";
++				regulator-always-on;
++				/* stock: 1700-3350 mV */
++			};
++
++			s2mps18_ldo22: LDO22 {
++				regulator-name = "vdd_ldo22";
++				/* stock: 700-1100 mV */
++			};
++
++			s2mps18_ldo28: LDO28 {
++				regulator-name = "VDD_FCAM_A2P8";
++				regulator-min-microvolt = <2800000>;
++				regulator-max-microvolt = <2800000>;
++			};
++
++			s2mps18_ldo30: LDO30 {
++				regulator-name = "vdd_ldo30";
++				regulator-always-on;
++				/* stock: 450-1100 mV */
++			};
++
++			s2mps18_ldo31: LDO31 {
++				regulator-name = "vmmc";
++				regulator-min-microvolt = <2950000>;
++				regulator-max-microvolt = <2950000>;
++			};
++
++			s2mps18_ldo32: LDO32 {
++				regulator-name = "VDD_RCAM_A2P8";
++				regulator-min-microvolt = <2800000>;
++				regulator-max-microvolt = <2800000>;
++			};
++
++			s2mps18_ldo33: LDO33 {
++				regulator-name = "regulator_1v8";
++				regulator-boot-on;
++				/* stock: 1800 mV */
++			};
++
++			s2mps18_ldo34: LDO34 {
++				regulator-name = "VDD_RCAM_CORE_1P05";
++				regulator-min-microvolt = <1050000>;
++				regulator-max-microvolt = <1050000>;
++			};
++
++			/*
++			 * LDO35/42/43: the sensors behind the BCM4775 hub (accel,
++			 * light/proximity and its IR LED, magnetometer). S-Boot
++			 * leaves them off; the hub finds no sensors without them.
++			 */
++			s2mps18_ldo35: LDO35 {
++				regulator-name = "VDD_SENSOR_1P8";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++				regulator-always-on;
++			};
++
++			/* RT5665 MICVDD: S-Boot leaves it off (LCTRL 0x3c) */
++			s2mps18_ldo36: LDO36 {
++				regulator-name = "regulator_3v3";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++			};
++
++			s2mps18_ldo37: LDO37 {
++				regulator-name = "vdd_mcu_1p8";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++			};
++
++			s2mps18_ldo38: LDO38 {
++				regulator-name = "VDD_ESE_1P8";
++				/* stock: 1800 mV */
++			};
++
++			s2mps18_ldo39: LDO39 {
++				regulator-name = "VDD_FCAM_CORE_1P2";
++				regulator-min-microvolt = <1200000>;
++				regulator-max-microvolt = <1200000>;
++			};
++
++			s2mps18_ldo40: LDO40 {
++				regulator-name = "VDD_GRIP_3P0";
++				regulator-min-microvolt = <3000000>;
++				regulator-max-microvolt = <3000000>;
++			};
++
++			s2mps18_ldo41: LDO41 {
++				regulator-name = "VDD_NFC_1P8";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++			};
++
++			s2mps18_ldo42: LDO42 {
++				regulator-name = "vdd_proxy_led_3p3";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++
++			s2mps18_ldo43: LDO43 {
++				regulator-name = "vdd_ldo43";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++
++			s2mps18_ldo44: LDO44 {
++				regulator-name = "VDD_CAM_IO_1P8";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++			};
++
++			s2mps18_ldo45: LDO45 {
++				regulator-name = "VDD_RCAM_AF_2P8";
++				regulator-min-microvolt = <2800000>;
++				regulator-max-microvolt = <2800000>;
++			};
++		};
++	};
++};
++
++/*
++ * MAX77705 PMIC/charger/fuel gauge on HSI2C_40 (stock fragment@30,
++ * DTBO hw_rev 4). The controller node itself comes from the HSI2C work;
++ * until it transfers reliably the same devices can be reached through
++ * the i2c-gpio variant, exynos9810-gtactive3wifi-i2cgpio.dtb.
++ */
++&hsi2c_40 {
++	max77705: pmic@66 {
++		compatible = "maxim,max77705";
++		reg = <0x66>;
++		interrupts-extended = <&gpa1 6 IRQ_TYPE_LEVEL_LOW>;
++		interrupt-controller;
++		#interrupt-cells = <1>;
++		pinctrl-0 = <&max77705_irq>;
++		pinctrl-names = "default";
++	};
++
++	max77705_charger: charger@69 {
++		compatible = "maxim,max77705-charger";
++		reg = <0x69>;
++		interrupt-parent = <&max77705>;
++		interrupts = <0>;
++		monitored-battery = <&battery>;
++		power-supplies = <&max77705_usbc>;
++
++		/* the OTG boost, VBUS of the USB host role */
++		max77705_otg_vbus: usb-otg-vbus {
++			regulator-name = "usb_otg_vbus";
++			regulator-min-microvolt = <5000000>;
++			regulator-max-microvolt = <5000000>;
++		};
++	};
++
++	/* USB-C block: BC1.2 / Type-C Rp source detection */
++	max77705_usbc: usb-c@25 {
++		compatible = "maxim,max77705-usbc";
++		reg = <0x25>;
++		interrupt-parent = <&max77705>;
++		interrupts = <3>;
++	};
++
++	/* fg_resistor = 2 in the stock DT, i.e. a 5 mOhm sense resistor */
++	fuel-gauge@36 {
++		compatible = "maxim,max77705-battery";
++		reg = <0x36>;
++		interrupt-parent = <&max77705>;
++		interrupts = <2>;
++		monitored-battery = <&battery>;
++		shunt-resistor-micro-ohms = <5000>;
++		power-supplies = <&max77705_charger>;
++	};
++
++	/*
++	 * Pogo-connector MUIC. Its IRQ handler in the stock kernel
++	 * (sm5504-muic-pogo.c) moves usb-mux-sel to the pogo pins when a
++	 * dock (ID 34k or 49.9k) is attached; mainline has no such consumer
++	 * yet, so the hog keeps USB on the USB-C port.
++	 */
++	muic@14 {
++		compatible = "siliconmitus,sm5504-muic";
++		reg = <0x14>;
++		interrupt-parent = <&gpa1>;
++		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
++		pinctrl-0 = <&sm5504_irq>;
++		pinctrl-names = "default";
++	};
++};
++
++/* Peripheral I2C clients (stock-0.dts / dtbo-4.dts, hw_rev 4) */
++&hsi2c_20 {
++	clock-frequency = <400000>;
++
++	/* S.LSI NFC controller (stock "sec-nfc", 400 kHz bus) */
++	nfc@27 {
++		compatible = "samsung,s3fwrn5-i2c";
++		reg = <0x27>;
++		interrupt-parent = <&gpa1>;
++		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
++		/* VEN: high = power down; FIRM: high = firmware mode */
++		en-gpios = <&gpg1 0 GPIO_ACTIVE_HIGH>;
++		wake-gpios = <&gpg1 6 GPIO_ACTIVE_HIGH>;
++		pinctrl-0 = <&nfc_irq &nfc_pd &nfc_firm>;
++		pinctrl-names = "default";
++		pvdd-supply = <&s2mps18_ldo41>;
++		/*
++		 * Reference clock: TCXO on CLKOUT1 (stock "oscclk_nfc"). The
++		 * stock driver gates it by the chip's request line (gpa2-6),
++		 * here it runs while the driver is bound.
++		 */
++		clocks = <&pmu_system_controller 0>;
++		assigned-clocks = <&pmu_system_controller 0>;
++		assigned-clock-parents = <&oscclk>;
++	};
++};
++
++&hsi2c_23 {
++	clock-frequency = <400000>;
++
++	/*
++	 * Wacom W9019 EMR digitiser (stock "wacom,w90xx", fw
++	 * w9019_gtactive3.bin, max 17222 x 10764, pressure 4095,
++	 * wacom,invert = <0 1 1>: y inverted, then x/y swapped).
++	 * Bootloader address 0x09 is only used for firmware updates.
++	 */
++	digitizer@56 {
++		compatible = "wacom,w9019";
++		reg = <0x56>;
++		interrupt-parent = <&gpa3>;
++		interrupts = <3 IRQ_TYPE_LEVEL_LOW>;
++		vdd-supply = <&vdd_wacom>;
++		flash-mode-gpios = <&gpm41 0 GPIO_ACTIVE_HIGH>;
++		pinctrl-0 = <&epen_irq>;
++		pinctrl-names = "default";
++		touchscreen-inverted-y;
++		touchscreen-swapped-x-y;
++		/* 8.0" 16:10 panel; raw x is the long axis */
++		touchscreen-x-mm = <172>;
++		touchscreen-y-mm = <108>;
++	};
++};
++
++&hsi2c_34 {
++	/*
++	 * Stock runs it at 10 kHz, which the 200 MHz USI clock cannot be
++	 * divided down to ("FS clock set-up failed"); the A96T3x6 is fine
++	 * at 100 kHz.
++	 */
++	clock-frequency = <100000>;
++
++	/* ABOV A96T3x6 Wi-Fi antenna grip sensor */
++	proximity@20 {
++		compatible = "abov,a96t3x6";
++		reg = <0x20>;
++		interrupt-parent = <&gpa1>;
++		interrupts = <7 IRQ_TYPE_LEVEL_LOW>;
++		vdd-supply = <&s2mps18_ldo40>;
++		pinctrl-0 = <&grip_irq>;
++		pinctrl-names = "default";
++	};
++};
++
++/*
++ * CPU DVFS through the APM firmware (ACPM DVFS, channel 0). Levels from its
++ * fvmap in APM SRAM (domain 2: A55 208-2002 MHz, domain 3: M3 598-2886 MHz);
++ * the firmware sets the voltages. A55 capped at its retail 1.95 GHz. The
++ * SM-T570 stock kernel limits the M3 cluster to 650-1794 MHz (cpufreq
++ * domain@1 max-freq/policy-max); the levels above that up to the S9's
++ * 2.7 GHz are kept as boost (turbo-mode) OPPs, off unless
++ * /sys/devices/system/cpu/cpufreq/boost is set.
++ *
++ * opp-microwatt (Energy Model for EAS) per core from the stock DT
++ * energy-costs (core busy cost + a quarter of the cluster cost, in mW,
++ * x1000); the A55 208/299 MHz levels, which stock does not use, are
++ * extrapolated linearly from 455 MHz.
++ */
++/ {
++	cluster0_opp: opp-table-cluster0-opp {
++		compatible = "operating-points-v2";
++		opp-shared;
++
++		opp-208000000 {
++			opp-hz = /bits/ 64 <208000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <10000>;
++		};
++
++		opp-299000000 {
++			opp-hz = /bits/ 64 <299000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <14600>;
++		};
++
++		opp-455000000 {
++			opp-hz = /bits/ 64 <455000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <22250>;
++		};
++
++		opp-598000000 {
++			opp-hz = /bits/ 64 <598000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <31750>;
++		};
++
++		opp-715000000 {
++			opp-hz = /bits/ 64 <715000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <40000>;
++		};
++
++		opp-832000000 {
++			opp-hz = /bits/ 64 <832000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <52750>;
++		};
++
++		opp-949000000 {
++			opp-hz = /bits/ 64 <949000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <65250>;
++		};
++
++		/*
++		 * The S-Boot level, also used across system sleep: low enough
++		 * for the idle CPUs, fast enough to resume without a delay
++		 * (stock resumes at a CAL "resume" level in the same range).
++		 */
++		opp-1053000000 {
++			opp-hz = /bits/ 64 <1053000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <80000>;
++			opp-suspend;
++		};
++
++		opp-1248000000 {
++			opp-hz = /bits/ 64 <1248000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <109500>;
++		};
++
++		opp-1456000000 {
++			opp-hz = /bits/ 64 <1456000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <155500>;
++		};
++
++		opp-1690000000 {
++			opp-hz = /bits/ 64 <1690000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <241750>;
++		};
++
++		opp-1794000000 {
++			opp-hz = /bits/ 64 <1794000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <253250>;
++		};
++
++		opp-1950000000 {
++			opp-hz = /bits/ 64 <1950000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <264500>;
++		};
++	};
++
++	cluster1_opp: opp-table-cluster1-opp {
++		compatible = "operating-points-v2";
++		opp-shared;
++
++		opp-598000000 {
++			opp-hz = /bits/ 64 <598000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <230250>;
++		};
++
++		opp-650000000 {
++			opp-hz = /bits/ 64 <650000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <241000>;
++		};
++
++		opp-741000000 {
++			opp-hz = /bits/ 64 <741000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <267500>;
++		};
++
++		opp-858000000 {
++			opp-hz = /bits/ 64 <858000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <308000>;
++		};
++
++		opp-962000000 {
++			opp-hz = /bits/ 64 <962000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <364250>;
++		};
++
++		opp-1066000000 {
++			opp-hz = /bits/ 64 <1066000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <461750>;
++		};
++
++		opp-1170000000 {
++			opp-hz = /bits/ 64 <1170000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <554750>;
++		};
++
++		opp-1261000000 {
++			opp-hz = /bits/ 64 <1261000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <650250>;
++		};
++
++		opp-1469000000 {
++			opp-hz = /bits/ 64 <1469000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <933000>;
++		};
++
++		opp-1586000000 {
++			opp-hz = /bits/ 64 <1586000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <1118250>;
++		};
++
++		opp-1690000000 {
++			opp-hz = /bits/ 64 <1690000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <1340250>;
++		};
++
++		opp-1794000000 {
++			opp-hz = /bits/ 64 <1794000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <1567750>;
++		};
++
++		opp-1924000000 {
++			opp-hz = /bits/ 64 <1924000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <1942750>;
++			turbo-mode;
++		};
++
++		opp-2002000000 {
++			opp-hz = /bits/ 64 <2002000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <2188500>;
++			turbo-mode;
++		};
++
++		opp-2106000000 {
++			opp-hz = /bits/ 64 <2106000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <2898250>;
++			turbo-mode;
++		};
++
++		opp-2314000000 {
++			opp-hz = /bits/ 64 <2314000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <3439750>;
++			turbo-mode;
++		};
++
++		opp-2496000000 {
++			opp-hz = /bits/ 64 <2496000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <4295500>;
++			turbo-mode;
++		};
++
++		opp-2652000000 {
++			opp-hz = /bits/ 64 <2652000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <5261000>;
++			turbo-mode;
++		};
++
++		opp-2704000000 {
++			opp-hz = /bits/ 64 <2704000000>;
++			clock-latency-ns = <100000>;
++			opp-microwatt = <6086500>;
++			turbo-mode;
++		};
++	};
++};
++
++&cpu0 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
++&cpu1 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
++&cpu2 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
++&cpu3 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
++&cpu4 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
++&cpu5 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
++&cpu6 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
++&cpu7 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
++
++&soc {
++	/*
++	 * DECON0 + the IDMA channel S-Boot scans the panel out from
++	 * (stock decon_f@16030000, idma_* dma regs 0x16071000 + n * 0x1000).
++	 * Takeover driver: flips the buffer, keeps the panel/DSI setup.
++	 * Measured: window 5 (0..1199 x 0..1919) <- IDMA_G0, base 0xca000000,
++	 * SysMMU DPU0 in bypass.
++	 */
++	dpu: display-controller@16030000 {
++		compatible = "samsung,exynos9810-decon-takeover";
++		/* DECON, IDMA_G0 (boot scanout). Not yet: IDMA_VGRF 0x16076000 +
++		 * DPP_VGRF 0x16026000 for the gamma LUT; writing the HDR gamut
++		 * matrix while scanning out broke the panel stream (STATUS.md). */
++		reg = <0x16030000 0x10000>,
++		      <0x16071000 0x1000>;
++		interrupts = <GIC_SPI 182 IRQ_TYPE_LEVEL_HIGH>,
++			     <GIC_SPI 183 IRQ_TYPE_LEVEL_HIGH>,
++			     <GIC_SPI 188 IRQ_TYPE_LEVEL_HIGH>;
++		samsung,window = <5>;	/* S-Boot: window 5 <- IDMA_G0 */
++		width = <1200>;
++		height = <1920>;
++		/* 8.0" 16:10 panel, portrait */
++		width-mm = <108>;
++		height-mm = <172>;
++		refresh-rate = <60>;
++		/* gamma LUT through the panel (exynos9810-dsim-bl) */
++		samsung,panel-gamma;
++		status = "okay";
++	};
++};
++
++&spi_21 {
++	/* Software chip select, as in the stock firmware */
++	cs-gpios = <&gph0 7 GPIO_ACTIVE_LOW>;
++	pinctrl-0 = <&spi21_bus &spi21_cs>;
++	status = "okay";
++
++	/*
++	 * Touch part of the Himax HX83102E TDDI panel controller. It is
++	 * powered with the panel and runs firmware from its own flash.
++	 * Coordinates are reported in the panel's native portrait
++	 * orientation; use touchscreen-swapped-x-y / touchscreen-inverted-x/y
++	 * to match a rotated display.
++	 */
++	touchscreen@0 {
++		compatible = "himax,hx83102e";
++		reg = <0>;
++		spi-max-frequency = <10000000>; /* stock 7 MHz samples MISO a bit late here */
++		spi-cpha;
++		spi-cpol;
++		interrupt-parent = <&gpa1>;
++		interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
++		reset-gpios = <&gpg0 6 GPIO_ACTIVE_LOW>;
++		pinctrl-0 = <&touch_irq &touch_rst>;
++		pinctrl-names = "default";
++		touchscreen-size-x = <1200>;
++		touchscreen-size-y = <1920>;
++	};
++};
++
++&usi_chub01 {
++	/* SPI21: touchscreen */
++	status = "okay";
++};
++
++/*
++ * SPI20: Broadcom BCM4775 GNSS chip with its sensor-hub MCU (stock
++ * "ssp,BCM4773" node, DTBO hw_rev 4 fragments 92-95). On this board the
++ * accelerometer (ICM-42605M), light/proximity (TMD3725) and magnetometer
++ * (AK09916) hang off the hub, not off the AP. Pin settings as in the
++ * stock overlay: no pull on SCLK/MOSI/CS, pull-down on MISO, drive 3.
++ */
++&pinctrl_chub {
++	shub_spi_bus: shub-spi-bus-pins {
++		samsung,pins = "gph0-0", "gph0-1";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++
++	shub_spi_miso: shub-spi-miso-pins {
++		samsung,pins = "gph0-2";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++
++	shub_spi_cs: shub-spi-cs-pins {
++		samsung,pins = "gph0-3";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++};
++
++&pinctrl_alive {
++	/* hub -> AP "data pending", level high */
++	shub_host_req: shub-host-req-pins {
++		samsung,pins = "gpa2-1";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++
++	/* stock "ssp-batch-wake-irq": really an AP -> hub "AP awake" output */
++	shub_ap_sleep: shub-ap-sleep-pins {
++		samsung,pins = "gpa2-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++};
++
++&pinctrl_peric0 {
++	shub_mcu_resp: shub-mcu-resp-pins {
++		samsung,pins = "gpp2-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++
++	shub_mcu_req: shub-mcu-req-pins {
++		samsung,pins = "gpp2-1";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++
++	/* GPS_PWR_EN = BCM4775 NSTDBY, pulled down: chip held in standby */
++	shub_nstdby: shub-nstdby-pins {
++		samsung,pins = "gpg0-4";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
++		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
++	};
++};
++
++&spi_20 {
++	/* Software chip select, as in the stock firmware */
++	cs-gpios = <&gph0 3 GPIO_ACTIVE_LOW>;
++	pinctrl-0 = <&shub_spi_bus &shub_spi_miso &shub_spi_cs>;
++	status = "okay";
++
++	sensorhub@0 {
++		compatible = "brcm,bcm4775";
++		reg = <0>;
++		/* stock: 25 MHz, mode 3 */
++		spi-max-frequency = <12500000>;
++		spi-cpol;
++		spi-cpha;
++
++		interrupt-parent = <&gpa2>;
++		interrupts = <1 IRQ_TYPE_LEVEL_HIGH>;
++		host-req-gpios = <&gpa2 1 GPIO_ACTIVE_HIGH>;
++		mcu-req-gpios = <&gpp2 1 GPIO_ACTIVE_HIGH>;
++		mcu-resp-gpios = <&gpp2 0 GPIO_ACTIVE_HIGH>;
++		enable-gpios = <&gpg0 4 GPIO_ACTIVE_HIGH>;
++		ap-sleep-gpios = <&gpa2 0 GPIO_ACTIVE_LOW>;
++		vdd-mcu-supply = <&s2mps18_ldo37>;
++
++		pinctrl-0 = <&shub_host_req &shub_ap_sleep &shub_mcu_resp
++			     &shub_mcu_req &shub_nstdby>;
++		pinctrl-names = "default";
++
++		/*
++		 * The hub turns the accelerometer axes into Android's frame
++		 * of the portrait panel (x right, y up, z out of the screen;
++		 * +1 g along the axis pointing up). iio-sensor-proxy wants
++		 * the direction of gravity instead: -1 g on y when upright.
++		 */
++		mount-matrix = "-1", "0", "0",
++			       "0", "-1", "0",
++			       "0", "0", "1";
++
++		/* passed to the hub firmware (SSP "sensor formation") */
++		samsung,acc-position = <5>;
++		samsung,mag-position = <0>;
++	};
++};
++
++&usi_chub00 {
++	/* SPI20: BCM4775 sensor hub */
++	status = "okay";
++};
++
++/ {
++	/*
++	 * GPU core clock as left by S-Boot (no CMU_G3D driver yet):
++	 * PLL_CON0_PLL_G3D = 0xa0a00412 -> 26 MHz * 160 / (4 << 2) = 260 MHz,
++	 * MUX_CLK_G3D_BUSD = PLL_G3D, DIV_CLK_G3D_BUSD = 1, GPU user mux on.
++	 * 260 MHz is the stock boot/minimum G3D level, so the ACPM-managed
++	 * vdd_g3d (S2MPS18 BUCK6) is already at a voltage for it. The stock
++	 * DVFS levels are 572/546/455/338/299/260 MHz; their voltages come from
++	 * the ECT/ASV tables, so no OPP table until vdd_g3d can be controlled.
++	 */
++	gpu_clk: clock-gpu {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <260000000>;
++	};
++};
++
++/ {
++	/* G3D DVFS through ACPM (fvmap domain 4: 260-598 MHz, retail max 572) */
++	gpu_opp: opp-table-gpu {
++		compatible = "operating-points-v2";
++
++		opp-260000000 {
++			opp-hz = /bits/ 64 <260000000>;
++		};
++		opp-299000000 {
++			opp-hz = /bits/ 64 <299000000>;
++		};
++		opp-338000000 {
++			opp-hz = /bits/ 64 <338000000>;
++		};
++		opp-385000000 {
++			opp-hz = /bits/ 64 <385000000>;
++		};
++		opp-455000000 {
++			opp-hz = /bits/ 64 <455000000>;
++		};
++		opp-546000000 {
++			opp-hz = /bits/ 64 <546000000>;
++		};
++		opp-572000000 {
++			opp-hz = /bits/ 64 <572000000>;
++		};
++	};
++};
++
++&gpu {
++	/* ACPM sets the G3D clock and BUCK6 voltage together */
++	clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_G3D>;
++	operating-points-v2 = <&gpu_opp>;
++	status = "okay";
++};
++
++&pd_g3d {
++	/*
++	 * S-Boot leaves G3D on; don't power-cycle it until that is tested.
++	 * The GPU still runtime-suspends inside the domain (cores and L2
++	 * off); a kernel without CONFIG_PM does not build this driver, and
++	 * the GPU then waits for the domain forever.
++	 */
++	samsung,bringup-keep-on;
++	status = "okay";
++};
++
++/*
++ * Wi-Fi: Broadcom BCM4375 (stock CONFIG_BCM4375=y) on PCIe channel 0
++ * (stock pcie0@116A0000, enabled by DTBO fragment@73; channel 1 is unused).
++ * Bluetooth: same combo chip on UART_BT (stock serial_1, uart@10840000).
++ * No clock driver yet: the bootloader leaves all CMU_FSYS1 PCIe gates and the
++ * UART_BT gates enabled with their Q-channels held on.
++ */
++/ {
++	/*
++	 * UART_BT IPCLK as left by the bootloader: PLL_SHARED2 (M=400, P=13,
++	 * S=0 from 26 MHz) = 800 MHz, /2 (DIV_PLL_SHARED2_DIV2), /2
++	 * (CLKCMU_PERIC1_IP), /1 (DIV_CLK_PERIC1_UART_BT) = 200 MHz, which
++	 * matches the 200 MHz the vendor CAL tables program.
++	 */
++	clk_uart_bt: clock-uart-bt {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <200000000>;
++	};
++
++	/* WLAN_REG_ON (stock "samsung,brcm-wlan" gpios[0] = gpg0-5) */
++	wlan_reg_on: regulator-wlan-reg-on {
++		compatible = "regulator-fixed";
++		regulator-name = "wlan_reg_on";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&gpg0 5 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		pinctrl-0 = <&wlan_en>;
++		pinctrl-names = "default";
++	};
++};
++
++&pinctrl_alive {
++	/* stock uart1-bus / uart1-bus-rxd: RXD gpq0-0, TXD 1, RTS 2, CTS 3 */
++	uart1_bus: uart1-bus-pins {
++		samsung,pins = "gpq0-3", "gpq0-2", "gpq0-1";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++
++	uart1_rxd: uart1-rxd-pins {
++		samsung,pins = "gpq0-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++	};
++
++	/* WLAN_HOST_WAKE: unused by brcmfmac over PCIe, keep it from floating */
++	wlan_host_wake: wlan-host-wake-pins {
++		samsung,pins = "gpa0-7";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
++	};
++
++	bt_host_wake: bt-host-wake-pins {
++		samsung,pins = "gpa2-3";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
++	};
++};
++
++&pinctrl_cmgp {
++	bt_en: bt-en-pins {
++		samsung,pins = "gpm43-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++};
++
++&pinctrl_peric0 {
++	wlan_en: wlan-en-pins {
++		samsung,pins = "gpg0-5";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++
++	bt_dev_wake: bt-dev-wake-pins {
++		samsung,pins = "gpg2-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++};
++
++&pinctrl_fsys1 {
++	pcie0_clkreq: pcie0-clkreq-pins {
++		samsung,pins = "gpf2-0";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
++	};
++
++	pcie0_perst: pcie0-perst-pins {
++		samsung,pins = "gpf2-2";
++		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
++		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
++	};
++};
++
++&soc {
++	syscon_fsys1: syscon@11410000 {
++		compatible = "samsung,exynos9810-fsys1-sysreg", "syscon";
++		reg = <0x11410000 0x1200>;
++	};
++
++	pcie_0: pcie@11700000 {
++		compatible = "samsung,exynos9810-pcie";
++		reg = <0x11700000 0x1000>,
++		      <0x116a0000 0x1000>,
++		      <0x116c0000 0x20000>,
++		      <0x127fe000 0x2000>;
++		reg-names = "dbi", "elbi", "phy", "config";
++		interrupts = <GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH>;
++		#address-cells = <3>;
++		#size-cells = <2>;
++		device_type = "pci";
++		bus-range = <0x00 0xff>;
++		ranges = <0x82000000 0x0 0x11800000 0x11800000 0x0 0xff0000>;
++		/*
++		 * Without the PCIe SysMMU the bus master path is only known to
++		 * work below 4 GiB (the vendor kernel always used the SysMMU
++		 * with 32-bit IOVAs); bounce anything above.
++		 */
++		dma-ranges = <0x02000000 0x0 0x0 0x0 0x1 0x0>;
++		num-lanes = <1>;
++		max-link-speed = <2>;
++		#interrupt-cells = <1>;
++		interrupt-map-mask = <0 0 0 0>;
++		interrupt-map = <0 0 0 0 &gic GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH>;
++		reset-gpios = <&gpf2 2 GPIO_ACTIVE_LOW>;
++		vpcie3v3-supply = <&wlan_reg_on>;
++		samsung,pmu-syscon = <&pmu_system_controller>;
++		samsung,fsys-sysreg = <&syscon_fsys1>;
++		pinctrl-0 = <&pcie0_clkreq &pcie0_perst &wlan_host_wake>;
++		pinctrl-names = "default";
++
++		pcie@0,0 {
++			device_type = "pci";
++			reg = <0x0 0x0 0x0 0x0 0x0>;
++			bus-range = <0x01 0xff>;
++			#address-cells = <3>;
++			#size-cells = <2>;
++			ranges;
++
++			wifi: wifi@0,0 {
++				compatible = "pci14e4,4475";
++				reg = <0x10000 0x0 0x0 0x0 0x0>;
++				/*
++				 * Per-unit address (EFS wifi/.mac.info), filled
++				 * in at install time. While it stays zero the
++				 * firmware uses the nvram macaddr.
++				 */
++				local-mac-address = [00 00 00 00 00 00];
++				/*
++				 * Country to locale/revision of the Samsung CLM
++				 * blob (its "Samsung.TabA3WiFi" data), as in the
++				 * vendor driver's table.
++				 */
++				brcm,ccode-map = "AE-AE-6", "AF-AD-0", "AG-AG-2", "AI-AI-1",
++						 "AL-AL-2", "AN-GD-2", "AO-AD-0", "AR-AU-6",
++						 "AS-AS-12", "AT-AT-4", "AU-AU-6", "AW-AW-2",
++						 "AZ-AZ-2", "BA-BA-2", "BD-BD-1", "BE-BE-4",
++						 "BG-BG-4", "BH-BH-4", "BM-BM-12", "BN-BN-4",
++						 "BO-NG-0", "BR-BR-2", "BS-BS-2", "BT-BJ-0",
++						 "BW-BJ-0", "BY-BY-3", "CA-Q2-993", "CH-CH-4",
++						 "CN-CN-38", "CO-CO-17", "CR-CR-17", "CU-US-988",
++						 "CY-CY-4", "CZ-CZ-4", "DE-DE-7", "DK-DK-4",
++						 "DZ-GB-6", "EC-EC-21", "EE-EE-4", "EG-EG-13",
++						 "ES-ES-4", "ET-ET-2", "FI-FI-4", "FR-FR-5",
++						 "GB-GB-6", "GD-GD-2", "GF-GF-2", "GL-GP-2",
++						 "GP-GP-2", "GR-GR-4", "GT-GT-1", "GU-GU-30",
++						 "HK-HK-2", "HR-HR-4", "HU-HU-4", "ID-ID-1",
++						 "IE-IE-5", "IL-IL-14", "IN-IN-3", "IR-XZ-11",
++						 "IS-IS-4", "IT-IT-4", "JO-JO-3", "JP-JP-45",
++						 "KE-SA-0", "KH-KH-2", "KR-KR-48", "KW-KW-5",
++						 "KY-KY-3", "LA-LA-2", "LB-LB-5", "LI-LI-4",
++						 "LK-LK-1", "LS-LS-2", "LT-LT-4", "LU-LU-3",
++						 "LV-LV-4", "LY-LI-4", "MA-MA-2", "MC-MC-1",
++						 "MD-MD-2", "ME-ME-2", "MH-XZ-11", "MK-MK-2",
++						 "MN-MN-1", "MO-SG-0", "MQ-MQ-2", "MR-MR-2",
++						 "MT-MT-4", "MU-MU-2", "MV-MV-3", "MW-MW-1",
++						 "MX-MX-44", "MY-MY-3", "NI-NI-2", "NL-NL-4",
++						 "NO-NO-4", "NZ-NZ-4", "OM-OM-4", "PA-PA-17",
++						 "PE-PE-20", "PG-AU-6", "PH-PH-5", "PL-PL-4",
++						 "PR-PR-38", "PS-XZ-11", "PT-PT-4", "PY-PY-2",
++						 "RE-RE-2", "RO-RO-4", "RS-RS-2", "RU-RU-13",
++						 "SD-XZ-11", "SE-SE-4", "SI-SI-4", "SK-SK-4",
++						 "SN-MA-2", "SV-SV-25", "TH-TH-5", "TL-XZ-11",
++						 "TN-TN-1", "TR-TR-7", "TT-TT-3", "TW-TW-1",
++						 "UA-UA-8", "UM-PR-38", "US-US-988", "UY-VE-3",
++						 "UZ-MA-2", "VA-VA-2", "VE-VE-3", "VG-VG-2",
++						 "VI-PR-38", "VN-VN-4", "YT-YT-2", "ZA-ZA-6",
++						 "ZM-LA-2";
++			};
++		};
++	};
++
++	serial_1: serial@10840000 {
++		compatible = "samsung,exynos9810-uart";
++		reg = <0x10840000 0x100>;
++		interrupts = <GIC_SPI 422 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&clk_uart_bt>, <&clk_uart_bt>;
++		clock-names = "uart", "clk_uart_baud0";
++		samsung,uart-fifosize = <256>;
++		pinctrl-0 = <&uart1_bus &uart1_rxd>;
++		pinctrl-names = "default";
++
++		bluetooth: bluetooth {
++			compatible = "brcm,bcm4375-bt";
++			/*
++			 * Per-unit address (EFS bluetooth/bt_addr), filled in
++			 * at install time; zero keeps the controller's own.
++			 */
++			local-bd-address = [00 00 00 00 00 00];
++			shutdown-gpios = <&gpm43 0 GPIO_ACTIVE_HIGH>;
++			device-wakeup-gpios = <&gpg2 0 GPIO_ACTIVE_HIGH>;
++			host-wakeup-gpios = <&gpa2 3 GPIO_ACTIVE_HIGH>;
++			max-speed = <3000000>;
++			pinctrl-0 = <&bt_en &bt_dev_wake &bt_host_wake>;
++			pinctrl-names = "default";
++		};
++	};
++};
++
++/*
++ * The PSCI core power-down (C2) idle states are present but start disabled
++ * (CPUIDLE_FLAG_OFF, see drivers/cpuidle/dt_idle_states.c) because the ACPM
++ * wake-up handshake is still under test: a core that entered C2 was not woken
++ * again (Duranium 26102210 hung at boot). Boot with "exynos9810_c2=1" to
++ * enable them, or enable one core at a time at runtime via
++ * /sys/devices/system/cpu/cpuN/cpuidle/state1/disable.
++ */
+diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
+new file mode 100644
+index 000000000..28c6359eb
+--- /dev/null
++++ b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
+@@ -0,0 +1,88 @@
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
++/*
++ * Samsung Galaxy Tab Active3 LTE (gtactive3/SM-T575, SM-T575N) device tree
++ * source
++ *
++ * The same board as the Wi-Fi SM-T570 (exynos9810-gtactive3-common.dtsi)
++ * plus the Exynos 9810's own LTE modem (Shannon CP). Bring-up state: not
++ * yet booted on a T575. What differs, from the stock T575XXSFEYI1 device
++ * tree of a hw_rev 5 unit (docs/VARIANTS.md in the port repository):
++ *
++ *  - /reserved-memory/modem_if (0xf0000000, 146 MiB, "exynos,modem_if")
++ *    and cp_ram_logging (0xf9200000, 32 MiB): the CP's shared memory and
++ *    log buffer. Kept away from Linux until there is a modem driver, so
++ *    nothing of ours lands where the CP (or a later driver) expects them.
++ *  - The speaker amplifier on hw_rev 5 boards is a TI TAS2562 at 0x4c on
++ *    HSI2C 18 instead of the RT5510 at 0x34. This depends on the board
++ *    revision, not on the model (a hw_rev 5 SM-T570 has it too), so it
++ *    moves to the common file once the revision is known at boot.
++ *
++ * The first compatible must stay "samsung,gtactive3": systemd-stub matches
++ * it against U-Boot's device tree to pick this DTB from the UKI.
++ */
++
++/dts-v1/;
++#include "exynos9810-gtactive3-common.dtsi"
++
++/ {
++	model = "Samsung Galaxy Tab Active3 LTE (SM-T575)";
++	compatible = "samsung,gtactive3", "samsung,exynos9810";
++
++	reserved-memory {
++		/*
++		 * Modem shared memory: CP firmware image, IPC rings and the
++		 * CP's own RAM. Stock: modem_if (compatible "exynos,modem_if").
++		 * A future driver takes it over as its memory-region.
++		 */
++		cp_shmem: modem@f0000000 {
++			reg = <0x0 0xf0000000 0x09200000>;
++			no-map;
++		};
++
++		/* Stock cp_ram_logging: the CP's trace buffer, right after it */
++		cp_log: modem-log@f9200000 {
++			reg = <0x0 0xf9200000 0x02000000>;
++			no-map;
++		};
++	};
++};
++
++/*
++ * The same BCM4375 module as the Wi-Fi variant: brcmfmac names its firmware
++ * after the board type (brcmfmac4375b1-pcie.<board>.{bin,txt,clm_blob}),
++ * which defaults to the root compatible. Keep the Wi-Fi variant's names so
++ * the installer's firmware import (the owner's own stock files) serves
++ * both. Bluetooth (btbcm) has no such override and looks for
++ * BCM.samsung,gtactive3.hcd: the import has to provide that name too.
++ */
++&wifi {
++	brcm,board-type = "samsung,gtactive3wifi";
++};
++
++/*
++ * hw_rev 5 speaker amplifier. Disabled until the TAS2562 is wired into the
++ * sound card (the upstream tas2562 codec driver exists; its supplies,
++ * shutdown GPIO and the A-Box UAIF are still to be confirmed against the
++ * stock tree), and the RT5510 that is not fitted here is switched off.
++ */
++&rt5510 {
++	status = "disabled";
++};
++
++&hsi2c_18 {
++	tas2562: amplifier@4c {
++		compatible = "ti,tas2562";
++		reg = <0x4c>;
++		#sound-dai-cells = <0>;
++		status = "disabled";
++	};
++};
++
++/*
++ * gtactive3_rt5665.c needs both DAI links, and the speaker link points at
++ * the RT5510: keep the card off for the first boots. Next: point the
++ * speaker link at &tas2562 (or make it optional in the machine driver).
++ */
++&{/sound} {
++	status = "disabled";
++};
+diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
+index 829f03f79..0575b5cb6 100644
+--- a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
++++ b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
+@@ -2,2209 +2,15 @@
+ /*
+  * Samsung Galaxy Tab Active3 Wi-Fi (gtactive3wifi/SM-T570) device tree source
+  *
+- * Based on exynos9810-starlte.dts:
+- * Copyright (c) 2024 Markuss Broks <markuss.broks@gmail.com>
+- * Copyright (c) 2024 Maksym Holovach <nergzd@nergzd723.xyz>
+- *
+- * Framebuffer base and key GPIOs are taken from the stock T570XXSFEYI1 DTBO
+- * (hw_rev 5+). TODO: the memory map is still copied from starlte and must be
+- * checked against /proc/iomem on the device.
++ * Everything but the identity lives in exynos9810-gtactive3-common.dtsi.
++ * The first compatible must stay "samsung,gtactive3wifi": systemd-stub
++ * matches it against U-Boot's device tree to pick this DTB from the UKI.
+  */
+ 
+ /dts-v1/;
+-#include "exynos9810.dtsi"
+-#include <dt-bindings/clock/samsung,exynos9810-acpm.h>
+-#include <dt-bindings/gpio/gpio.h>
+-#include <dt-bindings/input/gpio-keys.h>
+-#include <dt-bindings/input/input.h>
+-#include <dt-bindings/interrupt-controller/irq.h>
+-#include <dt-bindings/leds/common.h>
++#include "exynos9810-gtactive3-common.dtsi"
+ 
+ / {
+ 	model = "Samsung Galaxy Tab Active3 (SM-T570)";
+ 	compatible = "samsung,gtactive3wifi", "samsung,exynos9810";
+-	chassis-type = "tablet";
+-
+-	/*
+-	 * EB-BT575BBE, values from the stock sec-battery node (DTBO hw_rev 4):
+-	 * battery_full_capacity 5000 mAh, chg_float_voltage 4260 mV,
+-	 * max_charging_current 3100 mA, sw_v_empty_voltage 3200 mV.
+-	 */
+-	battery: battery {
+-		compatible = "simple-battery";
+-		charge-full-design-microamp-hours = <5000000>;
+-		constant-charge-current-max-microamp = <3100000>;
+-		constant-charge-voltage-max-microvolt = <4260000>;
+-		voltage-max-design-microvolt = <4260000>;
+-		voltage-min-design-microvolt = <3200000>;
+-	};
+-
+-	/*
+-	 * 32.768 kHz RTC clock (XrtcXTI) from the S2MPS18, always on; the
+-	 * PMIC is read-only here, so it is not modelled as a PMIC clock.
+-	 */
+-	rtcclk: clock-rtcclk {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <32768>;
+-		clock-output-names = "rtcclk";
+-	};
+-
+-	chosen {
+-		#address-cells = <2>;
+-		#size-cells = <1>;
+-		ranges;
+-
+-		/*
+-		 * Scanned out by DECON_F window 5 in video mode, dual DSI
+-		 * (2 x 600x1920). The window blends with PD_FUNC_COPY, so the
+-		 * alpha byte is ignored and XRGB8888 needs no conversion.
+-		 */
+-		framebuffer0: framebuffer-0 {
+-			compatible = "simple-framebuffer";
+-			memory-region = <&fb_mem>;
+-			width = <1200>;
+-			height = <1920>;
+-			stride = <(1200 * 4)>;
+-			format = "x8r8g8b8";
+-			panel = <&panel>;
+-		};
+-	};
+-
+-	/*
+-	 * Himax HX83102E (BOE) TDDI, 1200x1920 portrait, on DSIM0 + DSIM1.
+-	 * There is no DSI host driver yet: the bootloader initialises the
+-	 * panel and this node only describes it for simpledrm (physical size,
+-	 * mounting) and links the DCS backlight. Change "rotation" here if
+-	 * userspace should treat another edge as the top.
+-	 *
+-	 * The node is disabled on purpose: "panel" is a fw_devlink supplier
+-	 * property, and an enabled node that never becomes a device would
+-	 * keep simpledrm in deferred probe forever ("wait for supplier
+-	 * /panel"; this config has no deferred probe timeout). simpledrm
+-	 * reads width-mm/height-mm/rotation regardless of the status.
+-	 */
+-	panel: panel {
+-		status = "disabled";
+-		width-mm = <108>;
+-		height-mm = <172>;
+-		rotation = <0>;
+-		backlight = <&backlight>;
+-	};
+-
+-	gpio-keys {
+-		compatible = "gpio-keys";
+-
+-		pinctrl-0 = <&key_power &key_voldown &key_volup &key_home &key_hot
+-			     &key_back &key_recent &hall_irq>;
+-		pinctrl-names = "default";
+-
+-		power-key {
+-			label = "Power";
+-			linux,code = <KEY_POWER>;
+-			gpios = <&gpa2 4 GPIO_ACTIVE_LOW>;
+-			wakeup-source;
+-		};
+-
+-		voldown-key {
+-			label = "Volume Down";
+-			linux,code = <KEY_VOLUMEDOWN>;
+-			gpios = <&gpa0 4 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		volup-key {
+-			label = "Volume Up";
+-			linux,code = <KEY_VOLUMEUP>;
+-			gpios = <&gpa0 3 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		home-key {
+-			label = "Home";
+-			linux,code = <KEY_HOMEPAGE>;
+-			gpios = <&gpa3 5 GPIO_ACTIVE_LOW>;
+-			wakeup-source;
+-		};
+-
+-		/* "Active key" on the side, user-programmable in stock firmware */
+-		hot-key {
+-			label = "Active";
+-			linux,code = <KEY_PROG1>;
+-			gpios = <&gpa0 5 GPIO_ACTIVE_LOW>;
+-			wakeup-source;
+-		};
+-
+-		back-key {
+-			label = "Back";
+-			linux,code = <KEY_BACK>;
+-			gpios = <&gpg3 0 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		recent-key {
+-			label = "Recent apps";
+-			/* KEY_APPSELECT (580) is beyond XKB keymaps: use the "expose" key */
+-			linux,code = <KEY_SCALE>;
+-			gpios = <&gpg3 1 GPIO_ACTIVE_LOW>;
+-		};
+-
+-		/*
+-		 * Book cover hall sensor, low while the cover is closed
+-		 * (stock "hall" node: hall,gpio_flip_cover = gpa0-2; Samsung
+-		 * hall.c reports !gpio_get_value() as the closed state).
+-		 */
+-		hall-sensor {
+-			label = "Cover";
+-			linux,input-type = <EV_SW>;
+-			linux,code = <SW_LID>;
+-			gpios = <&gpa0 2 GPIO_ACTIVE_LOW>;
+-			debounce-interval = <15>;
+-			wakeup-source;
+-			/* wake when the cover opens, not when it closes */
+-			wakeup-event-action = <EV_ACT_DEASSERTED>;
+-		};
+-	};
+-
+-	/* Coin DC motor, switched by the motor LDO enable (stock dc_vibrator) */
+-	vibrator {
+-		compatible = "gpio-vibrator";
+-		enable-gpios = <&gpg3 6 GPIO_ACTIVE_HIGH>;
+-		pinctrl-0 = <&mot_ldo_en>;
+-		pinctrl-names = "default";
+-	};
+-
+-	/*
+-	 * Rear camera flash: RT8547, FLEN = gpg3-5, CTRL = gpg0-7 (stock
+-	 * leds_rt8547: flash_en/flash_control). Stock currents: flash 1000 mA,
+-	 * movie (torch) 150 mA.
+-	 */
+-	led-controller {
+-		compatible = "richtek,rt8547";
+-		flen-gpios = <&gpg3 5 GPIO_ACTIVE_HIGH>;
+-		ctrl-gpios = <&gpg0 7 GPIO_ACTIVE_HIGH>;
+-
+-		led {
+-			function = LED_FUNCTION_FLASH;
+-			color = <LED_COLOR_ID_WHITE>;
+-			flash-max-timeout-us = <512000>;
+-			flash-max-microamp = <1000000>;
+-			led-max-microamp = <150000>;
+-		};
+-	};
+-
+-	/* S Pen digitiser supply (stock wacom_ldo_en: gpm42-0, 3.3 V) */
+-	vdd_wacom: regulator-wacom {
+-		compatible = "regulator-fixed";
+-		regulator-name = "wacom_3.3v";
+-		regulator-min-microvolt = <3300000>;
+-		regulator-max-microvolt = <3300000>;
+-		gpio = <&gpm42 0 GPIO_ACTIVE_HIGH>;
+-		enable-active-high;
+-		regulator-boot-on;
+-	};
+-
+-	/*
+-	 * The AP ADC samples the NTCs ratiometrically; its reference is not
+-	 * described in the stock DT and is assumed to be 1.8 V here. The
+-	 * lookup tables below are the stock sec-battery ADC code tables
+-	 * (DTBO hw_rev 4) converted to mV with the same 1.8 V, so only the
+-	 * ratio matters.
+-	 */
+-	vref_adc: regulator-adc-vref {
+-		compatible = "regulator-fixed";
+-		regulator-name = "adc_vref";
+-		regulator-min-microvolt = <1800000>;
+-		regulator-max-microvolt = <1800000>;
+-		regulator-always-on;
+-	};
+-
+-	/* Battery pack NTC (stock adc-temp, thermal_source ADC) */
+-	batt_ntc: thermal-sensor-battery {
+-		compatible = "generic-adc-thermal";
+-		#thermal-sensor-cells = <0>;
+-		io-channels = <&adc 1>;
+-		io-channel-names = "sensor-channel";
+-		temperature-lookup-table = <
+-			(-20000) 1603 (-19000) 1594 (-18000) 1585 (-17000) 1576
+-			(-16000) 1567 (-15000) 1558 (-14000) 1546 (-13000) 1535
+-			(-12000) 1523 (-11000) 1512 (-10000) 1500 (-9000) 1487
+-			(-8000) 1472 (-7000) 1458 (-6000) 1444 (-5000) 1432
+-			(-4000) 1419 (-3000) 1406 (-2000) 1393 (-1000) 1375
+-			0 1358 1000 1340 2000 1320 3000 1302
+-			4000 1284 5000 1267 6000 1248 7000 1230
+-			8000 1212 9000 1194 10000 1175 11000 1156
+-			12000 1136 13000 1116 14000 1097 15000 1077
+-			16000 1056 17000 1036 18000 1015 19000 995
+-			20000 974 21000 955 22000 935 23000 916
+-			24000 896 25000 876 26000 855 27000 839
+-			28000 826 29000 813 30000 800 31000 786
+-			32000 773 33000 760 34000 747 35000 725
+-			36000 703 37000 659 38000 625 39000 608
+-			40000 590 41000 574 42000 559 43000 543
+-			44000 527 45000 511 46000 497 47000 483
+-			48000 474 49000 465 50000 457 51000 448
+-			52000 439 53000 420 54000 403 55000 385
+-			56000 367 57000 357 58000 346 59000 335
+-			60000 324 61000 316 62000 309 63000 301
+-			64000 293 65000 286 66000 278 67000 270
+-			68000 263 69000 255 70000 247 71000 240
+-			72000 233 73000 226 74000 219 75000 212
+-			76000 206 77000 200 78000 194 79000 188
+-			80000 182 81000 178 82000 173 83000 169
+-			84000 164 85000 160 86000 156 87000 151
+-			88000 147 89000 142 90000 138
+-		>;
+-	};
+-
+-	/* NTC next to the MAX77705 charger (stock adc-chg-temp) */
+-	chg_ntc: thermal-sensor-charger {
+-		compatible = "generic-adc-thermal";
+-		#thermal-sensor-cells = <0>;
+-		io-channels = <&adc 3>;
+-		io-channel-names = "sensor-channel";
+-		temperature-lookup-table = <
+-			(-20000) 1598 (-19000) 1589 (-18000) 1579 (-17000) 1570
+-			(-16000) 1560 (-15000) 1551 (-14000) 1539 (-13000) 1527
+-			(-12000) 1516 (-11000) 1504 (-10000) 1492 (-9000) 1478
+-			(-8000) 1464 (-7000) 1449 (-6000) 1435 (-5000) 1421
+-			(-4000) 1406 (-3000) 1390 (-2000) 1375 (-1000) 1360
+-			0 1345 1000 1327 2000 1309 3000 1290
+-			4000 1272 5000 1254 6000 1236 7000 1218
+-			8000 1200 9000 1181 10000 1163 11000 1143
+-			12000 1123 13000 1103 14000 1083 15000 1063
+-			16000 1043 17000 1022 18000 1001 19000 981
+-			20000 960 21000 941 22000 922 23000 902
+-			24000 883 25000 864 26000 843 27000 821
+-			28000 800 29000 778 30000 757 31000 739
+-			32000 721 33000 703 34000 685 35000 667
+-			36000 650 37000 632 38000 614 39000 596
+-			40000 578 41000 562 42000 545 43000 528
+-			44000 512 45000 495 46000 482 47000 469
+-			48000 457 49000 444 50000 431 51000 419
+-			52000 407 53000 394 54000 382 55000 369
+-			56000 359 57000 348 58000 338 59000 327
+-			60000 316 61000 309 62000 301 63000 294
+-			64000 286 65000 278 66000 271 67000 263
+-			68000 255 69000 248 70000 240 71000 234
+-			72000 227 73000 220 74000 213 75000 207
+-			76000 200 77000 194 78000 188 79000 182
+-			80000 176 81000 172 82000 167 83000 163
+-			84000 159 85000 154 86000 150 87000 145
+-			88000 141 89000 137 90000 132
+-		>;
+-	};
+-
+-	/* NTC at the USB-C connector (stock adc-usb-temp) */
+-	usb_ntc: thermal-sensor-usb {
+-		compatible = "generic-adc-thermal";
+-		#thermal-sensor-cells = <0>;
+-		io-channels = <&adc 4>;
+-		io-channel-names = "sensor-channel";
+-		temperature-lookup-table = <
+-			(-20000) 1603 (-19000) 1594 (-18000) 1585 (-17000) 1576
+-			(-16000) 1567 (-15000) 1557 (-14000) 1546 (-13000) 1534
+-			(-12000) 1523 (-11000) 1512 (-10000) 1501 (-9000) 1487
+-			(-8000) 1472 (-7000) 1458 (-6000) 1444 (-5000) 1430
+-			(-4000) 1415 (-3000) 1400 (-2000) 1385 (-1000) 1370
+-			0 1356 1000 1338 2000 1320 3000 1302
+-			4000 1284 5000 1266 6000 1248 7000 1230
+-			8000 1212 9000 1193 10000 1175 11000 1156
+-			12000 1136 13000 1116 14000 1096 15000 1076
+-			16000 1056 17000 1036 18000 1015 19000 994
+-			20000 974 21000 954 22000 934 23000 915
+-			24000 895 25000 876 26000 854 27000 833
+-			28000 812 29000 791 30000 769 31000 751
+-			32000 733 33000 714 34000 696 35000 678
+-			36000 660 37000 642 38000 625 39000 607
+-			40000 589 41000 574 42000 558 43000 541
+-			44000 526 45000 510 46000 496 47000 482
+-			48000 468 49000 453 50000 439 51000 427
+-			52000 414 53000 402 54000 390 55000 378
+-			56000 367 57000 356 58000 345 59000 334
+-			60000 323 61000 316 62000 308 63000 300
+-			64000 292 65000 285 66000 277 67000 269
+-			68000 261 69000 254 70000 247 71000 240
+-			72000 232 73000 225 74000 218 75000 211
+-			76000 205 77000 199 78000 193 79000 187
+-			80000 181 81000 177 82000 172 83000 168
+-			84000 163 85000 159 86000 155 87000 150
+-			88000 146 89000 141 90000 137
+-		>;
+-	};
+-
+-	/*
+-	 * No trips: the MAX77705 charger driver reads battery-thermal and
+-	 * charger-thermal itself and throttles or stops charging at the stock
+-	 * thresholds.
+-	 */
+-	thermal-zones {
+-		battery-thermal {
+-			polling-delay-passive = <0>;
+-			polling-delay = <0>;
+-			thermal-sensors = <&batt_ntc>;
+-		};
+-
+-		charger-thermal {
+-			polling-delay-passive = <0>;
+-			polling-delay = <0>;
+-			thermal-sensors = <&chg_ntc>;
+-		};
+-
+-		usb-thermal {
+-			polling-delay-passive = <0>;
+-			polling-delay = <0>;
+-			thermal-sensors = <&usb_ntc>;
+-		};
+-	};
+-
+-	/*
+-	 * Stock routing (dtbo-4.dts sound node, samsung,routing): headset mic
+-	 * on IN1 with MICBIAS1, main mic on IN3 with MICBIAS2, sub mic on IN4
+-	 * with MICBIAS3, headphones on HPOL/HPOR, speaker on the RT5510.
+-	 */
+-	sound {
+-		compatible = "samsung,gtactive3-audio";
+-		model = "Galaxy Tab Active3";
+-		audio-routing = "Headphones", "HPOL",
+-				"Headphones", "HPOR",
+-				"Speaker", "OUTP",
+-				"Speaker", "OUTN",
+-				"IN1P", "Headset Mic",
+-				"IN1N", "Headset Mic",
+-				"Headset Mic", "MICBIAS1",
+-				"IN3P", "Main Mic",
+-				"IN3N", "Main Mic",
+-				"Main Mic", "MICBIAS2",
+-				"IN4P", "Sub Mic",
+-				"IN4N", "Sub Mic",
+-				"Sub Mic", "MICBIAS3";
+-
+-		headset-dai-link {
+-			cpu {
+-				sound-dai = <&abox 0>;
+-			};
+-			codec {
+-				sound-dai = <&rt5665 0>;
+-			};
+-		};
+-
+-		speaker-dai-link {
+-			cpu {
+-				sound-dai = <&abox 1>;
+-			};
+-			codec {
+-				sound-dai = <&rt5510>;
+-			};
+-		};
+-	};
+-
+-	memory@80000000 {
+-		device_type = "memory";
+-		reg = <0x0 0x80000000 0x3c800000>,
+-		      <0x0 0xc0000000 0x20000000>,
+-		      <0x0 0xe1900000 0x1e700000>,
+-		      <0x8 0x80000000 0x80000000>;
+-	};
+-
+-	reserved-memory {
+-		#address-cells = <2>;
+-		#size-cells = <1>;
+-		ranges;
+-
+-		fb_mem: framebuffer@ca000000 {
+-			reg = <0x0 0xca000000 (1200 * 1920 * 4)>;
+-			no-map;
+-		};
+-
+-		/* bring-up: keep the previous boot's kernel log across resets */
+-		ramoops@8ff000000 {
+-			compatible = "ramoops";
+-			reg = <0x8 0xff000000 0x100000>;
+-			console-size = <0x80000>;
+-			record-size = <0x20000>;
+-			pmsg-size = <0x10000>;
+-		};
+-
+-		/* bring-up: U-Boot's console log (CONFIG_EXYNOS_MOBILE_RAMLOG) */
+-		uboot-log@8ff100000 {
+-			reg = <0x8 0xff100000 0x100000>;
+-			no-map;
+-		};
+-	};
+-};
+-
+-&oscclk {
+-	clock-frequency = <26000000>;
+-};
+-
+-&rtc {
+-	clocks = <&cmu_apm CLK_GOUT_APM_APBIF_RTC_PCLK>, <&rtcclk>;
+-	clock-names = "rtc", "rtc_src";
+-	status = "okay";
+-};
+-
+-&abox {
+-	pinctrl-0 = <&aud_i2s0_bus &aud_i2s1_bus>;
+-	pinctrl-names = "default";
+-	/* no CMU_AUD clock driver yet: let the A-Box driver set PLL_AUD up */
+-	samsung,cmu-bringup;
+-	status = "okay";
+-};
+-
+-&adc {
+-	vdd-supply = <&vref_adc>;
+-	status = "okay";
+-};
+-
+-&pinctrl_alive {
+-	/* RT5665 GPIO1 = IRQ (jack detection, headset buttons) */
+-	rt5665_irq: rt5665-irq-pins {
+-		samsung,pins = "gpa2-2";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-
+-	key_power: key-power-pins {
+-		samsung,pins = "gpa2-4";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	key_voldown: key-voldown-pins {
+-		samsung,pins = "gpa0-4";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	key_volup: key-volup-pins {
+-		samsung,pins = "gpa0-3";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	key_home: key-home-pins {
+-		samsung,pins = "gpa3-5";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	key_hot: key-hot-pins {
+-		samsung,pins = "gpa0-5";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	hall_irq: hall-irq-pins {
+-		samsung,pins = "gpa0-2";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	max77705_irq: max77705-irq-pins {
+-		samsung,pins = "gpa1-6";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	touch_irq: touch-irq-pins {
+-		samsung,pins = "gpa1-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	nfc_irq: nfc-irq-pins {
+-		samsung,pins = "gpa1-2";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	sm5504_irq: sm5504-irq-pins {
+-		samsung,pins = "gpa1-4";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	grip_irq: grip-irq-pins {
+-		samsung,pins = "gpa1-7";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-
+-	/* microSD card detect: low = card inserted (external pull-up) */
+-	sd2_cd: sd2-cd-pins {
+-		samsung,pins = "gpa1-5";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	/* gpa3-3 = pen interrupt, gpa3-7 = pen detect (PDCT) */
+-	epen_irq: epen-irq-pins {
+-		samsung,pins = "gpa3-3", "gpa3-7";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-};
+-
+-&pinctrl_peric0 {
+-	touch_rst: touch-rst-pins {
+-		samsung,pins = "gpg0-6";
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-
+-	nfc_pd: nfc-pd-pins {
+-		samsung,pins = "gpg1-0";
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	nfc_firm: nfc-firm-pins {
+-		samsung,pins = "gpg1-6";
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-};
+-
+-&pinctrl_peric1 {
+-	/* CIS_CLK0/1 out (function 2), as the stock fimc_is_mclk*_fn states */
+-	cam0_mclk: cam0-mclk-pins {
+-		samsung,pins = "gpc1-4";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	cam1_mclk: cam1-mclk-pins {
+-		samsung,pins = "gpc1-5";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	key_back: key-back-pins {
+-		samsung,pins = "gpg3-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	key_recent: key-recent-pins {
+-		samsung,pins = "gpg3-1";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-
+-	mot_ldo_en: mot-ldo-en-pins {
+-		samsung,pins = "gpg3-6";
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV1>;
+-	};
+-};
+-
+-&pmu_system_controller {
+-	/* Boot reason for S-Boot, values from Samsung's sec_reboot.c */
+-	reboot-mode {
+-		compatible = "syscon-reboot-mode";
+-		offset = <0x080c>; /* INFORM3 */
+-		mode-normal = <0x12345670>;
+-		mode-download = <0x12345671>;
+-		mode-recovery = <0x12345674>;
+-		mode-bootloader = <0x1234567d>;
+-	};
+-};
+-
+-&soc {
+-	/*
+-	 * USB 2.0 device mode. There is no Exynos9810 clock driver yet: the
+-	 * bootloader leaves CMU_FSYS0 running (UFS lives there too) and init
+-	 * forces the two USB gates on before loading these drivers, so the
+-	 * 26 MHz oscillator stands in for every clock here.
+-	 */
+-	usbdrd: usb@10c00000 {
+-		compatible = "samsung,exynos9810-dwusb3", "samsung,exynos850-dwusb3";
+-		ranges = <0x0 0x10c00000 0x10000>;
+-		clocks = <&oscclk>, <&oscclk>;
+-		clock-names = "bus_early", "ref";
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-
+-		usbdrd_dwc3: usb@0 {
+-			compatible = "snps,dwc3";
+-			reg = <0x0 0x10000>;
+-			interrupts = <GIC_SPI 244 IRQ_TYPE_LEVEL_HIGH>;
+-			phys = <&usbdrd_phy 0>;
+-			phy-names = "usb2-phy";
+-			dr_mode = "peripheral";
+-			maximum-speed = "high-speed";
+-		};
+-	};
+-
+-	usbdrd_phy: phy@11100000 {
+-		compatible = "samsung,exynos9810-usbdrd-phy";
+-		reg = <0x11100000 0x200>;
+-		clocks = <&oscclk>, <&oscclk>;
+-		clock-names = "phy", "ref";
+-		samsung,pmu-syscon = <&pmu_system_controller>;
+-		#phy-cells = <1>;
+-	};
+-};
+-
+-&gpg3 {
+-	/* USB D+/D- mux: low = USB-C port, high = pogo connector */
+-	usb-mux-sel-hog {
+-		gpio-hog;
+-		gpios = <2 GPIO_ACTIVE_HIGH>;
+-		output-low;
+-		line-name = "usb-mux-sel";
+-	};
+-};
+-
+-/ {
+-	/*
+-	 * USI / HSI2C clocks as programmed by the bootloader (no clock driver
+-	 * yet). PLL_SHARED2 = 26 MHz * 400 / 13 = 800 MHz; CLKCMU_CMGP_BUS,
+-	 * CLKCMU_PERIC0_IP and CLKCMU_PERIC1_IP = PLL_SHARED2 / 2 / 2 = 200 MHz.
+-	 * USI_CMGP00/03, PERIC0/1 USI_I2C and I2C_CAM0-3 are undivided from
+-	 * those (200 MHz), PERIC1 USI07/08_USI are divided by 4 (50 MHz).
+-	 * The bus clocks are only gated, their rate does not matter.
+-	 */
+-	clk_usi_200m: clock-usi-200m {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <200000000>;
+-		clock-output-names = "usi_200m";
+-	};
+-
+-	clk_usi_50m: clock-usi-50m {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <50000000>;
+-		clock-output-names = "usi_50m";
+-	};
+-
+-	aliases {
+-		/* the debug console's i2cr/i2cw use /dev/i2c-0 */
+-		i2c0 = &hsi2c_40;
+-		bluetooth0 = &bluetooth;
+-		wifi0 = &wifi;
+-		/* same numbers as the stock kernel: rt5665 3-001b, rt5510 4-0034 */
+-		i2c3 = &hsi2c_7;
+-		i2c4 = &hsi2c_18;
+-		/* touchscreen stays spi0.0, sensor hub spi1.0 */
+-		spi0 = &spi_21;
+-		spi1 = &spi_20;
+-	};
+-};
+-
+-/* Camera I2C: S5K3L6 rear sensor @2d */
+-&hsi2c_0 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-	clock-frequency = <400000>;
+-	status = "okay";
+-
+-	/*
+-	 * Power sequence of the stock module (fimc-is-device-module-3l6):
+-	 * reset low, IO 1.8 V, analogue 2.8 V, core 1.05 V, AF 2.8 V, reset
+-	 * high, then the 26 MHz CIS_CLK0 on gpc1-4.
+-	 */
+-	rear_camera: camera@2d {
+-		compatible = "samsung,s5k3l6";
+-		reg = <0x2d>;
+-		clocks = <&cmu_top CLK_DOUT_CMU_CIS_CLK0>;
+-		pinctrl-0 = <&cam0_mclk>;
+-		pinctrl-names = "default";
+-		reset-gpios = <&gpg2 6 GPIO_ACTIVE_LOW>;
+-		vddio-supply = <&s2mps18_ldo44>;
+-		vdda-supply = <&s2mps18_ldo32>;
+-		vddd-supply = <&s2mps18_ldo34>;
+-		afvdd-supply = <&s2mps18_ldo45>;
+-		lens-focus = <&rear_lens>;
+-		orientation = <1>;	/* back */
+-		/* measured: upright in portrait (Snapshot on Phosh) */
+-		rotation = <270>;
+-
+-		port {
+-			rear_camera_out: endpoint {
+-				remote-endpoint = <&csis0_in>;
+-				data-lanes = <1 2 3 4>;
+-				link-frequencies = /bits/ 64 <598000000>;
+-			};
+-		};
+-	};
+-};
+-
+-&csis0 {
+-	status = "okay";
+-
+-	port {
+-		csis0_in: endpoint {
+-			remote-endpoint = <&rear_camera_out>;
+-			data-lanes = <1 2 3 4>;
+-		};
+-	};
+-};
+-
+-/* Camera I2C: GC5035 front sensor @37 */
+-&hsi2c_1 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-	clock-frequency = <400000>;
+-	status = "okay";
+-
+-	/*
+-	 * Stock power sequence (fimc-is-device-module-gc5035): reset low,
+-	 * IO 1.8 V, core 1.2 V, analogue 2.8 V, reset high, then the 26 MHz
+-	 * CIS_CLK1 on gpc1-5.
+-	 */
+-	front_camera: camera@37 {
+-		compatible = "galaxycore,gc5035";
+-		reg = <0x37>;
+-		clocks = <&cmu_top CLK_DOUT_CMU_CIS_CLK1>;
+-		pinctrl-0 = <&cam1_mclk>;
+-		pinctrl-names = "default";
+-		reset-gpios = <&gpg2 5 GPIO_ACTIVE_LOW>;
+-		vddio-supply = <&s2mps18_ldo44>;
+-		vddd-supply = <&s2mps18_ldo39>;
+-		vdda-supply = <&s2mps18_ldo28>;
+-		orientation = <0>;	/* front */
+-		/* measured: upright in portrait (Snapshot on Phosh) */
+-		rotation = <90>;
+-
+-		port {
+-			front_camera_out: endpoint {
+-				remote-endpoint = <&csis2_in>;
+-				data-lanes = <1 2>;
+-				link-frequencies = /bits/ 64 <448500000 224000000>;
+-			};
+-		};
+-	};
+-};
+-
+-&csis2 {
+-	status = "okay";
+-
+-	port {
+-		csis2_in: endpoint {
+-			remote-endpoint = <&front_camera_out>;
+-			data-lanes = <1 2>;
+-		};
+-	};
+-};
+-
+-/* Camera I2C: unused */
+-&hsi2c_2 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-};
+-
+-/* Camera I2C: DW9808 actuator @0c, rear camera EEPROM @58 */
+-&hsi2c_3 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-	clock-frequency = <400000>;
+-	status = "okay";
+-
+-	/* rear camera autofocus voice coil (stock fimc-is-actuator-dw9808) */
+-	rear_lens: lens@c {
+-		compatible = "dongwoon,dw9808-vcm", "dongwoon,dw9807-vcm";
+-		reg = <0x0c>;
+-		vdd-supply = <&s2mps18_ldo45>;
+-		vio-supply = <&s2mps18_ldo44>;
+-		nvmem-cells = <&rear_af_pan>;
+-		nvmem-cell-names = "af-pan";
+-	};
+-
+-	/*
+-	 * Rear camera module EEPROM, 16 KiB (stock rear_eeprom@58): AF
+-	 * infinity/macro DAC codes and AWB calibration, read-only. Its supply
+-	 * is the AF rail: stock's READ_ROM sequence (fimc-is-device-module-
+-	 * 3l6.c) turns on VDD_RCAM_AF_2P8, then VDD_CAM_IO_1P8 for the bus
+-	 * (always on here). Without the AF rail it never answers.
+-	 */
+-	eeprom@58 {
+-		compatible = "atmel,24c128";
+-		reg = <0x58>;
+-		vcc-supply = <&s2mps18_ldo45>;
+-		read-only;
+-
+-		nvmem-layout {
+-			compatible = "fixed-layout";
+-			#address-cells = <1>;
+-			#size-cells = <1>;
+-
+-			/* stock rom_af_cal_pan_addr: pan focus DAC code, s32 */
+-			rear_af_pan: af-pan@3314 {
+-				reg = <0x3314 0x4>;
+-			};
+-		};
+-	};
+-};
+-
+-/* RT5665 audio codec @1b */
+-&usi01_i2c {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "pclk", "ipclk";
+-	status = "okay";
+-};
+-
+-&hsi2c_7 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-	status = "okay";
+-
+-	/*
+-	 * Jack detection as in the stock dtbo-4: JD1 + JD2 (realtek,jd-src
+-	 * = <2>), the codec's GPIO1 interrupt output on gpa2-2.
+-	 * Supplies (stock realtek,regulator_1v8/_3v3): S2MPS18 LDO33 (1.8 V)
+-	 * is on from boot and stays as S-Boot left it. LDO36 (3.3 V, for the
+-	 * microphone bias; the codec is its only consumer in the stock DT) is
+-	 * off at boot: the codec switches it, as the stock driver does.
+-	 */
+-	rt5665: audio-codec@1b {
+-		compatible = "realtek,rt5665";
+-		reg = <0x1b>;
+-		#sound-dai-cells = <1>;
+-		MICVDD-supply = <&s2mps18_ldo36>;
+-		interrupt-parent = <&gpa2>;
+-		interrupts = <2 IRQ_TYPE_EDGE_BOTH>;
+-		pinctrl-0 = <&rt5665_irq>;
+-		pinctrl-names = "default";
+-		realtek,in1-differential;
+-		realtek,in3-differential;
+-		realtek,in4-differential;
+-		realtek,jd-src = <2>;
+-		/* the main mic path thumps for ~100 ms after power-up */
+-		realtek,amic-delay-ms = <150>;
+-	};
+-};
+-
+-/* RT5510 speaker amplifier @34 (hw_rev 4) */
+-&usi07_usi {
+-	clocks = <&clk_usi_200m>, <&clk_usi_50m>;
+-	clock-names = "pclk", "ipclk";
+-	status = "okay";
+-};
+-
+-&hsi2c_18 {
+-	clocks = <&clk_usi_50m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-	clock-frequency = <400000>;
+-	status = "okay";
+-
+-	/* hw_rev 4 only (dtbo-4); hw_rev 5+ has a TAS2562 here instead */
+-	rt5510: amplifier@34 {
+-		compatible = "richtek,rt5510";
+-		reg = <0x34>;
+-		#sound-dai-cells = <0>;
+-	};
+-};
+-
+-/* S.LSI NFC @27 */
+-&usi08_usi {
+-	clocks = <&clk_usi_200m>, <&clk_usi_50m>;
+-	clock-names = "pclk", "ipclk";	status = "okay";
+-};
+-
+-&hsi2c_20 {
+-	clocks = <&clk_usi_50m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";	status = "okay";
+-};
+-
+-/* Wacom W90xx S Pen digitiser @56 */
+-&usi09_i2c {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "pclk", "ipclk";	status = "okay";
+-};
+-
+-&hsi2c_23 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";	status = "okay";
+-};
+-
+-/* A96T3X6 grip sensor @20 */
+-&usi_cmgp00 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "pclk", "ipclk";	status = "okay";
+-};
+-
+-&hsi2c_34 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";	status = "okay";
+-};
+-
+-/* MAX77705 PMIC @66 (+ USB-C @25, fuel gauge @36, ...), SM5504 MUIC @14 */
+-&usi_cmgp03 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "pclk", "ipclk";
+-	status = "okay";
+-};
+-
+-&hsi2c_40 {
+-	clocks = <&clk_usi_200m>, <&clk_usi_200m>;
+-	clock-names = "hsi2c", "hsi2c_pclk";
+-	clock-frequency = <100000>;
+-	status = "okay";
+-};
+-
+-/ {
+-	/*
+-	 * UFS clocks as programmed by the bootloader (no clock driver yet):
+-	 * PLL_SHARED4 = 26 MHz * 205 / 8 = 666.25 MHz;
+-	 * FSYS0 bus = PLL_SHARED4 / 2, UFS_EMBD (UniPro) = PLL_SHARED4 / 2 / 2.
+-	 */
+-	ufs_core_clk: clock-ufs-core {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <333125000>;
+-	};
+-
+-	ufs_unipro_clk: clock-ufs-unipro {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <166562500>;
+-	};
+-};
+-
+-&soc {
+-	ufs_phy: phy@11124000 {
+-		compatible = "samsung,exynos9810-ufs-phy";
+-		reg = <0x11124000 0x800>;
+-		reg-names = "phy-pma";
+-		samsung,pmu-syscon = <&pmu_system_controller>;
+-		clocks = <&oscclk>;
+-		clock-names = "ref_clk";
+-		#phy-cells = <0>;
+-	};
+-
+-	ufs: ufs@11120000 {
+-		compatible = "samsung,exynos9810-ufs";
+-		reg = <0x11120000 0x200>,
+-		      <0x11121100 0x200>,
+-		      <0x11110000 0x8000>,
+-		      <0x11130000 0x100>;
+-		reg-names = "hci", "vs_hci", "unipro", "ufsp";
+-		interrupts = <GIC_SPI 242 IRQ_TYPE_LEVEL_HIGH>;
+-		clocks = <&ufs_core_clk>, <&ufs_unipro_clk>;
+-		clock-names = "core_clk", "sclk_unipro_main";
+-		freq-table-hz = <0 0>, <0 0>;
+-		phys = <&ufs_phy>;
+-		phy-names = "ufs-phy";
+-	};
+-};
+-
+-/*
+- * Only the cluster 0 (A55) watchdog: the cluster 1 counter does not run while
+- * the M3 cores are off (WTCNT stays at WTDAT).
+- */
+-/*
+- * microSD slot (stock dwmmc2, DTBO fragment@72): 4-bit, UHS-I up to
+- * SDR104, card detect on gpa1-5, card power LDO31 (2.95 V), signalling
+- * LDO2 (2.95 V, 1.8 V for UHS-I).
+- */
+-&mmc_2 {
+-	bus-width = <4>;
+-	card-detect-delay = <200>;
+-	cd-gpios = <&gpa1 5 GPIO_ACTIVE_LOW>;
+-	cap-sd-highspeed;
+-	disable-wp;
+-	sd-uhs-sdr50;
+-	sd-uhs-sdr104;
+-	vmmc-supply = <&s2mps18_ldo31>;
+-	vqmmc-supply = <&s2mps18_ldo2>;
+-	pinctrl-0 = <&sd2_clk &sd2_cmd &sd2_bus1 &sd2_bus4 &sd2_cd>;
+-	pinctrl-names = "default";
+-	status = "okay";
+-};
+-
+-&watchdog_cl0 {
+-	status = "okay";
+-};
+-
+-&soc {
+-	/*
+-	 * The HX83102E takes its brightness as DCS 0x51 (12 bits, two bytes)
+-	 * on both DSI links and drives the LED PWM itself; there is no
+-	 * backlight IC on I2C. Samsung's table tops out at 2437 in normal
+-	 * use and 3977 in outdoor mode, 928 is its default.
+-	 */
+-	backlight: backlight@16080000 {
+-		compatible = "samsung,exynos9810-dsim-backlight";
+-		reg = <0x16080000 0x100>, <0x16090000 0x100>;
+-		max-brightness = <3977>;
+-		default-brightness = <928>;
+-		/* Night Light: the DPU gamma LUT in the panel's digital gamma */
+-		samsung,hx83102e-dgc;
+-		/*
+-		 * Panel power (stock decon_board_hx83102e: gpio_lcd_rst,
+-		 * gpio_ldo_en, gpio_buck_en), for power_off_level 3.
+-		 */
+-		reset-gpios = <&gpa3 4 GPIO_ACTIVE_LOW>;
+-		ldo-enable-gpios = <&gpg2 2 GPIO_ACTIVE_HIGH>;
+-		buck-enable-gpios = <&gph1 4 GPIO_ACTIVE_HIGH>;
+-	};
+-};
+-
+-/*
+- * S2MPS18 main PMIC, reached through ACPM IPC channel 2 (stock
+- * s2mps18mfd node, DTBO hw_rev 4). The driver is read-only for now, so
+- * the regulators carry no voltage constraints: the stock ranges are
+- * kept as comments for when voltage control is enabled. The PMIC IRQ is
+- * gpa0-1 (not used yet).
+- */
+-&acpm_ipc {
+-	pmic-1 {
+-		compatible = "samsung,s2mps18-pmic";
+-
+-		regulators {
+-			s2mps18_buck1: BUCK1 {
+-				regulator-name = "vdd_mif";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_buck2: BUCK2 {
+-				regulator-name = "vdd_cpucl1";
+-				regulator-always-on;
+-				/* stock: 450-1300 mV */
+-			};
+-
+-			s2mps18_buck3: BUCK3 {
+-				regulator-name = "vdd_cpucl0";
+-				regulator-always-on;
+-				/* stock: 450-1300 mV */
+-			};
+-
+-			s2mps18_buck4: BUCK4 {
+-				regulator-name = "vdd_int";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_buck5: BUCK5 {
+-				regulator-name = "vdd_cam";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_buck6: BUCK6 {
+-				regulator-name = "vdd_g3d";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_buck7: BUCK7 {
+-				regulator-name = "vdd_cpucl1_m";
+-				regulator-always-on;
+-				/* stock: 450-1300 mV */
+-			};
+-
+-			s2mps18_buck8: BUCK8 {
+-				regulator-name = "vdd2_mem";
+-				regulator-always-on;
+-				/* stock: 900-1300 mV */
+-			};
+-
+-			s2mps18_buck9: BUCK9 {
+-				regulator-name = "vddq_mem";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_buck10: BUCK10 {
+-				regulator-name = "vdd_lldo1";
+-				regulator-always-on;
+-				/* stock: 750-1150 mV */
+-			};
+-
+-			s2mps18_buck11: BUCK11 {
+-				regulator-name = "vdd_lldo2";
+-				regulator-always-on;
+-				/* stock: 900-1300 mV */
+-			};
+-
+-			s2mps18_buck12: BUCK12 {
+-				regulator-name = "vdd_lldo3";
+-				regulator-always-on;
+-				/* stock: 1100-1500 mV */
+-			};
+-
+-			s2mps18_buck13: BUCK13 {
+-				regulator-name = "vdd_mldo";
+-				regulator-always-on;
+-				/* stock: 1750-2150 mV */
+-			};
+-
+-			s2mps18_ldo1: LDO1 {
+-				regulator-name = "vdd_ldo1";
+-				regulator-always-on;
+-				/* stock: 700-950 mV */
+-			};
+-
+-			s2mps18_ldo2: LDO2 {
+-				regulator-name = "vqmmc";
+-				/* stock: 1700-2950 mV, the LDO starts at 1800 mV */
+-				regulator-min-microvolt = <1800000>;
+-				regulator-max-microvolt = <2950000>;
+-			};
+-
+-			s2mps18_ldo3: LDO3 {
+-				regulator-name = "vdd_ldo3";
+-				regulator-always-on;
+-				/* stock: 1600-1950 mV */
+-			};
+-
+-			s2mps18_ldo4: LDO4 {
+-				regulator-name = "vdd_ldo4";
+-				regulator-always-on;
+-				/* stock: 700-1100 mV */
+-			};
+-
+-			s2mps18_ldo5: LDO5 {
+-				regulator-name = "vdd_ldo5";
+-				regulator-always-on;
+-				/* stock: 1600-1950 mV */
+-			};
+-
+-			s2mps18_ldo6: LDO6 {
+-				regulator-name = "vdd_ldo6";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_ldo7: LDO7 {
+-				regulator-name = "vdd_ldo7";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_ldo8: LDO8 {
+-				regulator-name = "vdd_ldo8";
+-				regulator-always-on;
+-				/* stock: 700-1300 mV */
+-			};
+-
+-			s2mps18_ldo9: LDO9 {
+-				regulator-name = "vdd_ldo9";
+-				regulator-always-on;
+-				/* stock: 1600-1950 mV */
+-			};
+-
+-			s2mps18_ldo10: LDO10 {
+-				regulator-name = "vdd_ldo10";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_ldo11: LDO11 {
+-				regulator-name = "vdd_ldo11";
+-				regulator-always-on;
+-				/* stock: 450-950 mV */
+-			};
+-
+-			s2mps18_ldo12: LDO12 {
+-				regulator-name = "vdd_ldo12";
+-				regulator-always-on;
+-				/* stock: 700-1100 mV */
+-			};
+-
+-			s2mps18_ldo13: LDO13 {
+-				regulator-name = "vdd_ldo13";
+-				regulator-always-on;
+-				/* stock: 1600-1950 mV */
+-			};
+-
+-			s2mps18_ldo14: LDO14 {
+-				regulator-name = "vdd_ldo14";
+-				regulator-always-on;
+-				/* stock: 1700-3350 mV */
+-			};
+-
+-			s2mps18_ldo22: LDO22 {
+-				regulator-name = "vdd_ldo22";
+-				/* stock: 700-1100 mV */
+-			};
+-
+-			s2mps18_ldo28: LDO28 {
+-				regulator-name = "VDD_FCAM_A2P8";
+-				regulator-min-microvolt = <2800000>;
+-				regulator-max-microvolt = <2800000>;
+-			};
+-
+-			s2mps18_ldo30: LDO30 {
+-				regulator-name = "vdd_ldo30";
+-				regulator-always-on;
+-				/* stock: 450-1100 mV */
+-			};
+-
+-			s2mps18_ldo31: LDO31 {
+-				regulator-name = "vmmc";
+-				regulator-min-microvolt = <2950000>;
+-				regulator-max-microvolt = <2950000>;
+-			};
+-
+-			s2mps18_ldo32: LDO32 {
+-				regulator-name = "VDD_RCAM_A2P8";
+-				regulator-min-microvolt = <2800000>;
+-				regulator-max-microvolt = <2800000>;
+-			};
+-
+-			s2mps18_ldo33: LDO33 {
+-				regulator-name = "regulator_1v8";
+-				regulator-boot-on;
+-				/* stock: 1800 mV */
+-			};
+-
+-			s2mps18_ldo34: LDO34 {
+-				regulator-name = "VDD_RCAM_CORE_1P05";
+-				regulator-min-microvolt = <1050000>;
+-				regulator-max-microvolt = <1050000>;
+-			};
+-
+-			/*
+-			 * LDO35/42/43: the sensors behind the BCM4775 hub (accel,
+-			 * light/proximity and its IR LED, magnetometer). S-Boot
+-			 * leaves them off; the hub finds no sensors without them.
+-			 */
+-			s2mps18_ldo35: LDO35 {
+-				regulator-name = "VDD_SENSOR_1P8";
+-				regulator-min-microvolt = <1800000>;
+-				regulator-max-microvolt = <1800000>;
+-				regulator-always-on;
+-			};
+-
+-			/* RT5665 MICVDD: S-Boot leaves it off (LCTRL 0x3c) */
+-			s2mps18_ldo36: LDO36 {
+-				regulator-name = "regulator_3v3";
+-				regulator-min-microvolt = <3300000>;
+-				regulator-max-microvolt = <3300000>;
+-			};
+-
+-			s2mps18_ldo37: LDO37 {
+-				regulator-name = "vdd_mcu_1p8";
+-				regulator-min-microvolt = <1800000>;
+-				regulator-max-microvolt = <1800000>;
+-			};
+-
+-			s2mps18_ldo38: LDO38 {
+-				regulator-name = "VDD_ESE_1P8";
+-				/* stock: 1800 mV */
+-			};
+-
+-			s2mps18_ldo39: LDO39 {
+-				regulator-name = "VDD_FCAM_CORE_1P2";
+-				regulator-min-microvolt = <1200000>;
+-				regulator-max-microvolt = <1200000>;
+-			};
+-
+-			s2mps18_ldo40: LDO40 {
+-				regulator-name = "VDD_GRIP_3P0";
+-				regulator-min-microvolt = <3000000>;
+-				regulator-max-microvolt = <3000000>;
+-			};
+-
+-			s2mps18_ldo41: LDO41 {
+-				regulator-name = "VDD_NFC_1P8";
+-				regulator-min-microvolt = <1800000>;
+-				regulator-max-microvolt = <1800000>;
+-			};
+-
+-			s2mps18_ldo42: LDO42 {
+-				regulator-name = "vdd_proxy_led_3p3";
+-				regulator-min-microvolt = <3300000>;
+-				regulator-max-microvolt = <3300000>;
+-				regulator-always-on;
+-			};
+-
+-			s2mps18_ldo43: LDO43 {
+-				regulator-name = "vdd_ldo43";
+-				regulator-min-microvolt = <3300000>;
+-				regulator-max-microvolt = <3300000>;
+-				regulator-always-on;
+-			};
+-
+-			s2mps18_ldo44: LDO44 {
+-				regulator-name = "VDD_CAM_IO_1P8";
+-				regulator-min-microvolt = <1800000>;
+-				regulator-max-microvolt = <1800000>;
+-			};
+-
+-			s2mps18_ldo45: LDO45 {
+-				regulator-name = "VDD_RCAM_AF_2P8";
+-				regulator-min-microvolt = <2800000>;
+-				regulator-max-microvolt = <2800000>;
+-			};
+-		};
+-	};
+ };
+-
+-/*
+- * MAX77705 PMIC/charger/fuel gauge on HSI2C_40 (stock fragment@30,
+- * DTBO hw_rev 4). The controller node itself comes from the HSI2C work;
+- * until it transfers reliably the same devices can be reached through
+- * the i2c-gpio variant, exynos9810-gtactive3wifi-i2cgpio.dtb.
+- */
+-&hsi2c_40 {
+-	max77705: pmic@66 {
+-		compatible = "maxim,max77705";
+-		reg = <0x66>;
+-		interrupts-extended = <&gpa1 6 IRQ_TYPE_LEVEL_LOW>;
+-		interrupt-controller;
+-		#interrupt-cells = <1>;
+-		pinctrl-0 = <&max77705_irq>;
+-		pinctrl-names = "default";
+-	};
+-
+-	max77705_charger: charger@69 {
+-		compatible = "maxim,max77705-charger";
+-		reg = <0x69>;
+-		interrupt-parent = <&max77705>;
+-		interrupts = <0>;
+-		monitored-battery = <&battery>;
+-		power-supplies = <&max77705_usbc>;
+-
+-		/* the OTG boost, VBUS of the USB host role */
+-		max77705_otg_vbus: usb-otg-vbus {
+-			regulator-name = "usb_otg_vbus";
+-			regulator-min-microvolt = <5000000>;
+-			regulator-max-microvolt = <5000000>;
+-		};
+-	};
+-
+-	/* USB-C block: BC1.2 / Type-C Rp source detection */
+-	max77705_usbc: usb-c@25 {
+-		compatible = "maxim,max77705-usbc";
+-		reg = <0x25>;
+-		interrupt-parent = <&max77705>;
+-		interrupts = <3>;
+-	};
+-
+-	/* fg_resistor = 2 in the stock DT, i.e. a 5 mOhm sense resistor */
+-	fuel-gauge@36 {
+-		compatible = "maxim,max77705-battery";
+-		reg = <0x36>;
+-		interrupt-parent = <&max77705>;
+-		interrupts = <2>;
+-		monitored-battery = <&battery>;
+-		shunt-resistor-micro-ohms = <5000>;
+-		power-supplies = <&max77705_charger>;
+-	};
+-
+-	/*
+-	 * Pogo-connector MUIC. Its IRQ handler in the stock kernel
+-	 * (sm5504-muic-pogo.c) moves usb-mux-sel to the pogo pins when a
+-	 * dock (ID 34k or 49.9k) is attached; mainline has no such consumer
+-	 * yet, so the hog keeps USB on the USB-C port.
+-	 */
+-	muic@14 {
+-		compatible = "siliconmitus,sm5504-muic";
+-		reg = <0x14>;
+-		interrupt-parent = <&gpa1>;
+-		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
+-		pinctrl-0 = <&sm5504_irq>;
+-		pinctrl-names = "default";
+-	};
+-};
+-
+-/* Peripheral I2C clients (stock-0.dts / dtbo-4.dts, hw_rev 4) */
+-&hsi2c_20 {
+-	clock-frequency = <400000>;
+-
+-	/* S.LSI NFC controller (stock "sec-nfc", 400 kHz bus) */
+-	nfc@27 {
+-		compatible = "samsung,s3fwrn5-i2c";
+-		reg = <0x27>;
+-		interrupt-parent = <&gpa1>;
+-		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+-		/* VEN: high = power down; FIRM: high = firmware mode */
+-		en-gpios = <&gpg1 0 GPIO_ACTIVE_HIGH>;
+-		wake-gpios = <&gpg1 6 GPIO_ACTIVE_HIGH>;
+-		pinctrl-0 = <&nfc_irq &nfc_pd &nfc_firm>;
+-		pinctrl-names = "default";
+-		pvdd-supply = <&s2mps18_ldo41>;
+-		/*
+-		 * Reference clock: TCXO on CLKOUT1 (stock "oscclk_nfc"). The
+-		 * stock driver gates it by the chip's request line (gpa2-6),
+-		 * here it runs while the driver is bound.
+-		 */
+-		clocks = <&pmu_system_controller 0>;
+-		assigned-clocks = <&pmu_system_controller 0>;
+-		assigned-clock-parents = <&oscclk>;
+-	};
+-};
+-
+-&hsi2c_23 {
+-	clock-frequency = <400000>;
+-
+-	/*
+-	 * Wacom W9019 EMR digitiser (stock "wacom,w90xx", fw
+-	 * w9019_gtactive3.bin, max 17222 x 10764, pressure 4095,
+-	 * wacom,invert = <0 1 1>: y inverted, then x/y swapped).
+-	 * Bootloader address 0x09 is only used for firmware updates.
+-	 */
+-	digitizer@56 {
+-		compatible = "wacom,w9019";
+-		reg = <0x56>;
+-		interrupt-parent = <&gpa3>;
+-		interrupts = <3 IRQ_TYPE_LEVEL_LOW>;
+-		vdd-supply = <&vdd_wacom>;
+-		flash-mode-gpios = <&gpm41 0 GPIO_ACTIVE_HIGH>;
+-		pinctrl-0 = <&epen_irq>;
+-		pinctrl-names = "default";
+-		touchscreen-inverted-y;
+-		touchscreen-swapped-x-y;
+-		/* 8.0" 16:10 panel; raw x is the long axis */
+-		touchscreen-x-mm = <172>;
+-		touchscreen-y-mm = <108>;
+-	};
+-};
+-
+-&hsi2c_34 {
+-	/*
+-	 * Stock runs it at 10 kHz, which the 200 MHz USI clock cannot be
+-	 * divided down to ("FS clock set-up failed"); the A96T3x6 is fine
+-	 * at 100 kHz.
+-	 */
+-	clock-frequency = <100000>;
+-
+-	/* ABOV A96T3x6 Wi-Fi antenna grip sensor */
+-	proximity@20 {
+-		compatible = "abov,a96t3x6";
+-		reg = <0x20>;
+-		interrupt-parent = <&gpa1>;
+-		interrupts = <7 IRQ_TYPE_LEVEL_LOW>;
+-		vdd-supply = <&s2mps18_ldo40>;
+-		pinctrl-0 = <&grip_irq>;
+-		pinctrl-names = "default";
+-	};
+-};
+-
+-/*
+- * CPU DVFS through the APM firmware (ACPM DVFS, channel 0). Levels from its
+- * fvmap in APM SRAM (domain 2: A55 208-2002 MHz, domain 3: M3 598-2886 MHz);
+- * the firmware sets the voltages. A55 capped at its retail 1.95 GHz. The
+- * SM-T570 stock kernel limits the M3 cluster to 650-1794 MHz (cpufreq
+- * domain@1 max-freq/policy-max); the levels above that up to the S9's
+- * 2.7 GHz are kept as boost (turbo-mode) OPPs, off unless
+- * /sys/devices/system/cpu/cpufreq/boost is set.
+- *
+- * opp-microwatt (Energy Model for EAS) per core from the stock DT
+- * energy-costs (core busy cost + a quarter of the cluster cost, in mW,
+- * x1000); the A55 208/299 MHz levels, which stock does not use, are
+- * extrapolated linearly from 455 MHz.
+- */
+-/ {
+-	cluster0_opp: opp-table-cluster0-opp {
+-		compatible = "operating-points-v2";
+-		opp-shared;
+-
+-		opp-208000000 {
+-			opp-hz = /bits/ 64 <208000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <10000>;
+-		};
+-
+-		opp-299000000 {
+-			opp-hz = /bits/ 64 <299000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <14600>;
+-		};
+-
+-		opp-455000000 {
+-			opp-hz = /bits/ 64 <455000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <22250>;
+-		};
+-
+-		opp-598000000 {
+-			opp-hz = /bits/ 64 <598000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <31750>;
+-		};
+-
+-		opp-715000000 {
+-			opp-hz = /bits/ 64 <715000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <40000>;
+-		};
+-
+-		opp-832000000 {
+-			opp-hz = /bits/ 64 <832000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <52750>;
+-		};
+-
+-		opp-949000000 {
+-			opp-hz = /bits/ 64 <949000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <65250>;
+-		};
+-
+-		/*
+-		 * The S-Boot level, also used across system sleep: low enough
+-		 * for the idle CPUs, fast enough to resume without a delay
+-		 * (stock resumes at a CAL "resume" level in the same range).
+-		 */
+-		opp-1053000000 {
+-			opp-hz = /bits/ 64 <1053000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <80000>;
+-			opp-suspend;
+-		};
+-
+-		opp-1248000000 {
+-			opp-hz = /bits/ 64 <1248000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <109500>;
+-		};
+-
+-		opp-1456000000 {
+-			opp-hz = /bits/ 64 <1456000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <155500>;
+-		};
+-
+-		opp-1690000000 {
+-			opp-hz = /bits/ 64 <1690000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <241750>;
+-		};
+-
+-		opp-1794000000 {
+-			opp-hz = /bits/ 64 <1794000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <253250>;
+-		};
+-
+-		opp-1950000000 {
+-			opp-hz = /bits/ 64 <1950000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <264500>;
+-		};
+-	};
+-
+-	cluster1_opp: opp-table-cluster1-opp {
+-		compatible = "operating-points-v2";
+-		opp-shared;
+-
+-		opp-598000000 {
+-			opp-hz = /bits/ 64 <598000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <230250>;
+-		};
+-
+-		opp-650000000 {
+-			opp-hz = /bits/ 64 <650000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <241000>;
+-		};
+-
+-		opp-741000000 {
+-			opp-hz = /bits/ 64 <741000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <267500>;
+-		};
+-
+-		opp-858000000 {
+-			opp-hz = /bits/ 64 <858000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <308000>;
+-		};
+-
+-		opp-962000000 {
+-			opp-hz = /bits/ 64 <962000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <364250>;
+-		};
+-
+-		opp-1066000000 {
+-			opp-hz = /bits/ 64 <1066000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <461750>;
+-		};
+-
+-		opp-1170000000 {
+-			opp-hz = /bits/ 64 <1170000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <554750>;
+-		};
+-
+-		opp-1261000000 {
+-			opp-hz = /bits/ 64 <1261000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <650250>;
+-		};
+-
+-		opp-1469000000 {
+-			opp-hz = /bits/ 64 <1469000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <933000>;
+-		};
+-
+-		opp-1586000000 {
+-			opp-hz = /bits/ 64 <1586000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <1118250>;
+-		};
+-
+-		opp-1690000000 {
+-			opp-hz = /bits/ 64 <1690000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <1340250>;
+-		};
+-
+-		opp-1794000000 {
+-			opp-hz = /bits/ 64 <1794000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <1567750>;
+-		};
+-
+-		opp-1924000000 {
+-			opp-hz = /bits/ 64 <1924000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <1942750>;
+-			turbo-mode;
+-		};
+-
+-		opp-2002000000 {
+-			opp-hz = /bits/ 64 <2002000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <2188500>;
+-			turbo-mode;
+-		};
+-
+-		opp-2106000000 {
+-			opp-hz = /bits/ 64 <2106000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <2898250>;
+-			turbo-mode;
+-		};
+-
+-		opp-2314000000 {
+-			opp-hz = /bits/ 64 <2314000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <3439750>;
+-			turbo-mode;
+-		};
+-
+-		opp-2496000000 {
+-			opp-hz = /bits/ 64 <2496000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <4295500>;
+-			turbo-mode;
+-		};
+-
+-		opp-2652000000 {
+-			opp-hz = /bits/ 64 <2652000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <5261000>;
+-			turbo-mode;
+-		};
+-
+-		opp-2704000000 {
+-			opp-hz = /bits/ 64 <2704000000>;
+-			clock-latency-ns = <100000>;
+-			opp-microwatt = <6086500>;
+-			turbo-mode;
+-		};
+-	};
+-};
+-
+-&cpu0 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
+-&cpu1 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
+-&cpu2 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
+-&cpu3 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL0>; operating-points-v2 = <&cluster0_opp>; };
+-&cpu4 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
+-&cpu5 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
+-&cpu6 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
+-&cpu7 { clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_CPUCL1>; operating-points-v2 = <&cluster1_opp>; };
+-
+-&soc {
+-	/*
+-	 * DECON0 + the IDMA channel S-Boot scans the panel out from
+-	 * (stock decon_f@16030000, idma_* dma regs 0x16071000 + n * 0x1000).
+-	 * Takeover driver: flips the buffer, keeps the panel/DSI setup.
+-	 * Measured: window 5 (0..1199 x 0..1919) <- IDMA_G0, base 0xca000000,
+-	 * SysMMU DPU0 in bypass.
+-	 */
+-	dpu: display-controller@16030000 {
+-		compatible = "samsung,exynos9810-decon-takeover";
+-		/* DECON, IDMA_G0 (boot scanout). Not yet: IDMA_VGRF 0x16076000 +
+-		 * DPP_VGRF 0x16026000 for the gamma LUT; writing the HDR gamut
+-		 * matrix while scanning out broke the panel stream (STATUS.md). */
+-		reg = <0x16030000 0x10000>,
+-		      <0x16071000 0x1000>;
+-		interrupts = <GIC_SPI 182 IRQ_TYPE_LEVEL_HIGH>,
+-			     <GIC_SPI 183 IRQ_TYPE_LEVEL_HIGH>,
+-			     <GIC_SPI 188 IRQ_TYPE_LEVEL_HIGH>;
+-		samsung,window = <5>;	/* S-Boot: window 5 <- IDMA_G0 */
+-		width = <1200>;
+-		height = <1920>;
+-		/* 8.0" 16:10 panel, portrait */
+-		width-mm = <108>;
+-		height-mm = <172>;
+-		refresh-rate = <60>;
+-		/* gamma LUT through the panel (exynos9810-dsim-bl) */
+-		samsung,panel-gamma;
+-		status = "okay";
+-	};
+-};
+-
+-&spi_21 {
+-	/* Software chip select, as in the stock firmware */
+-	cs-gpios = <&gph0 7 GPIO_ACTIVE_LOW>;
+-	pinctrl-0 = <&spi21_bus &spi21_cs>;
+-	status = "okay";
+-
+-	/*
+-	 * Touch part of the Himax HX83102E TDDI panel controller. It is
+-	 * powered with the panel and runs firmware from its own flash.
+-	 * Coordinates are reported in the panel's native portrait
+-	 * orientation; use touchscreen-swapped-x-y / touchscreen-inverted-x/y
+-	 * to match a rotated display.
+-	 */
+-	touchscreen@0 {
+-		compatible = "himax,hx83102e";
+-		reg = <0>;
+-		spi-max-frequency = <10000000>; /* stock 7 MHz samples MISO a bit late here */
+-		spi-cpha;
+-		spi-cpol;
+-		interrupt-parent = <&gpa1>;
+-		interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
+-		reset-gpios = <&gpg0 6 GPIO_ACTIVE_LOW>;
+-		pinctrl-0 = <&touch_irq &touch_rst>;
+-		pinctrl-names = "default";
+-		touchscreen-size-x = <1200>;
+-		touchscreen-size-y = <1920>;
+-	};
+-};
+-
+-&usi_chub01 {
+-	/* SPI21: touchscreen */
+-	status = "okay";
+-};
+-
+-/*
+- * SPI20: Broadcom BCM4775 GNSS chip with its sensor-hub MCU (stock
+- * "ssp,BCM4773" node, DTBO hw_rev 4 fragments 92-95). On this board the
+- * accelerometer (ICM-42605M), light/proximity (TMD3725) and magnetometer
+- * (AK09916) hang off the hub, not off the AP. Pin settings as in the
+- * stock overlay: no pull on SCLK/MOSI/CS, pull-down on MISO, drive 3.
+- */
+-&pinctrl_chub {
+-	shub_spi_bus: shub-spi-bus-pins {
+-		samsung,pins = "gph0-0", "gph0-1";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-
+-	shub_spi_miso: shub-spi-miso-pins {
+-		samsung,pins = "gph0-2";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-
+-	shub_spi_cs: shub-spi-cs-pins {
+-		samsung,pins = "gph0-3";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-};
+-
+-&pinctrl_alive {
+-	/* hub -> AP "data pending", level high */
+-	shub_host_req: shub-host-req-pins {
+-		samsung,pins = "gpa2-1";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-
+-	/* stock "ssp-batch-wake-irq": really an AP -> hub "AP awake" output */
+-	shub_ap_sleep: shub-ap-sleep-pins {
+-		samsung,pins = "gpa2-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-};
+-
+-&pinctrl_peric0 {
+-	shub_mcu_resp: shub-mcu-resp-pins {
+-		samsung,pins = "gpp2-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-
+-	shub_mcu_req: shub-mcu-req-pins {
+-		samsung,pins = "gpp2-1";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-
+-	/* GPS_PWR_EN = BCM4775 NSTDBY, pulled down: chip held in standby */
+-	shub_nstdby: shub-nstdby-pins {
+-		samsung,pins = "gpg0-4";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
+-		samsung,pin-drv = <EXYNOS5420_PIN_DRV_LV4>;
+-	};
+-};
+-
+-&spi_20 {
+-	/* Software chip select, as in the stock firmware */
+-	cs-gpios = <&gph0 3 GPIO_ACTIVE_LOW>;
+-	pinctrl-0 = <&shub_spi_bus &shub_spi_miso &shub_spi_cs>;
+-	status = "okay";
+-
+-	sensorhub@0 {
+-		compatible = "brcm,bcm4775";
+-		reg = <0>;
+-		/* stock: 25 MHz, mode 3 */
+-		spi-max-frequency = <12500000>;
+-		spi-cpol;
+-		spi-cpha;
+-
+-		interrupt-parent = <&gpa2>;
+-		interrupts = <1 IRQ_TYPE_LEVEL_HIGH>;
+-		host-req-gpios = <&gpa2 1 GPIO_ACTIVE_HIGH>;
+-		mcu-req-gpios = <&gpp2 1 GPIO_ACTIVE_HIGH>;
+-		mcu-resp-gpios = <&gpp2 0 GPIO_ACTIVE_HIGH>;
+-		enable-gpios = <&gpg0 4 GPIO_ACTIVE_HIGH>;
+-		ap-sleep-gpios = <&gpa2 0 GPIO_ACTIVE_LOW>;
+-		vdd-mcu-supply = <&s2mps18_ldo37>;
+-
+-		pinctrl-0 = <&shub_host_req &shub_ap_sleep &shub_mcu_resp
+-			     &shub_mcu_req &shub_nstdby>;
+-		pinctrl-names = "default";
+-
+-		/*
+-		 * The hub turns the accelerometer axes into Android's frame
+-		 * of the portrait panel (x right, y up, z out of the screen;
+-		 * +1 g along the axis pointing up). iio-sensor-proxy wants
+-		 * the direction of gravity instead: -1 g on y when upright.
+-		 */
+-		mount-matrix = "-1", "0", "0",
+-			       "0", "-1", "0",
+-			       "0", "0", "1";
+-
+-		/* passed to the hub firmware (SSP "sensor formation") */
+-		samsung,acc-position = <5>;
+-		samsung,mag-position = <0>;
+-	};
+-};
+-
+-&usi_chub00 {
+-	/* SPI20: BCM4775 sensor hub */
+-	status = "okay";
+-};
+-
+-/ {
+-	/*
+-	 * GPU core clock as left by S-Boot (no CMU_G3D driver yet):
+-	 * PLL_CON0_PLL_G3D = 0xa0a00412 -> 26 MHz * 160 / (4 << 2) = 260 MHz,
+-	 * MUX_CLK_G3D_BUSD = PLL_G3D, DIV_CLK_G3D_BUSD = 1, GPU user mux on.
+-	 * 260 MHz is the stock boot/minimum G3D level, so the ACPM-managed
+-	 * vdd_g3d (S2MPS18 BUCK6) is already at a voltage for it. The stock
+-	 * DVFS levels are 572/546/455/338/299/260 MHz; their voltages come from
+-	 * the ECT/ASV tables, so no OPP table until vdd_g3d can be controlled.
+-	 */
+-	gpu_clk: clock-gpu {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <260000000>;
+-	};
+-};
+-
+-/ {
+-	/* G3D DVFS through ACPM (fvmap domain 4: 260-598 MHz, retail max 572) */
+-	gpu_opp: opp-table-gpu {
+-		compatible = "operating-points-v2";
+-
+-		opp-260000000 {
+-			opp-hz = /bits/ 64 <260000000>;
+-		};
+-		opp-299000000 {
+-			opp-hz = /bits/ 64 <299000000>;
+-		};
+-		opp-338000000 {
+-			opp-hz = /bits/ 64 <338000000>;
+-		};
+-		opp-385000000 {
+-			opp-hz = /bits/ 64 <385000000>;
+-		};
+-		opp-455000000 {
+-			opp-hz = /bits/ 64 <455000000>;
+-		};
+-		opp-546000000 {
+-			opp-hz = /bits/ 64 <546000000>;
+-		};
+-		opp-572000000 {
+-			opp-hz = /bits/ 64 <572000000>;
+-		};
+-	};
+-};
+-
+-&gpu {
+-	/* ACPM sets the G3D clock and BUCK6 voltage together */
+-	clocks = <&acpm_ipc EXYNOS9810_CLK_ACPM_DVFS_G3D>;
+-	operating-points-v2 = <&gpu_opp>;
+-	status = "okay";
+-};
+-
+-&pd_g3d {
+-	/*
+-	 * S-Boot leaves G3D on; don't power-cycle it until that is tested.
+-	 * The GPU still runtime-suspends inside the domain (cores and L2
+-	 * off); a kernel without CONFIG_PM does not build this driver, and
+-	 * the GPU then waits for the domain forever.
+-	 */
+-	samsung,bringup-keep-on;
+-	status = "okay";
+-};
+-
+-/*
+- * Wi-Fi: Broadcom BCM4375 (stock CONFIG_BCM4375=y) on PCIe channel 0
+- * (stock pcie0@116A0000, enabled by DTBO fragment@73; channel 1 is unused).
+- * Bluetooth: same combo chip on UART_BT (stock serial_1, uart@10840000).
+- * No clock driver yet: the bootloader leaves all CMU_FSYS1 PCIe gates and the
+- * UART_BT gates enabled with their Q-channels held on.
+- */
+-/ {
+-	/*
+-	 * UART_BT IPCLK as left by the bootloader: PLL_SHARED2 (M=400, P=13,
+-	 * S=0 from 26 MHz) = 800 MHz, /2 (DIV_PLL_SHARED2_DIV2), /2
+-	 * (CLKCMU_PERIC1_IP), /1 (DIV_CLK_PERIC1_UART_BT) = 200 MHz, which
+-	 * matches the 200 MHz the vendor CAL tables program.
+-	 */
+-	clk_uart_bt: clock-uart-bt {
+-		compatible = "fixed-clock";
+-		#clock-cells = <0>;
+-		clock-frequency = <200000000>;
+-	};
+-
+-	/* WLAN_REG_ON (stock "samsung,brcm-wlan" gpios[0] = gpg0-5) */
+-	wlan_reg_on: regulator-wlan-reg-on {
+-		compatible = "regulator-fixed";
+-		regulator-name = "wlan_reg_on";
+-		regulator-min-microvolt = <3300000>;
+-		regulator-max-microvolt = <3300000>;
+-		gpio = <&gpg0 5 GPIO_ACTIVE_HIGH>;
+-		enable-active-high;
+-		pinctrl-0 = <&wlan_en>;
+-		pinctrl-names = "default";
+-	};
+-};
+-
+-&pinctrl_alive {
+-	/* stock uart1-bus / uart1-bus-rxd: RXD gpq0-0, TXD 1, RTS 2, CTS 3 */
+-	uart1_bus: uart1-bus-pins {
+-		samsung,pins = "gpq0-3", "gpq0-2", "gpq0-1";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-
+-	uart1_rxd: uart1-rxd-pins {
+-		samsung,pins = "gpq0-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-	};
+-
+-	/* WLAN_HOST_WAKE: unused by brcmfmac over PCIe, keep it from floating */
+-	wlan_host_wake: wlan-host-wake-pins {
+-		samsung,pins = "gpa0-7";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
+-	};
+-
+-	bt_host_wake: bt-host-wake-pins {
+-		samsung,pins = "gpa2-3";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_INPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_DOWN>;
+-	};
+-};
+-
+-&pinctrl_cmgp {
+-	bt_en: bt-en-pins {
+-		samsung,pins = "gpm43-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-};
+-
+-&pinctrl_peric0 {
+-	wlan_en: wlan-en-pins {
+-		samsung,pins = "gpg0-5";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-
+-	bt_dev_wake: bt-dev-wake-pins {
+-		samsung,pins = "gpg2-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-};
+-
+-&pinctrl_fsys1 {
+-	pcie0_clkreq: pcie0-clkreq-pins {
+-		samsung,pins = "gpf2-0";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_2>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_UP>;
+-	};
+-
+-	pcie0_perst: pcie0-perst-pins {
+-		samsung,pins = "gpf2-2";
+-		samsung,pin-function = <EXYNOS_PIN_FUNC_OUTPUT>;
+-		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+-	};
+-};
+-
+-&soc {
+-	syscon_fsys1: syscon@11410000 {
+-		compatible = "samsung,exynos9810-fsys1-sysreg", "syscon";
+-		reg = <0x11410000 0x1200>;
+-	};
+-
+-	pcie_0: pcie@11700000 {
+-		compatible = "samsung,exynos9810-pcie";
+-		reg = <0x11700000 0x1000>,
+-		      <0x116a0000 0x1000>,
+-		      <0x116c0000 0x20000>,
+-		      <0x127fe000 0x2000>;
+-		reg-names = "dbi", "elbi", "phy", "config";
+-		interrupts = <GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH>;
+-		#address-cells = <3>;
+-		#size-cells = <2>;
+-		device_type = "pci";
+-		bus-range = <0x00 0xff>;
+-		ranges = <0x82000000 0x0 0x11800000 0x11800000 0x0 0xff0000>;
+-		/*
+-		 * Without the PCIe SysMMU the bus master path is only known to
+-		 * work below 4 GiB (the vendor kernel always used the SysMMU
+-		 * with 32-bit IOVAs); bounce anything above.
+-		 */
+-		dma-ranges = <0x02000000 0x0 0x0 0x0 0x1 0x0>;
+-		num-lanes = <1>;
+-		max-link-speed = <2>;
+-		#interrupt-cells = <1>;
+-		interrupt-map-mask = <0 0 0 0>;
+-		interrupt-map = <0 0 0 0 &gic GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH>;
+-		reset-gpios = <&gpf2 2 GPIO_ACTIVE_LOW>;
+-		vpcie3v3-supply = <&wlan_reg_on>;
+-		samsung,pmu-syscon = <&pmu_system_controller>;
+-		samsung,fsys-sysreg = <&syscon_fsys1>;
+-		pinctrl-0 = <&pcie0_clkreq &pcie0_perst &wlan_host_wake>;
+-		pinctrl-names = "default";
+-
+-		pcie@0,0 {
+-			device_type = "pci";
+-			reg = <0x0 0x0 0x0 0x0 0x0>;
+-			bus-range = <0x01 0xff>;
+-			#address-cells = <3>;
+-			#size-cells = <2>;
+-			ranges;
+-
+-			wifi: wifi@0,0 {
+-				compatible = "pci14e4,4475";
+-				reg = <0x10000 0x0 0x0 0x0 0x0>;
+-				/*
+-				 * Per-unit address (EFS wifi/.mac.info), filled
+-				 * in at install time. While it stays zero the
+-				 * firmware uses the nvram macaddr.
+-				 */
+-				local-mac-address = [00 00 00 00 00 00];
+-				/*
+-				 * Country to locale/revision of the Samsung CLM
+-				 * blob (its "Samsung.TabA3WiFi" data), as in the
+-				 * vendor driver's table.
+-				 */
+-				brcm,ccode-map = "AE-AE-6", "AF-AD-0", "AG-AG-2", "AI-AI-1",
+-						 "AL-AL-2", "AN-GD-2", "AO-AD-0", "AR-AU-6",
+-						 "AS-AS-12", "AT-AT-4", "AU-AU-6", "AW-AW-2",
+-						 "AZ-AZ-2", "BA-BA-2", "BD-BD-1", "BE-BE-4",
+-						 "BG-BG-4", "BH-BH-4", "BM-BM-12", "BN-BN-4",
+-						 "BO-NG-0", "BR-BR-2", "BS-BS-2", "BT-BJ-0",
+-						 "BW-BJ-0", "BY-BY-3", "CA-Q2-993", "CH-CH-4",
+-						 "CN-CN-38", "CO-CO-17", "CR-CR-17", "CU-US-988",
+-						 "CY-CY-4", "CZ-CZ-4", "DE-DE-7", "DK-DK-4",
+-						 "DZ-GB-6", "EC-EC-21", "EE-EE-4", "EG-EG-13",
+-						 "ES-ES-4", "ET-ET-2", "FI-FI-4", "FR-FR-5",
+-						 "GB-GB-6", "GD-GD-2", "GF-GF-2", "GL-GP-2",
+-						 "GP-GP-2", "GR-GR-4", "GT-GT-1", "GU-GU-30",
+-						 "HK-HK-2", "HR-HR-4", "HU-HU-4", "ID-ID-1",
+-						 "IE-IE-5", "IL-IL-14", "IN-IN-3", "IR-XZ-11",
+-						 "IS-IS-4", "IT-IT-4", "JO-JO-3", "JP-JP-45",
+-						 "KE-SA-0", "KH-KH-2", "KR-KR-48", "KW-KW-5",
+-						 "KY-KY-3", "LA-LA-2", "LB-LB-5", "LI-LI-4",
+-						 "LK-LK-1", "LS-LS-2", "LT-LT-4", "LU-LU-3",
+-						 "LV-LV-4", "LY-LI-4", "MA-MA-2", "MC-MC-1",
+-						 "MD-MD-2", "ME-ME-2", "MH-XZ-11", "MK-MK-2",
+-						 "MN-MN-1", "MO-SG-0", "MQ-MQ-2", "MR-MR-2",
+-						 "MT-MT-4", "MU-MU-2", "MV-MV-3", "MW-MW-1",
+-						 "MX-MX-44", "MY-MY-3", "NI-NI-2", "NL-NL-4",
+-						 "NO-NO-4", "NZ-NZ-4", "OM-OM-4", "PA-PA-17",
+-						 "PE-PE-20", "PG-AU-6", "PH-PH-5", "PL-PL-4",
+-						 "PR-PR-38", "PS-XZ-11", "PT-PT-4", "PY-PY-2",
+-						 "RE-RE-2", "RO-RO-4", "RS-RS-2", "RU-RU-13",
+-						 "SD-XZ-11", "SE-SE-4", "SI-SI-4", "SK-SK-4",
+-						 "SN-MA-2", "SV-SV-25", "TH-TH-5", "TL-XZ-11",
+-						 "TN-TN-1", "TR-TR-7", "TT-TT-3", "TW-TW-1",
+-						 "UA-UA-8", "UM-PR-38", "US-US-988", "UY-VE-3",
+-						 "UZ-MA-2", "VA-VA-2", "VE-VE-3", "VG-VG-2",
+-						 "VI-PR-38", "VN-VN-4", "YT-YT-2", "ZA-ZA-6",
+-						 "ZM-LA-2";
+-			};
+-		};
+-	};
+-
+-	serial_1: serial@10840000 {
+-		compatible = "samsung,exynos9810-uart";
+-		reg = <0x10840000 0x100>;
+-		interrupts = <GIC_SPI 422 IRQ_TYPE_LEVEL_HIGH>;
+-		clocks = <&clk_uart_bt>, <&clk_uart_bt>;
+-		clock-names = "uart", "clk_uart_baud0";
+-		samsung,uart-fifosize = <256>;
+-		pinctrl-0 = <&uart1_bus &uart1_rxd>;
+-		pinctrl-names = "default";
+-
+-		bluetooth: bluetooth {
+-			compatible = "brcm,bcm4375-bt";
+-			/*
+-			 * Per-unit address (EFS bluetooth/bt_addr), filled in
+-			 * at install time; zero keeps the controller's own.
+-			 */
+-			local-bd-address = [00 00 00 00 00 00];
+-			shutdown-gpios = <&gpm43 0 GPIO_ACTIVE_HIGH>;
+-			device-wakeup-gpios = <&gpg2 0 GPIO_ACTIVE_HIGH>;
+-			host-wakeup-gpios = <&gpa2 3 GPIO_ACTIVE_HIGH>;
+-			max-speed = <3000000>;
+-			pinctrl-0 = <&bt_en &bt_dev_wake &bt_host_wake>;
+-			pinctrl-names = "default";
+-		};
+-	};
+-};
+-
+-/*
+- * The PSCI core power-down (C2) idle states are present but start disabled
+- * (CPUIDLE_FLAG_OFF, see drivers/cpuidle/dt_idle_states.c) because the ACPM
+- * wake-up handshake is still under test: a core that entered C2 was not woken
+- * again (Duranium 26102210 hung at boot). Boot with "exynos9810_c2=1" to
+- * enable them, or enable one core at a time at runtime via
+- * /sys/devices/system/cpu/cpuN/cpuidle/state1/disable.
+- */
+-- 
+2.53.0
+
