@@ -1,10 +1,12 @@
 #!/bin/bash
 # Check a built image before it is published:
 #
-#   ci/check-image DIR VERSION CHANNEL TAG
+#   ci/check-image DIR VERSION CHANNEL TAG [VARIANT]
 #
 # DIR = mkosi.output/<IMAGE_ID> of a --profile=compressed build, CHANNEL =
-# release or dev, TAG = the release it goes to. Fails when
+# release or dev, TAG = the release it goes to, VARIANT = the codename of
+# the variant it was built for (config.toml; default device.codename).
+# Fails when
 #
 #  - the /usr image does not trust exactly the project's signing key, or a
 #    sysupdate transfer fetches from anywhere but TAG's GitHub release, or
@@ -19,7 +21,13 @@
 # (fsck.erofs --extract), without sudo.
 set -euo pipefail
 DIR=$1 VERSION=$2 CHANNEL=$3 TAG=$4
-REPO=${GITHUB_REPOSITORY:-$("$(dirname "$0")/../scripts/config" get project.repo)}
+CONFIG="$(dirname "$0")/../scripts/config"
+VARIANT=${5:-$("$CONFIG" get device.codename)}
+REPO=${GITHUB_REPOSITORY:-$("$CONFIG" get project.repo)}
+# where this variant's images record their channel (without the /usr prefix:
+# $M is the mounted /usr)
+CHANNEL_FILE=$("$CONFIG" get "variants.$VARIANT.channel_file")
+[[ $CHANNEL_FILE == /usr/* ]] || { echo "channel file $CHANNEL_FILE is not in /usr" >&2; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${TAG%-dev}
 BASE="https://github.com/$REPO/releases/download/"
@@ -35,8 +43,8 @@ export GNUPGHOME=$W/gnupg
 FPR=$(gpg --batch --show-keys --with-colons "$HERE/../pmos/sysupdate-public-key.asc" |
 	awk -F: '$1 == "fpr" { print $10; exit }')
 # the debug layer: packages and file names (base image and initrd)
-DEBUG_PKGS='^(duranium-usb-debug(-adb|-initramfs)?|device-samsung-gtactive3wifi-console)$'
-DEBUG_FILES='duranium-usb-debug|duranium-debug-|gta3-debug-console|gta3-console'
+DEBUG_PKGS=$("$CONFIG" get images.debug_package_regex)
+DEBUG_FILES=$("$CONFIG" get images.debug_file_regex)
 bad=0
 fail() { echo "::error::$TAG $VERSION: $*"; bad=1; }
 
@@ -109,7 +117,7 @@ for t in "$M"/lib/sysupdate.d/*.transfer; do
 	n=$((n + 1))
 done
 [ "$n" -ge 3 ] || fail "only $n sysupdate transfers"
-grep -qx "UPDATE_CHANNEL=$TAG" "$M/lib/gtactive3wifi/update-channel" || fail "update-channel is not $TAG"
+grep -qx "UPDATE_CHANNEL=$TAG" "$M${CHANNEL_FILE#/usr}" || fail "update-channel is not $TAG"
 grep -q '^Verify=no' "$M"/lib/sysupdate.d/*.transfer && fail "a transfer has Verify=no"
 
 pkgs=$M/share/duranium/base.packages

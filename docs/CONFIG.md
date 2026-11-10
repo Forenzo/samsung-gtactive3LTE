@@ -9,8 +9,10 @@ scripts/config check            # validate (CI runs it first)
 scripts/config get device.id    # one value; lists one per line
 scripts/config shell            # CFG_* assignments: eval "$(scripts/config shell)"
 scripts/config json             # everything, derived values filled in
-scripts/config channels         # "ui flavour tag" per update channel
+scripts/config channels         # "ui flavour tag variant" per update channel
 scripts/config matrix           # the image job matrix (GitHub Actions)
+scripts/config variants         # "codename id status images models..." per variant
+scripts/config variant-of SM-T575   # the variant of a model number
 ```
 
 In shell, a key `section.key` is `CFG_SECTION_KEY` (lists space separated,
@@ -41,11 +43,17 @@ optionally `SITE_DISPATCH_TOKEN` (tells the org site to rebuild).
 
 ## [device]
 
+The board family. A port with one variant needs nothing else; a family
+(Wi-Fi and LTE models of one tablet, say) adds `[[variant]]` tables, and
+`codename` names the default one.
+
 | Key | Type | Meaning |
 |---|---|---|
-| `vendor`, `codename` | `[a-z0-9]+` | postmarketOS naming; `id` = `<vendor>-<codename>` (derived) |
+| `vendor`, `codename` | `[a-z0-9]+` | postmarketOS naming; `codename` is the default variant's (the first `[[variant]]` if it names none); `id` = `<vendor>-<codename>` (derived) |
+| `family` | `[a-z0-9]+` | the family's shared name: boot chain, installer, common package, U-Boot/uniLoader defconfigs. Default: `codename` |
+| `family_id`, `common_package`, `common_aport` | derived | `<vendor>-<family>`, `<family_id>-common` (what every variant's device package depends on) and its aport |
 | `name` | string | marketing name without the vendor, e.g. `Galaxy Tab Active5` |
-| `models` | list | model numbers, e.g. `["SM-X306B", "SM-X300"]` |
+| `models` | list | every variant's model numbers, e.g. `["SM-X306B", "SM-X300"]` |
 | `form_factor` | `tablet`, `phone`, `other` | |
 | `arch` | `aarch64` | the only one supported |
 | `soc` | `[a-z0-9]+` | as in the kernel's DT names, e.g. `exynos1380` |
@@ -53,9 +61,33 @@ optionally `SITE_DISPATCH_TOKEN` (tells the org site to rebuild).
 | `status` | `bring-up`, `testing`, `stable` | shown on the site |
 | `id`, `package`, `aport` | derived | `<vendor>-<codename>`, `device-<id>`, its aport path |
 
+## [[variant]]
+
+One table per variant; without any, `scripts/config` makes one from
+`[device]` and `[android]`, so single-device ports keep working. In shell:
+`CFG_VARIANTS_<CODENAME>_<KEY>`; `scripts/config get variants.<codename>.<key>`.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `codename` | `[a-z0-9]+` | postmarketOS codename: device id, package, images. Never rename one that has installed devices |
+| `name` | string | e.g. `Samsung Galaxy Tab Active3 (LTE)` |
+| `models` | list | its model numbers; each in exactly one variant and in `device.models` |
+| `status` | `bring-up`, `testing`, `stable` | the installer refuses `bring-up` without `--bring-up` |
+| `modem` | bool | the variant has a modem in use (documentation, installer warnings) |
+| `images` | bool | CI builds and publishes its images and channels (`false` until it boots) |
+| `u_boot_match` | string | the model prefix U-Boot's board table matches in S-Boot's `androidboot.bootloader` (checked against `models`) |
+| `[variant.android]` | table | the `[android]` keys below that differ per variant: `product_device`, `firmware_pattern`, `tested_firmware`, `tested_bootloader_rev`, `fus_model` |
+| `id`, `package`, `aport` | derived | `<vendor>-<codename>`, `device-<id>`, its aport |
+| `dtb` | derived | `exynos/<soc>-<codename>.dtb` |
+| `kernel_dtb_package` | derived | `<kernel.package>-<codename>`: the kernel subpackage with only this DTB (its device package depends on it) |
+| `channel_file` | derived | `update.channel_file` for the default variant, else `/usr/lib/<id>/update-channel` |
+| `default` | derived | `true` for `device.codename` |
+
 ## [android]
 
-What the installer checks on stock Android.
+What the installer checks on stock Android. Keys that differ per variant
+belong in `[variant.android]`; the derived `[android]` is the default
+variant's.
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -130,17 +162,18 @@ installer menus). Missing ones default to the capitalised id.
 | `pages` | URL, derived | the release records: `https://<owner>.github.io/<name>` |
 | `public_key` | path | the signing key's public half (`scripts/new-signing-key`) |
 | `fingerprint` | 40 hex | its fingerprint (`scripts/new-signing-key` writes it) |
-| `channel_file` | path, derived | the file in every image that names its channel: `/usr/lib/<device.id>/update-channel` unless set (a port that shipped another path keeps it) |
+| `channel_file` | path, derived | the file in every image of the default variant that names its channel: `/usr/lib/<device.id>/update-channel` unless set (a port that shipped another path keeps it); other variants: `variants.<codename>.channel_file` |
 
 ## [bootchain]
 
 | Key | Type | Meaning |
 |---|---|---|
 | `enabled` | bool | build and publish the boot-chain payload (`bootchain/build.sh`) |
-| `tag` | derived | `<device.id>_bootchain` |
-| `u_boot_defconfig` | derived | `<codename>_defconfig` in `bootchain/u-boot/configs/` |
-| `uniloader_defconfig` | derived | `<codename>_chain_defconfig` in `bootchain/uniLoader/configs/` |
-| `dtb` | derived | `exynos/<soc>-<codename>.dtb`, the bring-up Linux's DTB |
+| `tag` | derived | `<device.family_id>_bootchain` |
+| `u_boot_defconfig` | derived | `<family>_defconfig` in `bootchain/u-boot/configs/` (`OF_LIST`: every variant's DT) |
+| `uniloader_defconfig` | derived | `<family>_chain_defconfig` in `bootchain/uniLoader/configs/` |
+| `dtb` | derived | the default variant's `dtb`: the bring-up Linux's DTB in the unsuffixed loaders |
+| `dtbs` | derived | every variant's `dtb`; the payload has `uniLoader-{chain,linux}-<codename>` for the others |
 | `bringup_config` | path | the bring-up kernel's config fragment (`bootchain/bringup.config`) |
 | `f2fs` | bool | mkfs.f2fs in the bring-up initramfs (for `restore-android`) |
 
@@ -148,7 +181,7 @@ installer menus). Missing ones default to the capitalised id.
 
 | Key | Type | Meaning |
 |---|---|---|
-| `name` | derived | `<codename>-setup`: state, cache and backup directory names |
+| `name` | derived | `<family>-setup`: state, cache and backup directory names |
 | `download_usb` | `vvvv:pppp` | Samsung Download mode USB id |
 | `flash_allow` | list | PIT names heimdall may ever write (never a protected one) |
 | `boot_partition`, `recovery_partition` | PIT names | |
