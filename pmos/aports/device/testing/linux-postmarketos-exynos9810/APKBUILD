@@ -115,7 +115,7 @@ package() {
 
 _dtb() {
 	local _v=${subpkgname#"$pkgname"-}
-	pkgdesc="$pkgdesc: device tree of samsung-$_v"
+	pkgdesc="Device tree of samsung-$_v for the Exynos 9810 mainline kernel"
 	depends="$pkgname=$pkgver-r$pkgrel"
 	install -Dm644 "$builddir"/arch/$_carch/boot/dts/exynos/exynos9810-$_v.dtb \
 		"$subpkgdir"/boot/dtbs/exynos/exynos9810-$_v.dtb
