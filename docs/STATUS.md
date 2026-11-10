@@ -65,6 +65,22 @@ Legend: ✔ verified · ◐ partly / with caveats (stated) · ✘ broken or not 
 | Hang recovery | ✔ watchdog handed over by U-Boot (82.6 s) and kept by the kernel; a deliberate lockup reset the board, the fallback Linux restarted Duranium after 15 s, disk unlocked; 3.5 min at the passphrase prompt causes no reset; ✘ 2026-10-24 15:37 the first boot attempt of r24 (26102402~test1, eight cores + exynos9810_c2=1) hung behind the splash before the initrd's USB gadget and the watchdog did NOT reset it in ~13 min (no USB device 15:37:14-15:52:08 on the laptop; ended by the user's Power + Vol Down forced restart; the next boot: RST_STAT 0x00010000 power-on, PMIC PWRONSRC 0x08, OFFSRC 0x00, U-Boot offcharge "Power held"). Watchdog reset blocked or the watchdog clock stopped: suspect C2 with eight cores (reset-LPI timeout is already set at 0.009 s, before the first M3 CPU_ON). Mitigation: exynos9810_c2=0 by default (r25) |
 | distrobox / podman / brew | ✔ podman in every image with Alpine 3.24.3 preinstalled (device -containers): root self-test all PASS offline (26102219~test2); distrobox in the dev-tools sysext (26102209) |
 
+## SM-T575 (LTE variant): bring-up, nothing verified
+
+The same board plus the SoC's modem (docs/VARIANTS.md). No T575 has run
+any of this; every row is "?" or "—" until a T575 owner tests it
+(TESTPLAN V2, V3). Legend as above.
+
+| Block | Driver / state | Bring-up | Duranium | What is left |
+|---|---|---|---|---|
+| **Boot: bring-up Linux** | `uniLoader-linux-gtactive3` (LTE DTB) in the boot-chain payload | ? | — | TESTPLAN V2 with a T575 |
+| **Boot: chained** | U-Boot board `gtactive3` (model T575), `exynos9810-gtactive3` in `OF_LIST` | ? | ? | TESTPLAN V3; CI builds U-Boot (`check.yml`) |
+| **Device tree** | `exynos9810-gtactive3.dts` on the common dtsi; CP carveouts reserved, RT5510 and the sound card off, TAS2562 node disabled | ? | ? | compile in CI; the second grip sensor; the T575's stock DT checked node by node |
+| **Image** | `device-samsung-gtactive3` + `samsung-gtactive3-common`, `images = false` | — | ? | a local `DEVICE=samsung-gtactive3` image, then the dev channels |
+| **Modem** Shannon CP (ss360ap) | remoteproc sketch `samsung_shannon_cp` (patches/linux/0154): maps the CP memory, parses the firmware TOC; cannot start the CP; not enabled | — | — | docs/re/modem.md P1-P3; the owner's decision on reading nv_data.bin |
+| **Speaker amp** TI TAS2562 (EUR hw_rev >= 5, both variants) | upstream `tas2562` codec; not wired into `gtactive3_rt5665.c` | — | — | supplies, shutdown GPIO and UAIF from the stock DT; the amp chosen by board revision |
+| **Bluetooth firmware** | btbcm asks for `BCM.samsung,gtactive3.hcd` (Wi-Fi keeps the T570 names via `brcm,board-type`) | — | — | the firmware import provides that name |
+
 ## CPU DVFS and idle (2026-10-22, measured)
 
 Earlier (bring-up #76/#77): cpufreq-dt + clk-acpm accepted every rate but

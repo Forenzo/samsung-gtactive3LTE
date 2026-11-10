@@ -1,13 +1,18 @@
 # Agent guide: Samsung Galaxy Tab Active3 port (exynos-linux)
 
 postmarketOS Duranium (immutable: systemd, UKI + systemd-boot, A/B
-systemd-sysupdate) on the Galaxy Tab Active3 Wi-Fi (SM-T570, Exynos 9810),
-with the upstream Linux kernel and our drivers. We maintain the kernel, the
+systemd-sysupdate) on the Galaxy Tab Active3 (Exynos 9810), with the
+upstream Linux kernel and our drivers. Two variants of one board
+(`[[variant]]` in config.toml, docs/VARIANTS.md): Wi-Fi SM-T570
+(`gtactive3wifi`, the tablets in use) and LTE SM-T575 (`gtactive3`,
+bring-up, not booted). We maintain the kernel, the
 drivers and the device packages; the UIs and the rest of the OS come
 unchanged from postmarketOS, rebuilt automatically when postmarketOS
 publishes. Repo: exynos-linux/samsung-gtactive3wifi.
 
-Read first: `docs/AGENT-HANDOFF.md` (current state), `docs/COORDINATION.md`
+Read first: `docs/AGENT-HANDOFF.md` (current state), `docs/VARIANTS.md`
+(what is shared, what is per variant, what never gets renamed),
+`docs/COORDINATION.md`
 (several sessions, one tablet: the coordinator, the device and build
 locks), `docs/STATUS.md` (what works, strictly), `PLAN.md` (what comes
 next), `config.toml` (the port's public configuration).
@@ -26,7 +31,7 @@ layout. Here:
 | `docs/PLAN.md` | `PLAN.md` |
 | `docs/HARDWARE.md` | `HARDWARE.md` |
 | the `build-loop` skill | the `gtactive3-build-loop` skill |
-| `scripts/build-image` | `cd build/wt/duranium && UI=<ui> sh contrib/samsung-gtactive3wifi/build-image.sh` (the duranium-build worktree with the `pmos/duranium-build` patches; see gtactive3-build-loop) |
+| `scripts/build-image` | `cd build/wt/duranium && DEVICE=samsung-gtactive3wifi UI=<ui> sh contrib/samsung-gtactive3/build-image.sh` (the duranium-build worktree with the `pmos/duranium-build` patches; `DEVICE=samsung-gtactive3` for the LTE variant; see gtactive3-build-loop) |
 | `scripts/kernel-export`, `scripts/aport-checksum` | `scripts/pmos-export` |
 | `bootchain/build.sh` | `ci/bootchain/build` |
 | the USB console | `scripts/tab*`, `scripts/devd.sh` (exynos-linux/usb-debug replaces them later, its docs/MIGRATION.md) |
@@ -34,7 +39,8 @@ layout. Here:
 
 ## Commands
 
-- `scripts/config check` / `get KEY` / `json` / `channels`: the config
+- `scripts/config check` / `get KEY` / `json` / `channels` / `variants` /
+  `variant-of MODEL`: the config; `python3 -I tests/config/test_config.py`
   (`ci/check-plumbing` checks no old-home URLs are left)
 - `scripts/build.sh`: the bring-up image; `scripts/pmos-export`: kernel and
   aports into `pmos/` for the image CI; `scripts/duranium-update`: A/B

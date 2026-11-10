@@ -5,6 +5,45 @@ If you are the agent reading this after compaction: **you are the lead**. You
 coordinate, integrate, flash the tablet and test every change on the device
 yourself, autonomously, overnight. Keep going until the mission is met.
 
+## State 2026-11-11 10:17 AEDT (session "Multi-variant port", branch `variants`, not merged)
+
+- The repo becomes the port of the whole Galaxy Tab Active3 family: Wi-Fi
+  SM-T570 (`gtactive3wifi`, unchanged for installed tablets) and LTE
+  SM-T575/T575N (`gtactive3`, bring-up, never booted). Research (three
+  agents) in docs/VARIANTS.md and docs/re/modem.md. Found on the way: the
+  GPL tree the docs called "T570 family" (`build/ref/gtactive3cs`) is the
+  SM-T577U's; HARDWARE.md's Wi-Fi PCIe row was wrong (pcie0, not pcie1).
+- A third party forked us for the T575: Forenzo/samsung-gtactive3LTE (live
+  FDT facts used here; their branch rewrote uniLoader relocation, not
+  taken). Inviting them to contribute here is the owner's call.
+- Branch `variants` (local, not pushed): config `[[variant]]` +
+  `device.family`, CI matrix per variant (LTE `images = false`), board DT
+  split (patches/linux/0153: common dtsi + per-variant DTS) and the Shannon
+  CP remoteproc sketch (0154, not enabled), kernel r26 with one DTB
+  subpackage per variant, `samsung-gtactive3-common` (all shared device
+  files, installed paths unchanged) + thin device packages (Wi-Fi r49, LTE
+  r0), duranium-build 0043 (`contrib/samsung-gtactive3`, `DEVICE=`), U-Boot
+  `gtactive3_defconfig` with both DTs and a T575 board entry, per-variant
+  bring-up loaders, installer variant detection (`--bring-up`), check.yml.
+- Not verified: nothing compiled here (this PC is a container without dtc
+  or cross compilers; the owner chose CI-only), the installer suite cannot
+  run here (no mkbootimg/avbtool/sfdisk/zstd; fails the same on main).
+  Passed here: scripts/config check, tests/config (12), tests/firmware (7),
+  shellcheck as on main, the regenerated kernel patch reproduces the kernel
+  tree exactly, the Wi-Fi DTS preprocesses to the same tree.
+- This PC has none of the laptop's worktrees (src/linux drv/* branches,
+  build/wt/pmaports-duranium, build/wt/duranium): src/linux here was
+  rebuilt from the export (base + gtactive3wifi.patch = r25, byte-exact)
+  plus 0153/0154. On the laptop: apply patches/linux/0153-0154 to the
+  kernel branch, and rebase any unexported device-package work (the audio
+  session's r49 mic slider) onto samsung-gtactive3-common, before the next
+  `scripts/pmos-export`.
+- Next three steps: as PLAN.md "Next three steps (2026-11-11)".
+- Waits for the owner: push the branch / open the PR (CI check.yml); the
+  repository rename (docs/RELEASES.md, "Moving the repository");
+  TESTPLAN V1 on the tablet before merging; a T575 owner for V2/V3; the
+  modem's EFS read decision (docs/re/modem.md).
+
 ## State 2026-10-25 17:58 AEDT (session "Docs refresh")
 
 - The owner reports (2026-10-25): rotation works, both cameras work, all

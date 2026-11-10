@@ -15,18 +15,19 @@ Rule for every test: a failure must come back to the USB console without anyone
 touching the tablet (reset → Download mode → automatic reflash, or watchdog reset
 → BOOT). No boot stages on RECOVERY.
 
-## Next three steps (2026-10-25)
+## Next three steps (2026-11-11)
 
-1. r25 (26102403: kernel cand/1035, device r48) on the tablet: count clean
-   boots (TESTPLAN B5) to 5, run TESTPLAN D11 (audio) and D7 E/F (cameras)
-   as booted, then `scripts/pmos-verify` so the release channels get a build.
-2. r26: autofocus that holds still (drv/cam-caf, test with the owner),
-   standard V4L2 camera controls on the lens and sensors, drv/wifi-recover
-   (live swap test first), the audio mic slider (device r49).
-3. Kernel root causes: the r24 boot hang the watchdog did not reset (C2
-   with eight cores suspected; r25 logs RST_STAT and the PMIC on/off
-   sources at boot), then C2 idle, deep sleep and a cable-out battery drain
-   measurement with the owner.
+1. The multi-variant change (branch `variants`): CI `check.yml` green
+   (LTE DTB, U-Boot with both DTs, the Wi-Fi DTB identical to main's, the
+   modem sketch compiles), then TESTPLAN V1 (the Wi-Fi image unchanged) on
+   the tablet before it merges: merging publishes it to the dev channels.
+2. Rename the repository to `exynos-linux/samsung-gtactive3`
+   (docs/RELEASES.md, "Moving the repository"), the owner's step 2 there.
+3. The open SM-T570 work of 2026-10-25, unchanged: r25 boots counted to 5
+   and `scripts/pmos-verify`; r26 (autofocus, V4L2 controls,
+   drv/wifi-recover, the mic slider, now `samsung-gtactive3-common` r50);
+   the boot hang, C2 and deep sleep. The LTE first boot (TESTPLAN V2/V3)
+   when a T575 owner joins (docs/VARIANTS.md).
 
 The layer lists below are the original bring-up plan; docs/STATUS.md says
 what is verified today.
@@ -72,6 +73,27 @@ what is verified today.
 ## Layer 5: acceleration and connectivity
 - [x] Mali-G72 Panfrost — `gpu` (owner 2026-10-25); left: AFBC fault count, MIF floor
 - [ ] Wi-Fi (Exynos PCIe + brcmfmac), Bluetooth (UART, hci_bcm) — `wifi`
+
+## Variants: the LTE SM-T575 (docs/VARIANTS.md)
+
+- [x] Config schema `[[variant]]`, CI matrix per variant, family names
+  (boot chain, installer, build tree `contrib/samsung-gtactive3`)
+- [x] Board DT split: `exynos9810-gtactive3-common.dtsi` + one file per
+  variant; LTE DTS with the CP carveouts reserved, Wi-Fi firmware names
+- [x] Packages: `samsung-gtactive3-common`, thin `device-samsung-gtactive3wifi`
+  / `device-samsung-gtactive3`, per-variant DTB subpackages of the kernel
+- [x] U-Boot board entry (T575) and both DTs; per-variant bring-up loaders
+- [x] Installer: variant from the model, `--bring-up` for the LTE variant
+- [x] Modem: facts and a driver plan (docs/re/modem.md), remoteproc sketch
+  (patches/linux/0154, not enabled)
+- [ ] CI check green; TESTPLAN V1 on the SM-T570; merge
+- [ ] Repository rename (docs/RELEASES.md)
+- [ ] With a T575: stock DT/PIT facts, V2 bring-up Linux, V3 chained boot,
+  a local Duranium image, then `images = true`
+- [ ] Speaker amp by board revision (TAS2562 on EUR rev >= 5, both variants)
+- [ ] Second grip (SAR) sensor; Bluetooth firmware name on the LTE variant
+- [ ] Modem P1 (vendor-style module + vendor cbd, needs the EFS read
+  decision), P2 userspace, P3 mainline driver (docs/re/modem.md)
 
 ## Layer 6: the rest
 - [ ] Audio (ABOX, RT5665, RT5510) — `audio`: speaker, internal mic and jack detection fixed live on r24 (2026-10-24), permanent in r25 (drv/audio-fix 7e3507579, device r48); plug passed (owner 2026-10-24); left: unplug, then TESTPLAN D11 on r25 as booted

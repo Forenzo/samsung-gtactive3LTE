@@ -18,6 +18,30 @@ from them (only a Duranium ✔ counts).
 | Device package | device-samsung-gtactive3wifi r48 (C2 off by default, UCM jack controls) | platform |
 | Images | 26102403 on `samsung-gtactive3wifi_phosh_edge-dev` (CI, 2026-10-24); local 26102403~test1 | lead / CI |
 
+## V. Variants (the multi-variant change, 2026-11-11)
+
+**V1. Wi-Fi image unchanged** (branch `variants` before it merges; every
+gate in A first). The change moves the device package's files into
+`samsung-gtactive3-common`, the DTB into `linux-postmarketos-exynos9810-
+gtactive3wifi`, and the board DTS into a common file. Build a local Wi-Fi
+image of the branch and compare it with the published one of the same
+day: the package list (`device-samsung-gtactive3wifi` + `-initramfs`,
+`samsung-gtactive3-common` + `-initramfs`, `-console` on dev, `-containers`,
+the kernel and its `-gtactive3wifi` DTB subpackage), every file under
+/usr the same apart from `/usr/share/doc`, the UKI with one `.dtb` section
+(not `.dtbauto`), the initrd still holding `usb-prep` and the watchdog
+drop-in, `/usr/lib/gtactive3wifi/update-channel`. Then on the tablet: B1-B5
+and one A/B update to it and back. CI (`check.yml`) compares the Wi-Fi DTB
+with main's.
+
+**V2. LTE first contact** (a T575 and its owner; docs/VARIANTS.md): the
+bring-up Linux (`uniLoader-linux-gtactive3` in BOOT) reaches the USB
+console; `/proc/iomem` shows 0xf0000000-0xfb1fffff reserved; dmesg has no
+errors from the modem regions. Way back: Download mode + stock BOOT.
+
+**V3. LTE chained boot**: U-Boot's log names board `gtactive3` and
+`exynos9810-gtactive3.dtb` (S-Boot's `androidboot.bootloader=T575...`).
+
 ## A. Laptop gates (no tablet)
 
 | id | what | command | PASS |

@@ -1,13 +1,21 @@
-# Mainline Linux / postmarketOS on the Samsung Galaxy Tab Active3 (SM-T570)
+# Mainline Linux / postmarketOS on the Samsung Galaxy Tab Active3
 
-Mainline Linux on the Wi-Fi Galaxy Tab Active3 (`gtactive3wifi`, Exynos 9810),
-running postmarketOS Duranium (immutable, A/B updates) with Phosh or GNOME.
-The kernel and drivers are ours; the rest of the OS is unmodified
-postmarketOS.
+Mainline Linux on the Galaxy Tab Active3 (Exynos 9810), running
+postmarketOS Duranium (immutable, A/B updates) with Phosh or GNOME. The
+kernel and drivers are ours; the rest of the OS is unmodified postmarketOS.
+
+| Variant | Models | State |
+|---|---|---|
+| Wi-Fi (`gtactive3wifi`) | SM-T570 | in daily use: the table below |
+| LTE (`gtactive3`) | SM-T575, SM-T575N | bring-up: device tree, boot chain and packages ready, not booted yet; the modem has a driver plan ([docs/re/modem.md](docs/re/modem.md)) |
+
+One repository for the family: what the variants share and what differs is
+in [docs/VARIANTS.md](docs/VARIANTS.md). The US SM-T577U is not supported
+(no confirmed bootloader unlock).
 
 ## Status
 
-As of 2026-10-25, in postmarketOS Duranium (Phosh). The strict, per-block
+SM-T570, as of 2026-10-25, in postmarketOS Duranium (Phosh). The strict, per-block
 table with sources and test runs is [docs/STATUS.md](docs/STATUS.md).
 
 | Area | State |
