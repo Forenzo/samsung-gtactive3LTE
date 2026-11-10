@@ -2,9 +2,19 @@
 
 **Experimental device port** of mainline Linux and postmarketOS Duranium for the **Samsung Galaxy Tab Active3 LTE (SM-T575)**, based on [exynos-linux/samsung-gtactive3wifi](https://github.com/exynos-linux/samsung-gtactive3wifi).
 
-**Current status: research and hardware comparison. The SM-T575 has not been verified to boot Linux.** The existing kernel patches, installers, device tree and published images in this fork were originally made for the Wi-Fi-only **SM-T570**. **Do not flash SM-T570 images or run the inherited installer on an SM-T575.**
+**SM-T575 status (2026-11-10):** An independent LTE DTB, Linux kernel Image and diagnostic initramfs compile; a dedicated uniLoader builds with static linker/relocation checks. A 55,304,208-byte **unsigned, offline-only .research BOOT-format file** was byte-verified against the rooted Android backup, but **SM-T575 Linux has never been booted, S-Boot acceptance is unknown, and no safe flash/restore procedure is approved**. The inherited installer, device-tree defaults and published SM-T570 images remain **Wi-Fi-only**: **do not flash or run them on SM-T575**.
 
-The LTE development work lives on the [`port/sm-t575-bringup` branch](https://github.com/Forenzo/samsung-gtactive3LTE/tree/port/sm-t575-bringup), including [our LTE bring-up and safety notes](https://github.com/Forenzo/samsung-gtactive3LTE/blob/port/sm-t575-bringup/docs/SM-T575-BRINGUP.md) and a read-only macOS-compatible [hardware inventory script](https://github.com/Forenzo/samsung-gtactive3LTE/blob/port/sm-t575-bringup/scripts/t575-inventory.sh).
+The LTE development work lives on the [`port/sm-t575-bringup` branch](https://github.com/Forenzo/samsung-gtactive3LTE/tree/port/sm-t575-bringup), including [the dated T570-versus-T575 hardware comparison, build evidence and safety notes](https://github.com/Forenzo/samsung-gtactive3LTE/blob/port/sm-t575-bringup/docs/SM-T575-BRINGUP.md#sm-t570-wi-fi-versus-sm-t575-lte-evidence-and-porting-differences-2026-11-10) and a read-only macOS-compatible [hardware inventory script](https://github.com/Forenzo/samsung-gtactive3LTE/blob/port/sm-t575-bringup/scripts/t575-inventory.sh).
+
+### SM-T570 versus SM-T575: key differences verified so far
+
+- **Same Exynos 9810 foundation:** running T575 Android FDT has the same four physical DRAM banks recorded in upstream T570 source, but bootloader handover and memory ownership are not confirmed.
+- **LTE modem:** T575 adds Samsung modem interface and reserved modem/CP-logging memory; cellular support is deliberately postponed.
+- **Audio amplifier depends on hardware revision:** T575 selects **TAS2562**; tested T570 rev4 uses RT5510, but upstream T570 notes also identify TAS2562 on another revision. Thus this is **not necessarily an LTE-exclusive hardware change**.
+- **Display and pen are related but not proven interchangeable:** T575 has HX83102E-family panel/touch hardware, W90xx pen and the same nominal 1200×1920 boot framebuffer; T575 DECON takeover and native panel remain disabled.
+- **Boot chain must stay model-specific:** verified T575 rooted Android BOOT v2 uses board ID **SRPTE13A015**, distinct from inherited Wi-Fi assumptions. T575 uniLoader has its own passive board selection, ARM64 header and audited relocation changes.
+
+The [detailed comparison](docs/SM-T575-BRINGUP.md#sm-t570-wi-fi-versus-sm-t575-lte-evidence-and-porting-differences-2026-11-10) distinguishes private T575 hardware observations, upstream T570 source references and outstanding uncertainties.
 
 ### Planned work
 - Compare real T575 hardware and vendor device trees with the T570.
