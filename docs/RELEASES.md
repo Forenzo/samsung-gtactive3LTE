@@ -68,8 +68,11 @@ only window is the second between replacing `SHA256SUMS` and
 
 ## Channels
 
-One GitHub release per channel. The tag is what sysupdate looks for
-(`%M_%W_%w` = image id, UI, release):
+One GitHub release per channel and variant (config.toml `[[variant]]`
+with `images = true`; `scripts/config channels` lists them). The tag is
+what sysupdate looks for (`%M_%W_%w` = image id, UI, release); the image id
+is the variant's device id, so a tablet only ever sees its own variant's
+images. Today only the Wi-Fi variant publishes:
 
 | Channel (release tag) | For |
 |---|---|
@@ -83,11 +86,15 @@ root shell, ssh, adb and the bring-up register console, **no password**).
 Never use them on a tablet that strangers can plug a cable into. The dev
 channels are GitHub pre-releases. The boot-chain payload (uniLoader +
 U-Boot for the BOOT partition, used by the installer) has its own release,
-`samsung-gtactive3wifi_bootchain`, signed with the same key and built by
-its own workflow (`bootchain.yml`, `ci/bootchain/`); `releases.json` lists
-it under `bootchain`.
+`samsung-gtactive3_bootchain` (one for the family: U-Boot picks each
+variant's device tree, and the payload has one bring-up loader per
+variant), signed with the same key and built by its own workflow
+(`bootchain.yml`, `ci/bootchain/`); `releases.json` lists it under
+`bootchain`. The LTE variant's channels will be
+`samsung-gtactive3_<ui>_edge[-dev]`.
 
-Every image carries, from `contrib/samsung-gtactive3wifi/mkosi.finalize`:
+Every image carries, from `contrib/samsung-gtactive3/mkosi.finalize`
+(`DEVICE=` picks the variant):
 
 - `/usr/lib/sysupdate.d/*.transfer` sourcing
   `https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/<channel>/`
@@ -98,12 +105,50 @@ Every image carries, from `contrib/samsung-gtactive3wifi/mkosi.finalize`:
   `pmos/sysupdate-public-key.asc` (fingerprint
   `D0FE 850A F01A 4783 1B6E  F808 5831 61CE 787F F5B5`), so a tablet only
   installs what this project signed (`Verify=` stays on)
-- `/usr/lib/gtactive3wifi/update-channel` (also printed by
+- the variant's channel file (`variants.<codename>.channel_file`: the
+  Wi-Fi images' historic `/usr/lib/gtactive3wifi/update-channel`, the LTE
+  images' `/usr/lib/samsung-gtactive3/update-channel`; also printed by
   `duranium-set-channel`; there is no staging channel)
 
 The 26102201 images (the first two pre-releases) had **no keyring** (gpg
 under keyboxd ignored `--keyring` in CI) and cannot update with sysupdate;
 tablets running them need one `scripts/duranium-update` to a newer image.
+
+## Moving the repository (samsung-gtactive3wifi -> samsung-gtactive3)
+
+The repository serves the whole family now and is to be renamed
+`exynos-linux/samsung-gtactive3`. What installed tablets depend on
+(researched 2026-11-11):
+
+- their sysupdate transfers fetch from `update.base`
+  (`https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/`)
+  and their image id is `samsung-gtactive3wifi` (channel tags, asset
+  names). The image id, tags and asset names **never** change (they are
+  the Wi-Fi variant's, not the repository's).
+- after a rename GitHub answers the old `releases/download/...`,
+  `releases/latest/download/...` and API URLs with a 301 to the new name
+  (seen on this repository's own move from dixonSolutions/gtactive3-mainline
+  on 2026-10-23), as long as no repository takes the old name again;
+  systemd-pull follows redirects. The old **Pages** URL is not redirected
+  (the installer reads `update.pages` from config.toml at run time).
+
+Order (`.claude/rules/releases.md`: an image with the new address first):
+
+1. Set `update.base = "https://github.com/exynos-linux/samsung-gtactive3/releases/download/"`
+   in config.toml and let CI publish a dev image with it; boot it on the
+   tablet (TESTPLAN B). Its update check fails until step 2 (the new URL
+   does not exist yet), so step 2 follows the same day.
+2. The owner renames the repository (GitHub Settings, or
+   `gh repo rename samsung-gtactive3 -R exynos-linux/samsung-gtactive3wifi`).
+3. Same change set: `project.repo`, `update.base` back to derived,
+   `ci/check-plumbing` (the old name joins the old-home list), the default
+   `BASE` in `contrib/samsung-gtactive3/mkosi.finalize` (pmos/duranium-build),
+   the links in the docs and CLAUDE.md, the org site and the usb-debug
+   tool's device list.
+4. On the tablet: an update from the new address (and one older image
+   updating through the redirect). Then `scripts/pmos-verify` as usual.
+5. Never create a repository named `samsung-gtactive3wifi` again: it would
+   end the redirect for every tablet on an older image.
 
 ## Versions
 

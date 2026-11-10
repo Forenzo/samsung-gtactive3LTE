@@ -5,7 +5,7 @@
 # Report-only for now: it never blocks publishing, it runs after "images"
 # has published and attaches results.json, the serial log and screenshots to
 # the run. It needs a published kernel built with the virt.config fragment
-# (duranium-build contrib/samsung-gtactive3wifi/kernel/virt.config); with an
+# (duranium-build contrib/samsung-gtactive3/kernel/virt.config); with an
 # older kernel the harness reports SKIP.
 #
 # To run it from images.yml instead (one job after "image"):

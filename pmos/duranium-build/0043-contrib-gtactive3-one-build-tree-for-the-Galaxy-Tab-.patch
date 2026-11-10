@@ -1,0 +1,590 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 10:02:01 +1100
+Subject: [PATCH] contrib: gtactive3: one build tree for the Galaxy Tab Active3
+ family
+
+The port now covers two variants of the Galaxy Tab Active3: the Wi-Fi
+SM-T570 (samsung-gtactive3wifi) and the LTE SM-T575 (samsung-gtactive3).
+Move contrib/samsung-gtactive3wifi to contrib/samsung-gtactive3 and pick
+the variant with DEVICE= (default the Wi-Fi one, so nothing changes for
+existing callers): IMAGE_ID, PMOS_DEVICE and the package check follow it.
+
+mkosi.finalize serves both: the top-level hook calls
+contrib/$PMOS_DEVICE/mkosi.finalize, which is this file for the LTE
+variant and a link to it for the Wi-Fi one. The channel file comes from
+GTA3_CHANNEL_FILE; the Wi-Fi variant keeps /usr/lib/gtactive3wifi/
+update-channel, which installed tablets and duranium-set-channel read.
+
+build-apks.sh builds the new samsung-gtactive3-common package and both
+device packages by default; the local firmware package installs with the
+common package.
+---
+ .../README.md                                 | 25 +++--
+ .../build-apks.sh                             |  7 +-
+ .../build-image.sh                            | 27 ++++--
+ .../firmware/APKBUILD                         |  4 +-
+ .../install-to-userdata.sh                    |  2 +-
+ .../kernel/bigcores.config                    |  0
+ .../kernel/camera.config                      |  0
+ .../kernel/gen-kernel-config.sh               |  0
+ .../kernel/gpu.config                         |  0
+ .../kernel/gtactive3wifi.config               |  0
+ .../kernel/hwgaps.config                      |  0
+ .../kernel/kcheck.py                          |  0
+ .../kernel/mergecfg.py                        |  0
+ .../kernel/performance.config                 |  0
+ .../kernel/pm.config                          |  0
+ .../kernel/pmos-deps.config                   |  0
+ .../kernel/pmos-fragment.config               |  0
+ .../kernel/refresh-aport.sh                   |  0
+ .../kernel/sensors.config                     |  0
+ .../kernel/virt.config                        |  0
+ contrib/samsung-gtactive3/mkosi.finalize      | 95 +++++++++++++++++++
+ .../pkgbuilder.Containerfile                  |  2 +-
+ .../sysupdate-public-key.asc                  |  0
+ contrib/samsung-gtactive3wifi/mkosi.finalize  | 85 +----------------
+ 24 files changed, 138 insertions(+), 109 deletions(-)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/README.md (91%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/build-apks.sh (93%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/build-image.sh (79%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/firmware/APKBUILD (94%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/install-to-userdata.sh (99%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/bigcores.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/camera.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/gen-kernel-config.sh (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/gpu.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/gtactive3wifi.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/hwgaps.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/kcheck.py (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/mergecfg.py (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/performance.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/pm.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/pmos-deps.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/pmos-fragment.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/refresh-aport.sh (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/sensors.config (100%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/kernel/virt.config (100%)
+ create mode 100755 contrib/samsung-gtactive3/mkosi.finalize
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/pkgbuilder.Containerfile (93%)
+ rename contrib/{samsung-gtactive3wifi => samsung-gtactive3}/sysupdate-public-key.asc (100%)
+ mode change 100755 => 120000 contrib/samsung-gtactive3wifi/mkosi.finalize
+
+diff --git a/contrib/samsung-gtactive3wifi/README.md b/contrib/samsung-gtactive3/README.md
+similarity index 91%
+rename from contrib/samsung-gtactive3wifi/README.md
+rename to contrib/samsung-gtactive3/README.md
+index 4851a4b..d32585c 100644
+--- a/contrib/samsung-gtactive3wifi/README.md
++++ b/contrib/samsung-gtactive3/README.md
+@@ -1,7 +1,10 @@
+-# Duranium on the Samsung Galaxy Tab Active3 Wi-Fi (SM-T570)
++# Duranium on the Samsung Galaxy Tab Active3 (SM-T570, SM-T575)
+ 
+ Bring-up support for building and installing a postmarketOS **Duranium** image
+-on the Galaxy Tab Active3 (`samsung-gtactive3wifi`, Exynos 9810), produced by
++on the Galaxy Tab Active3 (Exynos 9810) in its two variants: Wi-Fi
++(`samsung-gtactive3wifi`, SM-T570) and LTE (`samsung-gtactive3`, SM-T575,
++not booted yet). `DEVICE=` picks the variant (default the Wi-Fi one);
++`contrib/samsung-gtactive3wifi/mkosi.finalize` links to the one hook here. Produced by
+ the gtactive3-mainline Duranium track. This is a development bring-up, kept
+ clearly separate from the regular pmaports/kernel track so the two can be
+ merged later.
+@@ -15,8 +18,9 @@ and Duranium (branch `duranium-gtactive3`, worktree
+ 
+ | Package | Where | What |
+ |---|---|---|
++| `samsung-gtactive3-common` | `device/testing/` | everything both variants share (the rows below that are not identity); `device-samsung-gtactive3wifi` (Wi-Fi) and `device-samsung-gtactive3` (LTE) are its thin variant packages: deviceinfo, kernel cmdline, DTB |
+ | `device-samsung-gtactive3wifi` | `device/testing/` | deviceinfo, kernel cmdline, suspend off, phoc on pixman; depends on the kernel and `duranium-usb-debug` (development) |
+-| `device-samsung-gtactive3wifi-initramfs` | (subpackage) | early boot, also in the Duranium initrd: USB prep (clock gates + MAX77705 data switch over hardware I2C), PID 1 watchdog, nested-GPT udev rule, initrd deadline |
++| `samsung-gtactive3-common-initramfs` | (subpackage) | early boot, also in the Duranium initrd: USB prep (clock gates + MAX77705 data switch over hardware I2C), PID 1 watchdog, nested-GPT udev rule, initrd deadline |
+ | `device-samsung-gtactive3wifi-bootimg` | (subpackage) | regular chain only (`install_if` boot-deploy): uniLoader, stock DT table, AVB signing |
+ | `linux-postmarketos-exynos9810` | `device/testing/` | kernel from source: torvalds tarball + the src/linux `gtactive3wifi` series (linearised, tree-identical), config from `kernel/gen-kernel-config.sh` |
+ | `uniloader-samsung-gtactive3wifi`, `firmware-samsung-gtactive3wifi-bootdtb` | `device/testing/` | regular boot.img chain |
+@@ -30,7 +34,7 @@ Duranium repo changes (branch `gtactive3wifi`, worktree `build/wt/duranium`):
+   (local) pmaports checkout alone instead of switching/resetting it.
+ - `scripts/mkosi-container`: `MKOSI_CONTAINER_ARGS` for extra podman
+   arguments (bind mounts, `--security-opt label=disable` on SELinux hosts).
+-- `contrib/samsung-gtactive3wifi/`: `pkgbuilder.Containerfile`,
++- `contrib/samsung-gtactive3/`: `pkgbuilder.Containerfile`,
+   `build-apks.sh`, `build-image.sh`, `install-to-userdata.sh`, `kernel/`
+   (config fragments + generator), `firmware/` and this README.
+ 
+@@ -115,8 +119,9 @@ resizing for the 52 GiB target. The installer only writes the image bytes.
+ 
+ ```sh
+ # every heavy step takes build/kbuild.lock itself
+-contrib/samsung-gtactive3wifi/build-image.sh            # GNOME, edge
+-SKIP_APKS=1 contrib/samsung-gtactive3wifi/build-image.sh # reuse the .apks
++contrib/samsung-gtactive3/build-image.sh            # GNOME, edge, Wi-Fi
++SKIP_APKS=1 contrib/samsung-gtactive3/build-image.sh # reuse the .apks
++DEVICE=samsung-gtactive3 contrib/samsung-gtactive3/build-image.sh  # LTE
+ ```
+ 
+ `build-apks.sh` builds the packages above in an x86_64 postmarketOS
+@@ -125,7 +130,7 @@ pmbootstrap's cross-native mode, no qemu) into `build/wt/duranium-localpkgs`;
+ sources are cached in `build/wt/duranium-distfiles`. `build-image.sh`
+ symlinks `duranium/pmaports` to the worktree and runs mkosi in its container
+ (`scripts/mkosi-container`) with that package directory. Output:
+-`mkosi.output/samsung-gtactive3wifi_gnome_edge/`.
++`mkosi.output/<DEVICE>_gnome_edge/`.
+ 
+ The UKI embeds exactly one DTB (`exynos9810-gtactive3wifi.dtb`, the kernel
+ package ships only that one), so mkosi uses an unconditional `.dtb` section
+@@ -136,7 +141,7 @@ rather than `.dtbauto`: it does not depend on U-Boot's DT compatible.
+ From the bring-up console (S-Boot -> uniLoader -> bring-up Linux):
+ 
+ ```sh
+-contrib/samsung-gtactive3wifi/install-to-userdata.sh \
++contrib/samsung-gtactive3/install-to-userdata.sh \
+     mkosi.output/samsung-gtactive3wifi_gnome_edge/samsung-gtactive3wifi_gnome_edge_<ver>.raw
+ ```
+ 
+@@ -187,7 +192,7 @@ Prerequisites, in this order (each is its own layer with its own live test):
+    chainload test "U-Boot `fallback` comes back to the bring-up console
+    without touching the device" must have passed: every step below relies
+    on it.
+-2. Host build done: `contrib/samsung-gtactive3wifi/build-image.sh` (GNOME).
++2. Host build done: `contrib/samsung-gtactive3/build-image.sh` (GNOME).
+ 
+ Steps (lead; device steps through `flock build/tab.lock`):
+ 
+@@ -205,7 +210,7 @@ Steps (lead; device steps through `flock build/tab.lock`):
+    `scripts/tab "cat /sys/class/block/sda31/uevent"` (expect
+    `PARTNAME=userdata`, `PARTN=31`), `scripts/tab "cat /sys/class/block/sda31/size"`
+    (108322816 on this unit = 55.4 GB). PASS: as expected.
+-4. DEVICE, install: `contrib/samsung-gtactive3wifi/install-to-userdata.sh <img>.raw`.
++4. DEVICE, install: `contrib/samsung-gtactive3/install-to-userdata.sh <img>.raw`.
+    Writes only sda31 (userdata, wipe approved in PLAN.md); BOOT and every
+    other partition are untouched, so the device still boots the bring-up
+    console afterwards. PASS: `Verify OK`. FAIL: rerun; nothing to recover.
+diff --git a/contrib/samsung-gtactive3wifi/build-apks.sh b/contrib/samsung-gtactive3/build-apks.sh
+similarity index 93%
+rename from contrib/samsung-gtactive3wifi/build-apks.sh
+rename to contrib/samsung-gtactive3/build-apks.sh
+index e118b03..e45698b 100755
+--- a/contrib/samsung-gtactive3wifi/build-apks.sh
++++ b/contrib/samsung-gtactive3/build-apks.sh
+@@ -1,10 +1,11 @@
+ #!/bin/sh
+-# Build the samsung-gtactive3wifi packages that are not in the
++# Build the Galaxy Tab Active3 packages that are not in the
+ # postmarketOS binary repository, from the pmaports worktree, without
+ # pmbootstrap:
+ #
+ #   duranium-usb-debug(-initramfs)                    main/
+-#   device-samsung-gtactive3wifi(-initramfs)         device/testing/
++#   samsung-gtactive3-common(-initramfs, ...)         device/testing/
++#   device-samsung-gtactive3wifi, -gtactive3          device/testing/
+ #   linux-postmarketos-exynos9810                     device/testing/
+ #   gnome-shell-extension-blur-my-shell, -touchup     device/testing/
+ #   firmware-samsung-gtactive3wifi (local only)       contrib/.../firmware/
+@@ -35,7 +36,9 @@ JOBS=${JOBS:-12}
+ 
+ if [ $# -eq 0 ]; then
+ 	set -- main/duranium-usb-debug \
++		device/testing/samsung-gtactive3-common \
+ 		device/testing/device-samsung-gtactive3wifi \
++		device/testing/device-samsung-gtactive3 \
+ 		device/testing/linux-postmarketos-exynos9810 \
+ 		device/testing/gnome-shell-extension-blur-my-shell \
+ 		device/testing/gnome-shell-extension-touchup
+diff --git a/contrib/samsung-gtactive3wifi/build-image.sh b/contrib/samsung-gtactive3/build-image.sh
+similarity index 79%
+rename from contrib/samsung-gtactive3wifi/build-image.sh
+rename to contrib/samsung-gtactive3/build-image.sh
+index 56684bf..4642ea6 100755
+--- a/contrib/samsung-gtactive3wifi/build-image.sh
++++ b/contrib/samsung-gtactive3/build-image.sh
+@@ -1,7 +1,8 @@
+ #!/bin/sh
+-# Build the Duranium image for samsung-gtactive3wifi from the LOCAL pmaports
+-# worktree (branch duranium-gtactive3), without touching an upstream
+-# pmaports clone and without pmbootstrap.
++# Build the Duranium image of one Galaxy Tab Active3 variant (DEVICE:
++# samsung-gtactive3wifi, the Wi-Fi SM-T570, default; samsung-gtactive3, the
++# LTE SM-T575) from the LOCAL pmaports worktree (branch duranium-gtactive3),
++# without touching an upstream pmaports clone and without pmbootstrap.
+ #
+ # Steps:
+ #  1. Build the packages that are not in the postmarketOS binary repository
+@@ -12,11 +13,11 @@
+ #     never fetches, switches or resets it) and run mkosi (in its container,
+ #     scripts/mkosi-container) with $PKGS as an extra package source.
+ #
+-# Output: mkosi.output/samsung-gtactive3wifi_<UI>_edge/ (disk image .raw,
++# Output: mkosi.output/<DEVICE>_<UI>_edge/ (disk image .raw,
+ # UKI .efi, split partitions). Every heavy step takes build/kbuild.lock.
+ #
+-# Environment: UI (gnome, phosh, ...: any postmarketOS UI), PKGS, PMAPORTS,
+-# MKOSI, SKIP_APKS, CHANNEL. Extra arguments go to mkosi (e.g.
++# Environment: DEVICE, UI (gnome, phosh, ...: any postmarketOS UI), PKGS,
++# PMAPORTS, MKOSI, SKIP_APKS, CHANNEL, GTA3_UPDATE_BASE, GTA3_CHANNEL_FILE. Extra arguments go to mkosi (e.g.
+ # --profile=compressed).
+ #
+ # CHANNEL=dev (default here): development image with the USB debug layer
+@@ -31,6 +32,13 @@ DUR=$(cd "$HERE/../.." && pwd)
+ PMAPORTS=${PMAPORTS:-$ROOT/build/wt/pmaports-duranium}
+ PKGS=${PKGS:-$ROOT/build/wt/duranium-localpkgs}
+ LOCK=$ROOT/build/kbuild.lock
++# the variant's postmarketOS device: IMAGE_ID, channel tags and asset names
++# follow it, so an installed tablet only ever sees its own variant's images
++DEVICE=${DEVICE:-samsung-gtactive3wifi}
++case "$DEVICE" in
++samsung-gtactive3wifi | samsung-gtactive3) ;;
++*) echo "DEVICE must be samsung-gtactive3wifi or samsung-gtactive3, not '$DEVICE'" >&2; exit 1 ;;
++esac
+ UI=${UI:-gnome}
+ RELEASE=edge
+ CHANNEL=${CHANNEL:-dev}
+@@ -62,7 +70,7 @@ if [ -z "${SKIP_APKS:-}" ]; then
+ 	echo "== 1. local packages -> $PKGS"
+ 	PKGS=$PKGS PMAPORTS=$PMAPORTS sh "$HERE/build-apks.sh"
+ fi
+-ls "$PKGS"/linux-postmarketos-exynos9810-*.apk "$PKGS"/device-samsung-gtactive3wifi-*.apk >/dev/null
++ls "$PKGS"/linux-postmarketos-exynos9810-*.apk "$PKGS"/device-"$DEVICE"-*.apk >/dev/null
+ [ "$CHANNEL" != dev ] || ls "$PKGS"/duranium-usb-debug-*.apk >/dev/null
+ 
+ echo "== 2. mkosi image"
+@@ -74,7 +82,7 @@ fi
+ ln -sfn "$PMAPORTS" "$DUR/pmaports"
+ cd "$DUR"
+ [ -s mkosi.version ] || "$MKOSI" bump
+-IMAGE_ID="samsung-gtactive3wifi_${UI}_${RELEASE}"
++IMAGE_ID="${DEVICE}_${UI}_${RELEASE}"
+ # Once a build has cached the repository metadata, do not refresh it: every
+ # sub-image (base, initrd, sysexts) ran "apk update" and any flaky lookup
+ # killed the build. FRESH=1 refreshes on purpose (to pull upstream updates);
+@@ -92,10 +100,11 @@ for attempt in 1 2 3; do
+ 			--force \
+ 			--architecture=arm64 \
+ 			--image-id="$IMAGE_ID" \
+-			--environment=PMOS_DEVICE=samsung-gtactive3wifi \
++			--environment=PMOS_DEVICE="$DEVICE" \
+ 			--environment=PMOS_VARIANT="$UI" \
+ 			--environment=GTA3_CHANNEL="$GTA3_CHANNEL" \
+ 			--environment=GTA3_UPDATE_BASE="${GTA3_UPDATE_BASE:-}" \
++			--environment=GTA3_CHANNEL_FILE="${GTA3_CHANNEL_FILE:-}" \
+ 			--environment=DURANIUM_EXTRA_PACKAGES="$EXTRA" \
+ 			--release="$RELEASE" \
+ 			--package-directory="$PKGS" \
+diff --git a/contrib/samsung-gtactive3wifi/firmware/APKBUILD b/contrib/samsung-gtactive3/firmware/APKBUILD
+similarity index 94%
+rename from contrib/samsung-gtactive3wifi/firmware/APKBUILD
+rename to contrib/samsung-gtactive3/firmware/APKBUILD
+index 1097eba..6d04e30 100644
+--- a/contrib/samsung-gtactive3wifi/firmware/APKBUILD
++++ b/contrib/samsung-gtactive3/firmware/APKBUILD
+@@ -10,7 +10,7 @@
+ #
+ # install_if: apk installs it automatically next to the device package when
+ # it is available in a repository (the local package directory that
+-# contrib/samsung-gtactive3wifi/build-apks.sh hands to mkosi), and images
++# contrib/samsung-gtactive3/build-apks.sh hands to mkosi), and images
+ # built without it simply do not get it.
+ pkgname=firmware-samsung-gtactive3wifi
+ pkgver=20251001
+@@ -20,7 +20,7 @@ url="https://github.com/exynos-linux/samsung-gtactive3wifi"
+ arch="noarch"
+ license="proprietary"
+ options="!check !strip !tracedeps !archcheck"
+-install_if="device-samsung-gtactive3wifi"
++install_if="samsung-gtactive3-common"
+ source=""
+ 
+ : "${GTA3_FIRMWARE_DIR:?set GTA3_FIRMWARE_DIR to firmware/extracted/linux-firmware/lib/firmware}"
+diff --git a/contrib/samsung-gtactive3wifi/install-to-userdata.sh b/contrib/samsung-gtactive3/install-to-userdata.sh
+similarity index 99%
+rename from contrib/samsung-gtactive3wifi/install-to-userdata.sh
+rename to contrib/samsung-gtactive3/install-to-userdata.sh
+index 4524506..235cbcf 100755
+--- a/contrib/samsung-gtactive3wifi/install-to-userdata.sh
++++ b/contrib/samsung-gtactive3/install-to-userdata.sh
+@@ -200,7 +200,7 @@ fi
+ cat <<EOF
+ 
+ Done. The Duranium GPT is now written to $DEV.
+-Next (see contrib/samsung-gtactive3wifi/README.md, "Test plan"):
++Next (see contrib/samsung-gtactive3/README.md, "Test plan"):
+   flash the chainload BOOT image (uniLoader -> U-Boot, bring-up Linux as the
+   watchdog fallback) from the chainload track. U-Boot maps sda31 as a whole
+   disk with blkmap and runs systemd-boot from the nested ESP.
+diff --git a/contrib/samsung-gtactive3wifi/kernel/bigcores.config b/contrib/samsung-gtactive3/kernel/bigcores.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/bigcores.config
+rename to contrib/samsung-gtactive3/kernel/bigcores.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/camera.config b/contrib/samsung-gtactive3/kernel/camera.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/camera.config
+rename to contrib/samsung-gtactive3/kernel/camera.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/gen-kernel-config.sh b/contrib/samsung-gtactive3/kernel/gen-kernel-config.sh
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/gen-kernel-config.sh
+rename to contrib/samsung-gtactive3/kernel/gen-kernel-config.sh
+diff --git a/contrib/samsung-gtactive3wifi/kernel/gpu.config b/contrib/samsung-gtactive3/kernel/gpu.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/gpu.config
+rename to contrib/samsung-gtactive3/kernel/gpu.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/gtactive3wifi.config b/contrib/samsung-gtactive3/kernel/gtactive3wifi.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/gtactive3wifi.config
+rename to contrib/samsung-gtactive3/kernel/gtactive3wifi.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/hwgaps.config b/contrib/samsung-gtactive3/kernel/hwgaps.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/hwgaps.config
+rename to contrib/samsung-gtactive3/kernel/hwgaps.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/kcheck.py b/contrib/samsung-gtactive3/kernel/kcheck.py
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/kcheck.py
+rename to contrib/samsung-gtactive3/kernel/kcheck.py
+diff --git a/contrib/samsung-gtactive3wifi/kernel/mergecfg.py b/contrib/samsung-gtactive3/kernel/mergecfg.py
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/mergecfg.py
+rename to contrib/samsung-gtactive3/kernel/mergecfg.py
+diff --git a/contrib/samsung-gtactive3wifi/kernel/performance.config b/contrib/samsung-gtactive3/kernel/performance.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/performance.config
+rename to contrib/samsung-gtactive3/kernel/performance.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/pm.config b/contrib/samsung-gtactive3/kernel/pm.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/pm.config
+rename to contrib/samsung-gtactive3/kernel/pm.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/pmos-deps.config b/contrib/samsung-gtactive3/kernel/pmos-deps.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/pmos-deps.config
+rename to contrib/samsung-gtactive3/kernel/pmos-deps.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/pmos-fragment.config b/contrib/samsung-gtactive3/kernel/pmos-fragment.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/pmos-fragment.config
+rename to contrib/samsung-gtactive3/kernel/pmos-fragment.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/refresh-aport.sh b/contrib/samsung-gtactive3/kernel/refresh-aport.sh
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/refresh-aport.sh
+rename to contrib/samsung-gtactive3/kernel/refresh-aport.sh
+diff --git a/contrib/samsung-gtactive3wifi/kernel/sensors.config b/contrib/samsung-gtactive3/kernel/sensors.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/sensors.config
+rename to contrib/samsung-gtactive3/kernel/sensors.config
+diff --git a/contrib/samsung-gtactive3wifi/kernel/virt.config b/contrib/samsung-gtactive3/kernel/virt.config
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/kernel/virt.config
+rename to contrib/samsung-gtactive3/kernel/virt.config
+diff --git a/contrib/samsung-gtactive3/mkosi.finalize b/contrib/samsung-gtactive3/mkosi.finalize
+new file mode 100755
+index 0000000..980e0aa
+--- /dev/null
++++ b/contrib/samsung-gtactive3/mkosi.finalize
+@@ -0,0 +1,95 @@
++#!/bin/sh
++# Device hook, run at the end of the top-level mkosi.finalize (before /etc
++# moves into the base confext and before the usr partition and its verity
++# hash are made).
++#
++# Update server: gtactive3-mainline publishes its own images (our kernel and
++# drivers on top of the postmarketOS packages) as GitHub releases, one
++# release per update channel:
++#
++#   https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/
++#       samsung-gtactive3wifi_<ui>_<release><suffix>/SHA256SUMS(.gpg)
++#
++# so sysupdate here must never fetch postmarketOS's generic images (they
++# carry no kernel for this device), and must only trust manifests signed
++# with the project's key:
++#
++#  - every sysupdate.d transfer that points at the postmarketOS image server
++#    points at the release of this image's channel instead
++#  - the sysupdate keyring holds only sysupdate-public-key.asc
++#
++# GTA3_CHANNEL: "" (release images) or "dev" (development images with the
++# USB debug layer, channel tag suffix "-dev"). GTA3_UPDATE_BASE overrides
++# the server: gtactive3-mainline's CI sets it from its config.toml
++# (update.base); build-image.sh passes it through to mkosi.
++# GTA3_CHANNEL_FILE: where the image records its channel (config.toml
++# variants.<codename>.channel_file); the Wi-Fi variant keeps its historic
++# /usr/lib/gtactive3wifi/update-channel.
++#
++# One hook for every variant: contrib/<PMOS_DEVICE>/mkosi.finalize is this
++# file (samsung-gtactive3, the LTE variant) or a link to it.
++set -eu
++
++HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
++BASE=${GTA3_UPDATE_BASE:-https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/}
++case "$PMOS_DEVICE" in
++samsung-gtactive3wifi) CHFILE=${GTA3_CHANNEL_FILE:-/usr/lib/gtactive3wifi/update-channel} ;;
++*) CHFILE=${GTA3_CHANNEL_FILE:-/usr/lib/$PMOS_DEVICE/update-channel} ;;
++esac
++case "${GTA3_CHANNEL:-}" in
++	"") suffix= ;;
++	dev) suffix=-dev ;;
++	*) echo "GTA3_CHANNEL must be empty or dev, not '$GTA3_CHANNEL'" >&2; exit 1 ;;
++esac
++
++n=0
++for t in "$BUILDROOT"/usr/lib/sysupdate.d/*.transfer; do
++	[ -f "$t" ] || continue
++	grep -qE '^Path=https://duranium\.(postmarketos\.org|nura\.eco)/images/' "$t" || continue
++	sed -i -E "s|^Path=https://duranium\.(postmarketos\.org\|nura\.eco)/images/(staging/)?([^/]+)/|Path=${BASE}\3${suffix}/|" "$t"
++	grep -q "^Path=${BASE}" "$t" || { echo "could not rewrite Path= in $t" >&2; exit 1; }
++	n=$((n + 1))
++done
++[ "$n" -gt 0 ] || { echo "no sysupdate transfer pointed at the postmarketOS server" >&2; exit 1; }
++echo "sysupdate: $n transfers -> ${BASE}%M_%W_%w${suffix}/"
++
++# duranium-set-channel only knows the postmarketOS server layout
++# (/images/ vs /images/staging/): on this device it would copy every transfer
++# unchanged into /etc/sysupdate.d, freezing them. Our channels are fixed per
++# image (release or -dev, see update-channel below).
++if [ -f "$BUILDROOT"/usr/bin/duranium-set-channel ]; then
++	cat > "$BUILDROOT"/usr/bin/duranium-set-channel <<'EOF'
++#!/bin/sh
++# Galaxy Tab Active3: one update channel per image (GitHub releases of the
++# port), there is no staging channel. Prints the channel.
++set -eu
++. @CHFILE@
++case "${1:-}" in
++"") echo "$UPDATE_CHANNEL" ;;
++main) echo "$UPDATE_CHANNEL" ;;
++*) echo "this device has no '$1' channel; images follow $UPDATE_CHANNEL" >&2; exit 1 ;;
++esac
++EOF
++	sed -i "s|@CHFILE@|$CHFILE|" "$BUILDROOT"/usr/bin/duranium-set-channel
++	chmod 0755 "$BUILDROOT"/usr/bin/duranium-set-channel
++fi
++
++# A plain binary OpenPGP key file is a valid keyring for the gpg that
++# systemd-pull runs. Never "gpg --keyring X --import": a GnuPG 2.4 with a
++# fresh home (CI) keeps keys in keyboxd and silently ignores --keyring, and
++# the image then has no keyring at all (26102201: every update failed with
++# "No OpenPGP keyrings found").
++ring="$BUILDROOT"/usr/lib/systemd/import-pubring.pgp
++rm -f "$ring" "$ring~"
++gpg --dearmor < "$HERE"/sysupdate-public-key.asc > "$ring"
++chmod 0644 "$ring"
++gh=$(mktemp -d)
++n=$(GNUPGHOME=$gh gpg --batch --show-keys --with-colons "$ring" | grep -c '^pub' || true)
++rm -rf "$gh"
++[ "$n" = 1 ] || { echo "$ring must hold exactly one key, has $n" >&2; exit 1; }
++
++# which channel this image follows, for duranium-update and humans
++mkdir -p "$BUILDROOT$(dirname "$CHFILE")"
++printf 'UPDATE_BASE=%s\nUPDATE_CHANNEL=%s_%s_%s%s\n' "$BASE" \
++	"$PMOS_DEVICE" "$PMOS_VARIANT" "${RELEASE:-edge}" "$suffix" \
++	> "$BUILDROOT$CHFILE"
+diff --git a/contrib/samsung-gtactive3wifi/pkgbuilder.Containerfile b/contrib/samsung-gtactive3/pkgbuilder.Containerfile
+similarity index 93%
+rename from contrib/samsung-gtactive3wifi/pkgbuilder.Containerfile
+rename to contrib/samsung-gtactive3/pkgbuilder.Containerfile
+index 7ff4784..58612f1 100644
+--- a/contrib/samsung-gtactive3wifi/pkgbuilder.Containerfile
++++ b/contrib/samsung-gtactive3/pkgbuilder.Containerfile
+@@ -1,4 +1,4 @@
+-# Package builder for the samsung-gtactive3wifi aports, without pmbootstrap.
++# Package builder for the Galaxy Tab Active3 aports, without pmbootstrap.
+ #
+ # x86_64 postmarketOS edge with the cross compiler that pmbootstrap uses for
+ # its "cross-native" kernel builds (gcc-aarch64 from the postmarketOS
+diff --git a/contrib/samsung-gtactive3wifi/sysupdate-public-key.asc b/contrib/samsung-gtactive3/sysupdate-public-key.asc
+similarity index 100%
+rename from contrib/samsung-gtactive3wifi/sysupdate-public-key.asc
+rename to contrib/samsung-gtactive3/sysupdate-public-key.asc
+diff --git a/contrib/samsung-gtactive3wifi/mkosi.finalize b/contrib/samsung-gtactive3wifi/mkosi.finalize
+deleted file mode 100755
+index c8f7ede..0000000
+--- a/contrib/samsung-gtactive3wifi/mkosi.finalize
++++ /dev/null
+@@ -1,84 +0,0 @@
+-#!/bin/sh
+-# Device hook, run at the end of the top-level mkosi.finalize (before /etc
+-# moves into the base confext and before the usr partition and its verity
+-# hash are made).
+-#
+-# Update server: gtactive3-mainline publishes its own images (our kernel and
+-# drivers on top of the postmarketOS packages) as GitHub releases, one
+-# release per update channel:
+-#
+-#   https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/
+-#       samsung-gtactive3wifi_<ui>_<release><suffix>/SHA256SUMS(.gpg)
+-#
+-# so sysupdate here must never fetch postmarketOS's generic images (they
+-# carry no kernel for this device), and must only trust manifests signed
+-# with the project's key:
+-#
+-#  - every sysupdate.d transfer that points at the postmarketOS image server
+-#    points at the release of this image's channel instead
+-#  - the sysupdate keyring holds only sysupdate-public-key.asc
+-#
+-# GTA3_CHANNEL: "" (release images) or "dev" (development images with the
+-# USB debug layer, channel tag suffix "-dev"). GTA3_UPDATE_BASE overrides
+-# the server: gtactive3-mainline's CI sets it from its config.toml
+-# (update.base); build-image.sh passes it through to mkosi.
+-set -eu
+-
+-HERE=$(cd "$(dirname "$0")" && pwd)
+-BASE=${GTA3_UPDATE_BASE:-https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/}
+-case "${GTA3_CHANNEL:-}" in
+-	"") suffix= ;;
+-	dev) suffix=-dev ;;
+-	*) echo "GTA3_CHANNEL must be empty or dev, not '$GTA3_CHANNEL'" >&2; exit 1 ;;
+-esac
+-
+-n=0
+-for t in "$BUILDROOT"/usr/lib/sysupdate.d/*.transfer; do
+-	[ -f "$t" ] || continue
+-	grep -qE '^Path=https://duranium\.(postmarketos\.org|nura\.eco)/images/' "$t" || continue
+-	sed -i -E "s|^Path=https://duranium\.(postmarketos\.org\|nura\.eco)/images/(staging/)?([^/]+)/|Path=${BASE}\3${suffix}/|" "$t"
+-	grep -q "^Path=${BASE}" "$t" || { echo "could not rewrite Path= in $t" >&2; exit 1; }
+-	n=$((n + 1))
+-done
+-[ "$n" -gt 0 ] || { echo "no sysupdate transfer pointed at the postmarketOS server" >&2; exit 1; }
+-echo "sysupdate: $n transfers -> ${BASE}%M_%W_%w${suffix}/"
+-
+-# duranium-set-channel only knows the postmarketOS server layout
+-# (/images/ vs /images/staging/): on this device it would copy every transfer
+-# unchanged into /etc/sysupdate.d, freezing them. Our channels are fixed per
+-# image (release or -dev, see update-channel below).
+-if [ -f "$BUILDROOT"/usr/bin/duranium-set-channel ]; then
+-	cat > "$BUILDROOT"/usr/bin/duranium-set-channel <<'EOF'
+-#!/bin/sh
+-# samsung-gtactive3wifi: one update channel per image (gtactive3-mainline
+-# GitHub releases), there is no staging channel. Prints the channel.
+-set -eu
+-. /usr/lib/gtactive3wifi/update-channel
+-case "${1:-}" in
+-"") echo "$UPDATE_CHANNEL" ;;
+-main) echo "$UPDATE_CHANNEL" ;;
+-*) echo "this device has no '$1' channel; images follow $UPDATE_CHANNEL" >&2; exit 1 ;;
+-esac
+-EOF
+-	chmod 0755 "$BUILDROOT"/usr/bin/duranium-set-channel
+-fi
+-
+-# A plain binary OpenPGP key file is a valid keyring for the gpg that
+-# systemd-pull runs. Never "gpg --keyring X --import": a GnuPG 2.4 with a
+-# fresh home (CI) keeps keys in keyboxd and silently ignores --keyring, and
+-# the image then has no keyring at all (26102201: every update failed with
+-# "No OpenPGP keyrings found").
+-ring="$BUILDROOT"/usr/lib/systemd/import-pubring.pgp
+-rm -f "$ring" "$ring~"
+-gpg --dearmor < "$HERE"/sysupdate-public-key.asc > "$ring"
+-chmod 0644 "$ring"
+-gh=$(mktemp -d)
+-n=$(GNUPGHOME=$gh gpg --batch --show-keys --with-colons "$ring" | grep -c '^pub' || true)
+-rm -rf "$gh"
+-[ "$n" = 1 ] || { echo "$ring must hold exactly one key, has $n" >&2; exit 1; }
+-
+-# which channel this image follows, for duranium-update and humans
+-mkdir -p "$BUILDROOT"/usr/lib/gtactive3wifi
+-printf 'UPDATE_BASE=%s\nUPDATE_CHANNEL=%s_%s_%s%s\n' "$BASE" \
+-	"$PMOS_DEVICE" "$PMOS_VARIANT" "${RELEASE:-edge}" "$suffix" \
+-	> "$BUILDROOT"/usr/lib/gtactive3wifi/update-channel
+diff --git a/contrib/samsung-gtactive3wifi/mkosi.finalize b/contrib/samsung-gtactive3wifi/mkosi.finalize
+new file mode 120000
+index 0000000..70ab57f
+--- /dev/null
++++ b/contrib/samsung-gtactive3wifi/mkosi.finalize
+@@ -0,0 +1 @@
++../samsung-gtactive3/mkosi.finalize
+\ No newline at end of file
+-- 
+2.53.0
+

@@ -24,6 +24,9 @@
 #   EXTENSIONS="dev-tools waydroid" ...  extensions to deliver ("" = none)
 #   UI=phosh ...                         image variant (default gnome); a
 #                                        switch is an A/B update like any other
+#   DEVICE=samsung-gtactive3 ...         the tablet's variant (config.toml
+#                                        variants: default device.id, the
+#                                        Wi-Fi SM-T570)
 #   GTA3_SSH=root@100.x.y.z ...          over ssh (Tailscale) instead of the
 #                                        USB console; data goes zstd-compressed
 #   OUT=DIR ...                          where the image files are (default:
@@ -33,7 +36,8 @@
 set -euo pipefail
 P=$(cd "$(dirname "$0")/.." && pwd)
 UI=${UI:-gnome}
-NAME=samsung-gtactive3wifi_${UI}_edge
+DEVICE=${DEVICE:-$("$(dirname "$0")/config" get device.id)}
+NAME=${DEVICE}_${UI}_edge
 OUT=${OUT:-$P/build/wt/duranium/mkosi.output/$NAME}
 LL=fe80::57:aff:fe00:1
 W=$P/build/.upd

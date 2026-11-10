@@ -28,7 +28,7 @@ t "cat /proc/version" | grep -q borysthebear ||
 # Never by default; only with the explicit flag.
 if [ "${1:-}" = "--wipe-user-data" ]; then
 	log "installing $(basename "$RAW")"
-	bash "$P/build/wt/duranium/contrib/samsung-gtactive3wifi/install-to-userdata.sh" "$RAW" |
+	bash "$P/build/wt/duranium/contrib/samsung-gtactive3/install-to-userdata.sh" "$RAW" |
 		grep -E "MB/s|Verify|ERROR"
 fi
 
