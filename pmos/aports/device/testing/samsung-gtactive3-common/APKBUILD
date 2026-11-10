@@ -1,16 +1,23 @@
-# Reference: <https://postmarketos.org/devicepkg>
+# Everything the Galaxy Tab Active3 variants share: the board is one design
+# (Wi-Fi SM-T570 = device-samsung-gtactive3wifi, LTE SM-T575 =
+# device-samsung-gtactive3), so suspend, USB, Wi-Fi, audio, cameras, the GPU
+# setup, the update helpers and the debug console are the same. The device
+# packages only add their deviceinfo, kernel command line and DTB.
+#
+# Moved here from device-samsung-gtactive3wifi r48 unchanged: every file
+# keeps its installed path (the "gtactive3wifi" names in them included), so
+# the Wi-Fi images install exactly what they did.
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
-pkgname=device-samsung-gtactive3wifi
-pkgdesc="Samsung Galaxy Tab Active3 (Wi-Fi)"
+pkgname=samsung-gtactive3-common
+pkgdesc="Samsung Galaxy Tab Active3: support shared by every variant"
 pkgver=2
-pkgrel=48
-url="https://github.com/dixonSolutions/gtactive3-mainline"
+pkgrel=49
+url="https://github.com/exynos-linux/samsung-gtactive3wifi"
 license="MIT"
 arch="aarch64"
 options="!check !archcheck !strip !tracedeps"
 depends="
 	$pkgname-initramfs=$pkgver-r$pkgrel
-	linux-postmarketos-exynos9810
 	postmarketos-base
 	systemd-boot
 	zstd
@@ -30,9 +37,9 @@ depends="$depends cryptsetup"
 # dependency: development images add it (duranium-usb-debug,
 # duranium-usb-debug-adb; build-image.sh CHANNEL=dev), release images leave
 # it out, and the bring-up register console (-console) follows it.
-# podman for every user, with an Alpine image that works offline
-_pmb_recommends="$pkgname-containers"
-makedepends="devicepkg-dev linux-headers"
+# podman for every user, with an Alpine image that works offline: the
+# device packages recommend $pkgname-containers
+makedepends="linux-headers"
 subpackages="
 	$pkgname-initramfs:initramfs
 	$pkgname-console:console
@@ -46,8 +53,6 @@ _alpine=3.24.3
 _alpine_created=2026-10-21T21:55:43Z
 _alpine_rootfs=alpine-minirootfs-$_alpine-aarch64.tar.gz
 source="
-	deviceinfo
-	kernel-cmdline.conf
 	gtactive3wifi-usb-prep.c
 	gtactive3wifi-usb-prep.service
 	gta3-console.c
@@ -126,7 +131,6 @@ source="
 builddir="$srcdir"
 
 build() {
-	devicepkg_build $startdir $pkgname
 	${CC:-gcc} $CFLAGS -O2 -Wall -static -o "$srcdir"/gtactive3wifi-usb-prep \
 		"$srcdir"/gtactive3wifi-usb-prep.c $LDFLAGS
 	# cross-native build: abuild's strip is the host one, so strip here
@@ -148,8 +152,6 @@ build() {
 }
 
 package() {
-	devicepkg_package $startdir $pkgname
-
 	# Suspend to idle only (PSCI 0.1), off until the wake-up path has been
 	# proven on the tablet: the gate allows it per boot (a sleep the user
 	# cannot end strands the tablet)
@@ -432,8 +434,6 @@ initramfs() {
 }
 
 sha512sums="
-c6afa71ccf2102f8e986145e21b0b1c40d1b65c00664d2563da8aed0b4158d24d6dd1aaacbef4917a315e0f95feda8a6ba9f11c788a55ad96fdd00ccb2026c58  deviceinfo
-49a069aebdf0364fc1e60bfd5629905d1c1573cf73e781a26d7948a00020251dd506f661b47e605b814821858fbab9863ec60c26df4beea4fe5b2812591c0ee4  kernel-cmdline.conf
 acba813ff0feb882b6cb0cc4b4c9f8dc0b9b58cb3da7c6a87920ecf4ef63670ac90f23d3ca6bc5b057832fe8e4388c1eca60b6c79c7f3e50eab6d5986cd349d7  gtactive3wifi-usb-prep.c
 fcf5c1e3a2c601e30acc506b7996770dfeddf2cc2b920bc9acb2858442b2aad71ab2d0fd50590e0cdacc8ebb14fb1c04bdca0007268ad6f62f5988a8ac61e3ad  gtactive3wifi-usb-prep.service
 28297b58b56192c894ed5a1f60a4834b4490945054b6db21dcf72212605fdf4a5cd153331313eab1b78d65b13402038dfd08f5b41e1da9b3bb02db0d012328dc  gta3-console.c
@@ -488,7 +488,7 @@ cbd57e963b49b08d97b12818d44f19bfc736a538bb04299a8d4d58f8609e2e8773b8af87ecfda037
 c15bf919861bc0d0db2475c751a7ccb9b2773a10e328465d0eb3a5b89125d8e9c03954698b9c9bdfe5bb0a28a8ded4f7bb8af2d4b7cc8a3364b255a0de810d94  61-gtactive3wifi-sensors.rules
 276873db11bcca166df29b472f32becb6b26fe76d1c8adcaab997a5f6b45c3df5c612057cc667111c521a1628ec550b8083b4cd97859d62350a017c27af9ba7a  gtactive3wifi-typing-booster-defaults.sh
 1ee2d69d7825e35c5cebb37c563267f646e5a18eec0616b99ce460c25d197c23f0d38acaad4fee7cb2f850143e5305af6e744f8345e722b8af1df2ad94aee94c  gtactive3wifi-typing-booster-defaults.service
-83176124d91fa184b062098da1d48ae0d6ec7ca320a2ba34076ddac54958756bde7fc9c8032ee20cb61e65b958fd3b000809b9ec52b524d60e6c70093ecfcfc9  80-device-samsung-gtactive3wifi.preset
+625508baa42fad23519a17bf5044ce7fe4652dd02887e8fe649d79b273893fd3f619a3d45e596db2515c64dc5196af585c7541f7cdc708ee46f228dca83681a8  80-device-samsung-gtactive3wifi.preset
 12ecb8f1960365f7ab82897905f0426dbdbfb7d00a6e1a1c0bbbe3ca3bfbe8fe1c463667124c8244975f63f5c8cedac2ace01f35ed590296e2e5db0065f8374d  80-device-samsung-gtactive3wifi.user-preset
 75283b6d91b9ffa5ccbcf05fd5d4ac522462046ade9a8d411ac209a18fbb2cda9ba4509bdc1d0ad2c7b77d8b7c6c5ebe4d2618ad2625266f8ea4ee1ba7014b80  oomd-avoid.conf
 c049eaa52427f76ad7ada60091e9724a97b1f98cf0c503dc20cb2836b71d5cccfd1cebeb3163374a461952be9efa5a6af4e4f1d01b3acc4f069abfe49d3c94bb  powersave.conf
@@ -506,5 +506,5 @@ fb2febe60164d63cb0c02ef81f477fd326f53b9a39bbf9487492c4c6743d0e6d4eec5462ebb0bf94
 1c7dea1fc828d397636ad2cefd59d481c39f8827269498587057bb97d723742738b79f1c9e60bd5d4d732411868507079e8b02c6546f2a5800a75c22118783e3  containers-selftest.sh
 2f58d3af193c441d90b2b2a25d8f7f5db160ab63fb26b1f36bb6ac3db35cd50ab71693c6fa588873000c9d59542d7f91e6e8d58700a60603f01282f201f522f9  gtactive3wifi-container-images.service
 e4f4a34f93f43ff0439299269252cc487fe1fb763b42a51c887685607560e8dcd096e6b7290fab45006fcd76727bdcd467d2626f4545b6e234e48eaf61ee9f28  gtactive3wifi-container-images.user.service
-03422f1492db2d8e30711b3657345528d572a9e827c048bdd995b2fc5afb0a1a42fc5ba2ba3e6f99cec2cefd6df1fe27fb80c557f24ba7f2a6d5a7728b990d3f  README
+e5c88cc4a2aaa887aecf74b4097070118dfde56099049e422b5f2e4040e1fa6dd9248d71c2a0d04c1e3ea3dbf0f221504eda16532257556382090af32e5fb266  README
 "

@@ -1,0 +1,49 @@
+# Reference: <https://postmarketos.org/devicepkg>
+#
+# Galaxy Tab Active3 Wi-Fi (SM-T570). Everything the variants share is in
+# samsung-gtactive3-common (until r48 it was all here); this package is the
+# variant's identity: deviceinfo, the kernel command line and its DTB.
+maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
+pkgname=device-samsung-gtactive3wifi
+pkgdesc="Samsung Galaxy Tab Active3 (Wi-Fi)"
+pkgver=2
+pkgrel=49
+url="https://github.com/exynos-linux/samsung-gtactive3wifi"
+license="MIT"
+arch="aarch64"
+options="!check !archcheck !strip !tracedeps"
+depends="
+	$pkgname-initramfs=$pkgver-r$pkgrel
+	samsung-gtactive3-common
+	linux-postmarketos-exynos9810-gtactive3wifi
+	"
+# podman for every user, with an Alpine image that works offline
+_pmb_recommends="samsung-gtactive3-common-containers"
+makedepends="devicepkg-dev"
+# duranium-build's pmaports.py puts device-<codename>-initramfs into the
+# initrd (pmos/duranium-build 0001): it brings the common early-boot
+# support (USB prep, watchdog, nested GPT) there
+subpackages="$pkgname-initramfs:initramfs"
+source="
+	deviceinfo
+	kernel-cmdline.conf
+	"
+
+build() {
+	devicepkg_build $startdir $pkgname
+}
+
+package() {
+	devicepkg_package $startdir $pkgname
+}
+
+initramfs() {
+	pkgdesc="$pkgdesc (initrd and early boot support)"
+	depends="samsung-gtactive3-common-initramfs"
+	mkdir -p "$subpkgdir"
+}
+
+sha512sums="
+c6afa71ccf2102f8e986145e21b0b1c40d1b65c00664d2563da8aed0b4158d24d6dd1aaacbef4917a315e0f95feda8a6ba9f11c788a55ad96fdd00ccb2026c58  deviceinfo
+49a069aebdf0364fc1e60bfd5629905d1c1573cf73e781a26d7948a00020251dd506f661b47e605b814821858fbab9863ec60c26df4beea4fe5b2812591c0ee4  kernel-cmdline.conf
+"

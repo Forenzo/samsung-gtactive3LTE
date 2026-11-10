@@ -1,6 +1,11 @@
-device-samsung-gtactive3wifi: Samsung Galaxy Tab Active3 Wi-Fi (SM-T570)
+samsung-gtactive3-common: Samsung Galaxy Tab Active3, every variant
 
-Early boot (device-samsung-gtactive3wifi-initramfs, also in the Duranium
+What the Wi-Fi SM-T570 (device-samsung-gtactive3wifi) and the LTE SM-T575
+(device-samsung-gtactive3) share; the device packages add deviceinfo, the
+kernel command line and their DTB. Files keep the "gtactive3wifi" names
+they had when this was the Wi-Fi device package.
+
+Early boot (samsung-gtactive3-common-initramfs, also in the Duranium
 initrd):
 - gtactive3wifi-usb-prep.service: forces the USB 3.0 DRD clock gates on
   (/dev/mem, no clock driver yet), loads exynos-usi + i2c-exynos5 and routes
