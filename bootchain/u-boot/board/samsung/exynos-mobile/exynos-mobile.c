@@ -161,17 +161,28 @@ static int exynos7870_fdt_match(struct exynos_board_info *board_info)
 }
 
 /*
- * Galaxy Tab Active3: match like the other boards, but when chain-loaded by
- * uniLoader without a usable S-Boot FDT (it then passes its own DTB, which
- * has no Samsung command line), still take the device tree if this image
- * is built for this board alone.
+ * Galaxy Tab Active3 (Wi-Fi gtactive3wifi = T570, LTE gtactive3 = T575):
+ * match like the other boards by the model in S-Boot's command line. When
+ * chain-loaded by uniLoader without a usable S-Boot FDT (it then passes its
+ * own DTB, which has no Samsung command line), nothing names the model:
+ * only the default device tree takes the boot then, as it did when it was
+ * the only one. A command line that names another model never matches.
  */
 static int exynos9810_gtactive3_match(struct exynos_board_info *board_info)
 {
+	const char *args;
+	char dt[64];
+
 	if (!exynos7870_fdt_match(board_info))
 		return 0;
 
-	if (strcmp(CONFIG_OF_LIST, CONFIG_DEFAULT_DEVICE_TREE))
+	args = exynos_prev_bl_get_bootargs();
+	if (args && strstr(args, "androidboot.bootloader="))
+		return -1;
+
+	snprintf(dt, sizeof(dt), "exynos/%s-%s", board_info->chip,
+		 board_info->name);
+	if (strcmp(dt, CONFIG_DEFAULT_DEVICE_TREE))
 		return -1;
 
 	log_warning("%s: previous bootloader did not identify the board, using %s\n",
@@ -211,6 +222,14 @@ static struct exynos_board_info exynos_board_info_match[] = {
 		.dram_bank_bases = exynos7870_common_dram_bank_bases,
 		.match = exynos7870_fdt_match,
 		.match_model = "G610",
+		.match_max_rev = U8_MAX,
+	}, {
+		/* Samsung Galaxy Tab Active3 (LTE: SM-T575, SM-T575N) */
+		.name = "gtactive3",
+		.chip = "exynos9810",
+		.dram_bank_bases = exynos9810_common_dram_bank_bases,
+		.match = exynos9810_gtactive3_match,
+		.match_model = "T575",
 		.match_max_rev = U8_MAX,
 	}, {
 		/* Samsung Galaxy Tab Active3 (Wi-Fi) */
@@ -622,7 +641,7 @@ static void exynos_mark_uniloader_os(void)
  * Hand the watchdog to the OS (EFI ExitBootServices and booti both end up
  * here). wdt_handover=keep: leave it running with a full timeout, so a
  * kernel that hangs before its watchdog driver takes over resets into
- * uniLoader's fallback Linux. wdt_handover=stop (gtactive3wifi): stop it.
+ * uniLoader's fallback Linux. wdt_handover=stop (gtactive3*): stop it.
  */
 void board_quiesce_devices(void)
 {
@@ -654,7 +673,8 @@ int misc_init_r(void)
 	env_set("platform", board_info->chip);
 	env_set("board", board_info->name);
 
-	if (!strcmp(board_info->name, "gtactive3wifi")) {
+	/* both Galaxy Tab Active3 variants: one board design */
+	if (!strncmp(board_info->name, "gtactive3", strlen("gtactive3"))) {
 		gtactive3_watchdog_off();
 		exynos_show_uniloader_record();
 		gtactive3_max77705_com_usb();

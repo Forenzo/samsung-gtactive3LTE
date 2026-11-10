@@ -19,7 +19,7 @@ PUB=$HERE/../../$CFG_UPDATE_PUBLIC_KEY
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 NAME=$(basename "$TAR")
-[[ $NAME =~ ^${CFG_DEVICE_CODENAME}-bootchain_[0-9.]+\.tar\.gz$ ]] || { echo "unexpected name $NAME" >&2; exit 1; }
+[[ $NAME =~ ^${CFG_DEVICE_FAMILY}-bootchain_[0-9.]+\.tar\.gz$ ]] || { echo "unexpected name $NAME" >&2; exit 1; }
 
 if ! gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
 	gh release create "$TAG" -R "$REPO" --target "${GITHUB_SHA:-main}" --prerelease --latest=false \

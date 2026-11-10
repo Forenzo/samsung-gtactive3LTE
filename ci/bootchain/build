@@ -4,7 +4,7 @@
 #
 #   ci/bootchain/build OUTDIR [VERSION]
 #
-# Output: OUTDIR/<device.codename>-bootchain_<VERSION>.tar.gz with, at its
+# Output: OUTDIR/<device.family>-bootchain_<VERSION>.tar.gz with, at its
 # root, what the installer's bootimg.sh expects (the port decides; the
 # exynos-linux layout, from the first port):
 #
@@ -12,6 +12,9 @@
 #                     is the fallback after a failed chained boot
 #   uniLoader-linux   loader that always starts the bring-up Linux (the
 #                     installer's live environment, USB console on TCP 23)
+#   uniLoader-{chain,linux}-<codename>
+#                     the same for each further [[variant]] (its DTB); the
+#                     unsuffixed ones are the default variant's
 #   ramdisk.cpio.gz   the bring-up Linux's initramfs
 #   MANIFEST          versions and source commits (GPL: the sources' URLs)
 #
@@ -27,7 +30,7 @@ eval "$("$R/scripts/config" shell)"
 [ "$CFG_BOOTCHAIN_ENABLED" = true ] || { echo "bootchain.enabled is false in config.toml" >&2; exit 1; }
 [ -x "$R/bootchain/build.sh" ] || { echo "no bootchain/build.sh" >&2; exit 1; }
 "$R/bootchain/build.sh" "$OUT" "$VER"
-tar=$OUT/${CFG_DEVICE_CODENAME}-bootchain_$VER.tar.gz
+tar=$OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz
 [ -s "$tar" ] || { echo "bootchain/build.sh made no $tar" >&2; exit 1; }
 tar -tzf "$tar" | grep -qx 'MANIFEST' || { echo "$tar has no MANIFEST" >&2; exit 1; }
 echo "built $tar"
