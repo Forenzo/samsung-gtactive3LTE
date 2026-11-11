@@ -18,8 +18,8 @@ touching the tablet (reset → Download mode → automatic reflash, or watchdog 
 ## Next three steps (2026-11-11)
 
 1. The multi-variant change (branch `variants`): CI `check.yml` green
-   (LTE DTB, U-Boot with both DTs, the Wi-Fi DTB identical to main's, the
-   modem sketch compiles), then TESTPLAN V1 (the Wi-Fi image unchanged) on
+   (LTE DTB, U-Boot with both DTs, a warning if the Wi-Fi DTB differs
+   from main's, the modem sketch compiles, the installer suite in Fedora), then TESTPLAN V1 (the Wi-Fi image unchanged) on
    the tablet before it merges: merging publishes it to the dev channels.
 2. Rename the repository to `exynos-linux/samsung-gtactive3`
    (docs/RELEASES.md, "Moving the repository"), the owner's step 2 there.

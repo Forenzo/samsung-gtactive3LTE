@@ -9,7 +9,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=device-samsung-gtactive3
 pkgdesc="Samsung Galaxy Tab Active3 (LTE)"
 pkgver=1
-pkgrel=0
+pkgrel=1
 url="https://github.com/exynos-linux/samsung-gtactive3wifi"
 license="MIT"
 arch="aarch64"
@@ -46,6 +46,6 @@ initramfs() {
 }
 
 sha512sums="
-9e77b1f500d06f3b8653d2dae22086b1a11a97d262123b92a29fb40a1406b21d50c82368feb18a00242d3b49540a244301e08999f9eab7cf600cd073954eac86  deviceinfo
+53fb8ce0312ef87202b90ef2623bf8dc529b507c1bea65551a94783300a9b35f149371d85d41da706b86c81ba0f3a53b13b6bdde271b9be2777cdf36665ec14d  deviceinfo
 3076178c711a93d0e8cd75acbe3236de157622078d0042b55516813d14f405a755bf5fc569841255a011ba5731479bb4fe0a6fd483ee587f10502f3b63a9d7b0  kernel-cmdline.conf
 "

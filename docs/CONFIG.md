@@ -73,7 +73,7 @@ One table per variant; without any, `scripts/config` makes one from
 | `name` | string | e.g. `Samsung Galaxy Tab Active3 (LTE)` |
 | `models` | list | its model numbers; each in exactly one variant and in `device.models` |
 | `status` | `bring-up`, `testing`, `stable` | the installer refuses `bring-up` without `--bring-up` |
-| `modem` | bool | the variant has a modem in use (documentation, installer warnings) |
+| `modem` | bool | the variant has a modem (documentation and the site; nothing reads it yet) |
 | `images` | bool | CI builds and publishes its images and channels (`false` until it boots) |
 | `u_boot_match` | string | the model prefix U-Boot's board table matches in S-Boot's `androidboot.bootloader` (checked against `models`) |
 | `[variant.android]` | table | the `[android]` keys below that differ per variant: `product_device`, `firmware_pattern`, `tested_firmware`, `tested_bootloader_rev`, `fus_model` |

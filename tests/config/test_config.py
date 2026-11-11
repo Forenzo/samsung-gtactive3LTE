@@ -126,6 +126,13 @@ class Schema(unittest.TestCase):
         t = TOML.replace("images = true", "images = false")
         self.assertIn("no variant publishes images", run("check", toml=t).stderr)
 
+    def test_single_table_instead_of_array_is_reported(self):
+        t = single_device(TOML) + '\n[variant]\ncodename = "gtactive3wifi"\n'
+        r = run("check", toml=t)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("array of tables", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
     def test_unknown_default_codename_falls_back_to_first(self):
         t = TOML.replace('codename = "gtactive3wifi"\nname = "Samsung Galaxy Tab Active3"\n',
                          'codename = "nosuch"\nname = "Samsung Galaxy Tab Active3"\n', 1)

@@ -336,7 +336,7 @@ Samsung's firmware and your backups stay on your PC: do not share them.
 - The boot chain payload (uniLoader + U-Boot + our bring-up Linux, all GPL,
   no Samsung files) is built by `ci/bootchain/build` and published by
   `.github/workflows/bootchain.yml` to the release
-  `samsung-gtactive3wifi_bootchain` with a signed SHA256SUMS. The installer
+  `samsung-gtactive3_bootchain` (one for both variants) with a signed SHA256SUMS. The installer
   packs it with the owner's stock DTB and header exactly as
   `scripts/mkboot-chain.sh` does (byte-identical before the AVB footer).
 - `--image FILE.raw[.zst]` and `--payload DIR` take local builds.

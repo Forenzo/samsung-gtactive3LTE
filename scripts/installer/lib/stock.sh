@@ -34,6 +34,19 @@ STOCK_DIR() { echo "$STATE_DIR/stock"; }
 # (the variant's android.firmware_pattern)
 fw_version_of() { basename "$1" | grep -oE "$(vcfg android.firmware_pattern)" | head -1; }
 
+# check_fw_model FILE: refuse another variant's firmware package (its boot
+# image would be the other board's: undo would flash it onto this tablet)
+check_fw_model() {
+	local f cn v
+	[ -z "$(fw_version_of "$1")" ] || return 0
+	f=$(basename "$1")
+	for cn in $("$GTA3_REPO/scripts/config" variants | awk '{ print $1 }'); do
+		[ "$cn" = "$VARIANT" ] && continue
+		v=$(printf '%s' "$f" | grep -oE "$("$GTA3_REPO/scripts/config" get "variants.$cn.android.firmware_pattern")" | head -1 || true)
+		[ -z "$v" ] || die "$f is firmware $v for the $("$GTA3_REPO/scripts/config" get "variants.$cn.name"), not for this $(vcfg name)"
+	done
+}
+
 check_fw_matches() {
 	local v=$1 pda
 	pda=$(state_get PDA)
@@ -74,6 +87,7 @@ save_stock_boot() { # SRC(.img|.lz4) [recovery SRC]
 stock_from_ap() { # AP tar
 	local ap=$1 w
 	[ -f "$ap" ] || die "no such file: $ap"
+	check_fw_model "$ap"
 	check_fw_matches "$(fw_version_of "$ap")"
 	info "checking $(basename "$ap") (md5)..."
 	PY_APTAR check "$ap" >> "$LOG_FILE" || die "the AP file is damaged or incomplete (md5): download it again"
@@ -94,6 +108,7 @@ stock_from_ap() { # AP tar
 stock_from_zip() { # decrypted firmware zip
 	local z=$1 w
 	[ -f "$z" ] || die "no such file: $z"
+	check_fw_model "$z"
 	check_fw_matches "$(fw_version_of "$z")"
 	w=$CACHE_DIR/stock-zip
 	mkdir -p "$w"

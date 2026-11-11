@@ -135,6 +135,10 @@ def load_variants(c):
     """
     d, kpkg = c["device"], c["kernel"]["package"]
     raw = c.pop("variant", None)
+    if raw is not None and not isinstance(raw, list):
+        # [variant] instead of [[variant]]: report it, carry on as one variant
+        c["_variant_error"] = "variant must be an array of tables: [[variant]], not [variant]"
+        raw = None
     if not raw:
         raw = [{"codename": d.get("codename", ""), "name": d.get("name", ""),
                 "models": list(d.get("models", [])), "status": d.get("status", ""),
@@ -264,6 +268,8 @@ def check(c):
         e("device.models is empty")
     if not re.fullmatch(r"[a-z0-9]+", d.get("family", "")):
         e("device.family must be lower case letters and digits")
+    if c.get("_variant_error"):
+        e(c["_variant_error"])
     for cn in c.get("_variant_dups", []):
         e(f"variant {cn!r} is defined twice")
     seen_models = {}

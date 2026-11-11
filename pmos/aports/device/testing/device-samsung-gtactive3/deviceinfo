@@ -33,3 +33,6 @@ deviceinfo_rootfs_image_sector_size="4096"
 deviceinfo_flash_method="heimdall-bootimg"
 deviceinfo_flash_heimdall_partition_kernel="BOOT"
 deviceinfo_initfs_compression="gzip"
+# as the Wi-Fi variant: the DTB is not copied into /boot separately
+# (duranium-build mkosi.prepare), the UKI embeds it
+deviceinfo_append_dtb="true"

@@ -101,7 +101,10 @@ patchram under both boards' names.
   T570's BOOT (61865984 bytes, `scripts/installer/lib/bootimg.sh`) and warns
   when the stock boot image differs; the T575's PIT is not read yet.
 - The CP's memory: does U-Boot or the bring-up Linux on a T575 touch
-  0xf0000000-0xfb200000 before a modem driver exists? Both reserve it now.
+  0xf0000000-0xfb200000 before a modem driver exists? Both reserve it now,
+  except U-Boot when S-Boot passed no usable command line (only uniLoader's
+  own DTB): then U-Boot runs on the Wi-Fi DT, without those reservations
+  in the EFI memory map (the kernel's own DTB still has them).
 
 ## Sources
 

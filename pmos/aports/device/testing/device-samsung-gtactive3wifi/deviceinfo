@@ -34,7 +34,7 @@ deviceinfo_rootfs_image_sector_size="4096"
 # Heimdall to BOOT from Download mode. Never set a vbmeta partition here:
 # S-Boot rev F refuses an unsigned vbmeta (flags=2) and stays in Odin mode.
 # There is no rootfs partition either: USERDATA holds Android's data (or,
-# with Duranium, the nested GPT, written by contrib/samsung-gtactive3wifi/
+# with Duranium, the nested GPT, written by contrib/samsung-gtactive3/
 # install-to-userdata.sh of the Duranium build tree).
 deviceinfo_flash_method="heimdall-bootimg"
 deviceinfo_flash_heimdall_partition_kernel="BOOT"

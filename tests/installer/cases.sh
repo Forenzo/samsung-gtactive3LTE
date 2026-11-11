@@ -226,16 +226,21 @@ t_stage1_lte_needs_bring_up() {
 t_stage1_lte_bring_up() {
 	new_tablet android; start_console
 	mock 's["props"].update({"ro.product.model": "SM-T575", "ro.product.device": "gtactive3"})'
-	setup live --yes --bring-up --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	# the fixture's stock boot image (the AP fixture is an SM-T570 one)
+	setup live --yes --bring-up --stock-boot "$RUN/fx/stock/boot.img.lz4" --payload "$PAYLOAD_DIR"
 	rc_is 0
 	st_is VARIANT gtactive3
 	st_is BRING_UP 1
 	boot_is linux
 	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-linux.img" FAKE-UNILOADER-LINUX-GTACTIVE3 ||
 		fail "BOOT does not hold the LTE bring-up loader"
-	setup prepare --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	setup prepare --yes --stock-boot "$RUN/fx/stock/boot.img.lz4" --payload "$PAYLOAD_DIR"
 	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-chain.img" FAKE-UNILOADER-CHAIN-GTACTIVE3 ||
 		fail "prepare packed another variant's chain loader"
+	# the other model's firmware package is refused
+	setup prepare --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 1
+	out_has "for the Samsung Galaxy Tab Active3 (Wi-Fi), not for this"
 	no_violation
 }
 

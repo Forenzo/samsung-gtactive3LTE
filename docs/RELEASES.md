@@ -14,8 +14,8 @@ To install, see [INSTALL.md](INSTALL.md).
 
 | Piece | Where | Who |
 |---|---|---|
-| Kernel (mainline + our Exynos 9810 / SM-T570 drivers) | `pmos/aports/device/testing/linux-postmarketos-exynos9810` = torvalds/linux at `_base` + `gtactive3wifi.patch` | us |
-| Device package (deviceinfo, early boot, UCM, defaults), USB debug layer, two GNOME Shell extensions | `pmos/aports/` | us |
+| Kernel (mainline + our Exynos 9810 / Galaxy Tab Active3 drivers) | `pmos/aports/device/testing/linux-postmarketos-exynos9810` = torvalds/linux at `_base` + `gtactive3.patch`, one DTB subpackage per variant | us |
+| Device packages (`samsung-gtactive3-common`: early boot, UCM, defaults; `device-samsung-<codename>`: deviceinfo, command line), USB debug layer, two GNOME Shell extensions | `pmos/aports/` | us |
 | duranium-build changes (device hook, build scripts) | `pmos/duranium-build/*.patch` on upstream `BASE` | us |
 | Image builder (mkosi config, A/B layout, first boot, sysupdate) | upstream duranium-build `main` | postmarketOS |
 | Every other package, every UI | postmarketOS + Alpine binary repositories | postmarketOS |

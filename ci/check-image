@@ -62,6 +62,10 @@ sec = {}
 for i in range(n):
     name, vsize, _, rsize, roff = struct.unpack_from("<8sIIII", d, pe + 24 + opt + 40 * i)
     sec.setdefault(name.rstrip(b"\0").decode(), d[roff:roff + min(vsize, rsize)])
+# one variant's DTB per image (the kernel's per-variant DTB subpackages):
+# an unconditional .dtb, never .dtbauto sections matched against U-Boot's DT
+assert ".dtb" in sec and ".dtbauto" not in sec, \
+    f"the UKI must carry exactly one unconditional .dtb (sections: {sorted(sec)})"
 
 def names(b):
     while b:
