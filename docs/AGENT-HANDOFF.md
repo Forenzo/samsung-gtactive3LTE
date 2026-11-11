@@ -13,8 +13,12 @@ yourself, autonomously, overnight. Keep going until the mission is met.
   to the new name and the asset downloads (installed tablets keep
   updating); the old Pages URL is 404, the new one serves releases.json.
   References updated here (config.toml project.repo, docs, scripts, aport
-  urls, duranium-build 0044), `ci/check-plumbing` now refuses the old name,
-  and the org site's `site.config.toml` points at the new repo and Pages.
+  urls, duranium-build 0044), `ci/check-plumbing` now refuses the old name.
+  The org site (exynos-linux.github.io) still lists the old repo and Pages
+  URL in `site.config.toml`, so its records for this device fail until
+  that is changed: the change (repo, pages, name, models) was prepared but
+  pushing to the site was not allowed from this session; it waits for the
+  owner.
   Never create a repository named samsung-gtactive3wifi again.
 - The images build after the merge (run 42956428304) failed before
   building: postmarketOS's container registry refused a token for
