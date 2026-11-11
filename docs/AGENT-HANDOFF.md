@@ -5,7 +5,23 @@ If you are the agent reading this after compaction: **you are the lead**. You
 coordinate, integrate, flash the tablet and test every change on the device
 yourself, autonomously, overnight. Keep going until the mission is met.
 
-## State 2026-11-11 10:17 AEDT (session "Multi-variant port", branch `variants`, not merged)
+## State 2026-11-11 (session "Multi-variant port"): `variants` merged into main
+
+- Merged into main on the owner's instruction, before TESTPLAN V1: the
+  next CI build publishes it to the Wi-Fi dev channels, and tablets on a
+  dev channel update to it. Run V1 against that dev image first thing
+  (one `.dtb` in the UKI, the initrd's usb-prep and watchdog, the package
+  list, B1-B5); the previous version stays in the other A/B slot (boot
+  counting). Release channels are unchanged until `scripts/pmos-verify`.
+- Two Fable reviews (branch plumbing; setup.sh and the installer) found and
+  this session fixed: the installer forgot a T575's variant after the first
+  command, update --test on a variant without images, Python 3.11, stale
+  test fixtures, the CI container's tools, a check for one .dtb per UKI,
+  another model's firmware package refused. check.yml runs only on
+  branches and pull requests, so on main the image build is the first
+  compile of the device trees; the installer suite has not run anywhere.
+
+## Earlier the same day 10:17 AEDT (branch `variants`, before the merge)
 
 - The repo becomes the port of the whole Galaxy Tab Active3 family: Wi-Fi
   SM-T570 (`gtactive3wifi`, unchanged for installed tablets) and LTE

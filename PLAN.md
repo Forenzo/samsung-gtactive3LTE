@@ -17,10 +17,11 @@ touching the tablet (reset → Download mode → automatic reflash, or watchdog 
 
 ## Next three steps (2026-11-11)
 
-1. The multi-variant change (branch `variants`): CI `check.yml` green
-   (LTE DTB, U-Boot with both DTs, a warning if the Wi-Fi DTB differs
-   from main's, the modem sketch compiles, the installer suite in Fedora), then TESTPLAN V1 (the Wi-Fi image unchanged) on
-   the tablet before it merges: merging publishes it to the dev channels.
+1. The multi-variant change (merged 2026-11-11): the images build on main
+   compiles it first; then TESTPLAN V1 (the Wi-Fi image unchanged) on the
+   tablet with the dev image it published, and check.yml (LTE DTB, U-Boot
+   with both DTs, the modem sketch, the installer suite) on the next
+   branch or pull request.
 2. Rename the repository to `exynos-linux/samsung-gtactive3`
    (docs/RELEASES.md, "Moving the repository"), the owner's step 2 there.
 3. The open SM-T570 work of 2026-10-25, unchanged: r25 boots counted to 5
@@ -86,7 +87,8 @@ what is verified today.
 - [x] Installer: variant from the model, `--bring-up` for the LTE variant
 - [x] Modem: facts and a driver plan (docs/re/modem.md), remoteproc sketch
   (patches/linux/0154, not enabled)
-- [ ] CI check green; TESTPLAN V1 on the SM-T570; merge
+- [x] Merged into main (2026-11-11, owner)
+- [ ] Images build green; TESTPLAN V1 on the SM-T570 with that dev image
 - [ ] Repository rename (docs/RELEASES.md)
 - [ ] With a T575: stock DT/PIT facts, V2 bring-up Linux, V3 chained boot,
   a local Duranium image, then `images = true`
