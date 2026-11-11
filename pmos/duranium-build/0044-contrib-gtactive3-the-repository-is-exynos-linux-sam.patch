@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 15:08:14 +1100
+Subject: [PATCH] contrib: gtactive3: the repository is
+ exynos-linux/samsung-gtactive3
+
+Renamed from samsung-gtactive3wifi on 2026-11-11 (it is the port of the
+whole Galaxy Tab Active3 family now). The default update address of the
+image hook follows; CI passes the address from config.toml anyway, and
+images with the old one still update through GitHub's redirect.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ contrib/samsung-gtactive3/firmware/APKBUILD | 2 +-
+ contrib/samsung-gtactive3/mkosi.finalize    | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/samsung-gtactive3/firmware/APKBUILD b/contrib/samsung-gtactive3/firmware/APKBUILD
+index 6d04e30..3dbb613 100644
+--- a/contrib/samsung-gtactive3/firmware/APKBUILD
++++ b/contrib/samsung-gtactive3/firmware/APKBUILD
+@@ -16,7 +16,7 @@ pkgname=firmware-samsung-gtactive3wifi
+ pkgver=20251001
+ pkgrel=0
+ pkgdesc="Samsung Galaxy Tab Active3 vendor firmware (local build, not redistributable)"
+-url="https://github.com/exynos-linux/samsung-gtactive3wifi"
++url="https://github.com/exynos-linux/samsung-gtactive3"
+ arch="noarch"
+ license="proprietary"
+ options="!check !strip !tracedeps !archcheck"
+diff --git a/contrib/samsung-gtactive3/mkosi.finalize b/contrib/samsung-gtactive3/mkosi.finalize
+index 980e0aa..c3cd83d 100755
+--- a/contrib/samsung-gtactive3/mkosi.finalize
++++ b/contrib/samsung-gtactive3/mkosi.finalize
+@@ -7,7 +7,7 @@
+ # drivers on top of the postmarketOS packages) as GitHub releases, one
+ # release per update channel:
+ #
+-#   https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/
++#   https://github.com/exynos-linux/samsung-gtactive3/releases/download/
+ #       samsung-gtactive3wifi_<ui>_<release><suffix>/SHA256SUMS(.gpg)
+ #
+ # so sysupdate here must never fetch postmarketOS's generic images (they
+@@ -31,7 +31,7 @@
+ set -eu
+ 
+ HERE=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+-BASE=${GTA3_UPDATE_BASE:-https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/}
++BASE=${GTA3_UPDATE_BASE:-https://github.com/exynos-linux/samsung-gtactive3/releases/download/}
+ case "$PMOS_DEVICE" in
+ samsung-gtactive3wifi) CHFILE=${GTA3_CHANNEL_FILE:-/usr/lib/gtactive3wifi/update-channel} ;;
+ *) CHFILE=${GTA3_CHANNEL_FILE:-/usr/lib/$PMOS_DEVICE/update-channel} ;;
+-- 
+2.53.0
+

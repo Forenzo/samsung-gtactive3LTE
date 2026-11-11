@@ -16,7 +16,7 @@ schema = 1
 template = false
 # owner/name on GitHub. CI uses $GITHUB_REPOSITORY when it is set, so a
 # fork (and this repo until it has moved to exynos-linux) publishes to itself.
-repo = "exynos-linux/samsung-gtactive3wifi"
+repo = "exynos-linux/samsung-gtactive3"
 title = "Galaxy Tab Active3: mainline Linux"
 maintainers = ["@dixonSolutions"]
 community = "https://discord.gg/exynos-linux"

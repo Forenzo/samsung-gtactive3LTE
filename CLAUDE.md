@@ -8,7 +8,7 @@ upstream Linux kernel and our drivers. Two variants of one board
 bring-up, not booted). We maintain the kernel, the
 drivers and the device packages; the UIs and the rest of the OS come
 unchanged from postmarketOS, rebuilt automatically when postmarketOS
-publishes. Repo: exynos-linux/samsung-gtactive3wifi.
+publishes. Repo: exynos-linux/samsung-gtactive3.
 
 Read first: `docs/AGENT-HANDOFF.md` (current state), `docs/VARIANTS.md`
 (what is shared, what is per variant, what never gets renamed),

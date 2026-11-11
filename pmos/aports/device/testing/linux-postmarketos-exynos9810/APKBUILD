@@ -19,7 +19,7 @@ _commit="12b04826f307d1635aa6e1eff7ca55fb62ab4f97"
 # is the tree of _commit in the gtactive3-mainline kernel (scripts/pmos-export)
 _base="f47d223627f80cb7a1eb14c585fe6cb35de5e984"
 pkgdesc="Mainline kernel for Samsung Exynos 9810 devices (WIP)"
-url="https://github.com/exynos-linux/samsung-gtactive3wifi"
+url="https://github.com/exynos-linux/samsung-gtactive3"
 arch="aarch64"
 _carch="arm64"
 _flavor="${pkgname#linux-}"

@@ -6,8 +6,8 @@ maintain the kernel, the drivers and the device packages. postmarketOS
 maintains everything else, and our images follow theirs automatically.
 
 Official record of what is published (versions, files, sizes, sha256,
-signature key): **https://exynos-linux.github.io/samsung-gtactive3wifi/**
-(machine-readable: [`releases.json`](https://exynos-linux.github.io/samsung-gtactive3wifi/releases.json)).
+signature key): **https://exynos-linux.github.io/samsung-gtactive3/**
+(machine-readable: [`releases.json`](https://exynos-linux.github.io/samsung-gtactive3/releases.json)).
 To install, see [INSTALL.md](INSTALL.md).
 
 ## Who maintains what
@@ -97,7 +97,9 @@ Every image carries, from `contrib/samsung-gtactive3/mkosi.finalize`
 (`DEVICE=` picks the variant):
 
 - `/usr/lib/sysupdate.d/*.transfer` sourcing
-  `https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/<channel>/`
+  `https://github.com/exynos-linux/samsung-gtactive3/releases/download/<channel>/`
+  (images built before the rename name the old repository, which GitHub
+  redirects)
   (upstream's transfers with only `Path=` rewritten: usr + verity into the
   inactive A/B slot, the UKI with boot counting `+2-0`, sysexts/confexts
   behind the disabled `dev-tools` / `waydroid` features)
@@ -114,41 +116,27 @@ The 26102201 images (the first two pre-releases) had **no keyring** (gpg
 under keyboxd ignored `--keyring` in CI) and cannot update with sysupdate;
 tablets running them need one `scripts/duranium-update` to a newer image.
 
-## Moving the repository (samsung-gtactive3wifi -> samsung-gtactive3)
+## The repository's names
 
-The repository serves the whole family now and is to be renamed
-`exynos-linux/samsung-gtactive3`. What installed tablets depend on
-(researched 2026-11-11):
+`exynos-linux/samsung-gtactive3` since 2026-11-11 (the family's port);
+before that `exynos-linux/samsung-gtactive3wifi` (from 2026-10-23) and
+`dixonSolutions/gtactive3-mainline`. Images built before a rename fetch
+updates from the old name: GitHub answers its `releases/download/...`,
+`releases/latest/download/...` and API URLs with a 301 to the new one
+(checked after both moves; systemd-pull follows redirects) as long as no
+repository takes an old name again, so **never create a repository named
+`samsung-gtactive3wifi` or `gtactive3-mainline` in those accounts**. Old
+GitHub Pages URLs are not redirected (404): the installer reads
+`update.pages` from config.toml at run time. `ci/check-plumbing` keeps old
+names out of the code.
 
-- their sysupdate transfers fetch from `update.base`
-  (`https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/`)
-  and their image id is `samsung-gtactive3wifi` (channel tags, asset
-  names). The image id, tags and asset names **never** change (they are
-  the Wi-Fi variant's, not the repository's).
-- after a rename GitHub answers the old `releases/download/...`,
-  `releases/latest/download/...` and API URLs with a 301 to the new name
-  (seen on this repository's own move from dixonSolutions/gtactive3-mainline
-  on 2026-10-23), as long as no repository takes the old name again;
-  systemd-pull follows redirects. The old **Pages** URL is not redirected
-  (the installer reads `update.pages` from config.toml at run time).
+The image id, channel tags and asset names (`samsung-gtactive3wifi_*`) are
+the Wi-Fi variant's, not the repository's, and never change.
 
-Order (`.claude/rules/releases.md`: an image with the new address first):
-
-1. Set `update.base = "https://github.com/exynos-linux/samsung-gtactive3/releases/download/"`
-   in config.toml and let CI publish a dev image with it; boot it on the
-   tablet (TESTPLAN B). Its update check fails until step 2 (the new URL
-   does not exist yet), so step 2 follows the same day.
-2. The owner renames the repository (GitHub Settings, or
-   `gh repo rename samsung-gtactive3 -R exynos-linux/samsung-gtactive3wifi`).
-3. Same change set: `project.repo`, `update.base` back to derived,
-   `ci/check-plumbing` (the old name joins the old-home list), the default
-   `BASE` in `contrib/samsung-gtactive3/mkosi.finalize` (pmos/duranium-build),
-   the links in the docs and CLAUDE.md, the org site and the usb-debug
-   tool's device list.
-4. On the tablet: an update from the new address (and one older image
-   updating through the redirect). Then `scripts/pmos-verify` as usual.
-5. Never create a repository named `samsung-gtactive3wifi` again: it would
-   end the redirect for every tablet on an older image.
+The 2026-11-11 rename went ahead of the "image with the new address first"
+order of `.claude/rules/releases.md`, on the owner's word: the redirect was
+checked right after it (old download URL: 301 to the new name, the asset
+200).
 
 ## Versions
 
@@ -250,7 +238,7 @@ from the release assets. `releases.json` (schema 1, consumed by the
 installer; new fields are only ever added):
 
 ```
-{"schema": 1, "generated": "<iso8601>", "repo": "exynos-linux/samsung-gtactive3wifi",
+{"schema": 1, "generated": "<iso8601>", "repo": "exynos-linux/samsung-gtactive3",
  "channels": [{"id": "samsung-gtactive3wifi_phosh_edge-dev", "ui": "phosh",
    "flavour": "release" | "dev", "title": "Phosh", "description": "...",
    "prerelease": bool, "verified": bool, "latest": "<version>",

@@ -69,7 +69,7 @@ Step by step, requirements and the way back to Android:
 ## Downloads and updates
 
 Images (Phosh, GNOME) are in the
-[releases](https://github.com/exynos-linux/samsung-gtactive3wifi/releases), rebuilt
+[releases](https://github.com/exynos-linux/samsung-gtactive3/releases), rebuilt
 automatically on top of each postmarketOS publish. Today only the development
 channels have builds; the release channels get one once an export passes on
 the device (`scripts/pmos-verify`). Installed tablets update

@@ -5,6 +5,24 @@ If you are the agent reading this after compaction: **you are the lead**. You
 coordinate, integrate, flash the tablet and test every change on the device
 yourself, autonomously, overnight. Keep going until the mission is met.
 
+## State 2026-11-11 (session "Multi-variant port"): repository renamed
+
+- The repository is `exynos-linux/samsung-gtactive3` (renamed from
+  samsung-gtactive3wifi on the owner's word; description and homepage
+  updated). Checked right after: the old release download URL answers 301
+  to the new name and the asset downloads (installed tablets keep
+  updating); the old Pages URL is 404, the new one serves releases.json.
+  References updated here (config.toml project.repo, docs, scripts, aport
+  urls, duranium-build 0044), `ci/check-plumbing` now refuses the old name,
+  and the org site's `site.config.toml` points at the new repo and Pages.
+  Never create a repository named samsung-gtactive3wifi again.
+- The images build after the merge (run 42956428304) failed before
+  building: postmarketOS's container registry refused a token for
+  docker-postmarketos:edge, as in the run before the merge. Nothing new
+  was published; the tablets stay on 26102403.
+- The local folder is still named samsung-gtactive3wifi (only the remote
+  moved; `git remote` points at the new URL).
+
 ## State 2026-11-11 (session "Multi-variant port"): `variants` merged into main
 
 - Merged into main on the owner's instruction, before TESTPLAN V1: the
