@@ -2,6 +2,7 @@
 #
 #  - offline: config.toml (scripts/config check + tests/config), the
 #    firmware tools' tests, shellcheck of the plumbing
+#  - installer: tests/installer in a Fedora container (its tools)
 #  - kernel: torvalds/linux at the kernel aport's _base + its patch, with the
 #    aport's config: every variant's DTB, the Wi-Fi DTB compared with the
 #    one main builds (sorted, so only real differences show), and the
@@ -33,6 +34,24 @@ jobs:
           shellcheck -x ci/state ci/channels ci/check-image ci/bootchain/build ci/bootchain/publish \
             bootchain/build.sh scripts/pmos-export
           shellcheck -x -P scripts/installer -S error scripts/installer/setup scripts/installer/lib/*.sh
+
+  # the installer's offline suite (fake tablet, fake console, local HTTP
+  # server): Fedora's android-tools has the mkbootimg, avbtool, lpmake and
+  # simg2img the fixtures need (Ubuntu packages no avbtool/lpmake)
+  installer:
+    runs-on: ubuntu-24.04
+    container: fedora:43
+    timeout-minutes: 30
+    steps:
+      - name: Tools
+        run: |
+          dnf -y -q install git android-tools dosfstools util-linux mtools zstd lz4 gnupg2 \
+            python3 e2fsprogs which findutils tar gzip
+      - uses: actions/checkout@v5
+      - name: tests/installer
+        run: |
+          git config --global --add safe.directory "$PWD"
+          bash tests/installer/run.sh
 
   kernel:
     runs-on: ubuntu-24.04

@@ -153,7 +153,7 @@ stock_acquire() {
 	else
 		box "The installer needs your tablet's stock firmware" \
 			"Samsung's files cannot be shipped with this project. Get the" \
-			"firmware matching your tablet ($(state_get PDA unknown)) for SM-T570:" \
+			"firmware matching your tablet ($(state_get PDA unknown)) for $(vcfg android.fus_model):" \
 			"  SamFW / Frija / Bifrost, or samloader with your serial number," \
 			"then run:  ./setup.sh --stock-ap /path/to/AP_....tar.md5" \
 			"Or let the installer fetch it: ./setup.sh --download-stock" \

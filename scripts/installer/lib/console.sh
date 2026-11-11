@@ -60,7 +60,7 @@ read_partitions() {
 		PART_DEV[$name]=/dev/$n
 		PART_BYTES[$name]=$(( ${sz:-0} * 512 ))
 	done
-	[ -n "${PART_DEV[userdata]:-}" ] || die "the tablet reports no userdata partition; is this an SM-T570?"
+	[ -n "${PART_DEV[userdata]:-}" ] || die "the tablet reports no userdata partition; is this a Galaxy Tab Active3?"
 	dbg "partitions: $(for k in "${!PART_DEV[@]}"; do printf '%s=%s ' "$k" "${PART_DEV[$k]}"; done)"
 }
 

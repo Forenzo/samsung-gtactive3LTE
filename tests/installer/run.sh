@@ -28,7 +28,16 @@ cleanup() {
 trap cleanup EXIT
 
 echo "building fixtures in $RUN ..."
-build_fixtures > "$RUN/fixtures.log" 2>&1 || { cat "$RUN/fixtures.log"; exit 2; }
+if ! build_fixtures > "$RUN/fixtures.log" 2>&1; then
+	cat "$RUN/fixtures.log"
+	# a PC without the tools (a container): GTA3_TEST_ALLOW_SKIP=1 reports
+	# the suite as skipped instead of failed; the laptop gate never sets it
+	if [ "${GTA3_TEST_ALLOW_SKIP:-}" = 1 ] && grep -q "missing on this PC" "$RUN/fixtures.log"; then
+		echo "SKIPPED: the installer tests did not run"
+		exit 0
+	fi
+	exit 2
+fi
 
 pass=0 failed=()
 for t in $(declare -F | awk '{ print $3 }' | grep '^t_'); do

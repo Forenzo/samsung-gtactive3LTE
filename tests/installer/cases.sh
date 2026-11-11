@@ -194,11 +194,49 @@ t_stage1_several_devices_need_serial() {
 
 t_stage1_wrong_model() {
 	new_tablet android; start_console
+	mock 's["props"]["ro.product.model"] = "SM-T577U"; s["props"]["ro.product.device"] = "gtactive3"'
+	setup live --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 1
+	out_has "this is not a supported Galaxy Tab Active3"
+	boot_is stock
+}
+
+t_stage1_model_device_mismatch() {
+	new_tablet android; start_console
 	mock 's["props"]["ro.product.model"] = "SM-T575"'
 	setup live --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
 	rc_is 1
-	out_has "only the Wi-Fi model SM-T570"
+	out_has "expected 'gtactive3'"
 	boot_is stock
+}
+
+# the LTE variant is in bring-up (config.toml): refused without --bring-up
+t_stage1_lte_needs_bring_up() {
+	new_tablet android; start_console
+	mock 's["props"].update({"ro.product.model": "SM-T575", "ro.product.device": "gtactive3"})'
+	setup live --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 1
+	out_has "only with --bring-up"
+	boot_is stock
+	no_violation
+}
+
+# with --bring-up: the LTE loaders go into BOOT, the variant is recorded,
+# and later commands (no Android check) keep using it
+t_stage1_lte_bring_up() {
+	new_tablet android; start_console
+	mock 's["props"].update({"ro.product.model": "SM-T575", "ro.product.device": "gtactive3"})'
+	setup live --yes --bring-up --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 0
+	st_is VARIANT gtactive3
+	st_is BRING_UP 1
+	boot_is linux
+	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-linux.img" FAKE-UNILOADER-LINUX-GTACTIVE3 ||
+		fail "BOOT does not hold the LTE bring-up loader"
+	setup prepare --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-chain.img" FAKE-UNILOADER-CHAIN-GTACTIVE3 ||
+		fail "prepare packed another variant's chain loader"
+	no_violation
 }
 
 t_stage1_untested_bootloader_stops() {

@@ -67,8 +67,8 @@ brcmfmac names its files after the board type, which defaults to the root
 compatible. The LTE DTS sets `brcm,board-type = "samsung,gtactive3wifi"`,
 so both variants use the same names and the installer's import serves both.
 Bluetooth (btbcm) has no such override: on the LTE variant it asks for
-`brcm/BCM.samsung,gtactive3.hcd`, which the import does not provide yet
-(TODO before Bluetooth on a T575).
+`brcm/BCM.samsung,gtactive3.hcd`, so `tools/fw_index.py` stages the
+patchram under both boards' names.
 
 ## The LTE variant: the way to its first boot
 
@@ -97,6 +97,9 @@ Bluetooth (btbcm) has no such override: on the LTE variant it asks for
   hardware (`gtactive3`).
 - Which board revisions ship in which countries (only two units known: a
   T570 rev 4 and a T575 rev 5).
+- BOOT's size: the installer builds the boot images' AVB footer for the
+  T570's BOOT (61865984 bytes, `scripts/installer/lib/bootimg.sh`) and warns
+  when the stock boot image differs; the T575's PIT is not read yet.
 - The CP's memory: does U-Boot or the bring-up Linux on a T575 touch
   0xf0000000-0xfb200000 before a modem driver exists? Both reserve it now.
 

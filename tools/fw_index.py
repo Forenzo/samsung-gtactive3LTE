@@ -73,7 +73,10 @@ RULES = [
      "libbt-vendor picks by /data/vendor/conn/.cid.info (strings in vendor/lib64/libbt-vendor.so: "
      "'semco_sem_e43_cs51', '_semco_sem.hcd'); UART /dev/ttySAC1 (vendor/etc/init/init.exynos9810.rc:798)",
      BT_NOTE + ". Staged as default because the Wi-Fi SEMCO module tag is semco_sem_e43_cs5x; VERIFY.",
-     ["brcm/BCM.samsung,gtactive3wifi.hcd", "brcm/BCM4375B1.samsung,gtactive3wifi.hcd"]),
+     # the LTE variant's root compatible is samsung,gtactive3 and btbcm has
+     # no board-type override (docs/VARIANTS.md, "Firmware names")
+     ["brcm/BCM.samsung,gtactive3wifi.hcd", "brcm/BCM4375B1.samsung,gtactive3wifi.hcd",
+      "brcm/BCM.samsung,gtactive3.hcd", "brcm/BCM4375B1.samsung,gtactive3.hcd"]),
     (r"vendor/firmware/bcm4375B1_semco\.hcd$", "Bluetooth BCM4375B1 patchram (SEMCO, older cid)",
      "libbt-vendor '_semco.hcd'", "alternative", [SG + "bt/bcm4375B1_semco.hcd"]),
     (r"vendor/firmware/bcm4375B1_murata\.hcd$", "Bluetooth BCM4375B1 patchram (Murata module)",

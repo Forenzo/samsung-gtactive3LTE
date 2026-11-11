@@ -130,6 +130,11 @@ done
 export YES YES_WIPE DRY_RUN VERBOSE
 
 state_init
+# the tablet's variant as recorded by the Android check (android_inspect),
+# for every command that does not run it again; a variant in bring-up also
+# needs --bring-up, recorded once
+set_variant "$(state_get VARIANT "$VARIANT")"
+[ "$(state_get VARIANT)" = "" ] || bring_up_check
 _log "gtactive3-setup $CMD ${ARGS[*]:-} (repo $(git -C "$GTA3_REPO" describe --always --dirty 2>/dev/null || echo ?))"
 say "${C_B}Galaxy Tab Active3: postmarketOS Duranium installer${C_0}"
 say "${C_DIM}Log: $LOG_FILE${C_0}"

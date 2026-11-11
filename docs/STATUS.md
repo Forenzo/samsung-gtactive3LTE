@@ -79,7 +79,7 @@ any of this; every row is "?" or "—" until a T575 owner tests it
 | **Image** | `device-samsung-gtactive3` + `samsung-gtactive3-common`, `images = false` | — | ? | a local `DEVICE=samsung-gtactive3` image, then the dev channels |
 | **Modem** Shannon CP (ss360ap) | remoteproc sketch `samsung_shannon_cp` (patches/linux/0154): maps the CP memory, parses the firmware TOC; cannot start the CP; not enabled | — | — | docs/re/modem.md P1-P3; the owner's decision on reading nv_data.bin |
 | **Speaker amp** TI TAS2562 (EUR hw_rev >= 5, both variants) | upstream `tas2562` codec; not wired into `gtactive3_rt5665.c` | — | — | supplies, shutdown GPIO and UAIF from the stock DT; the amp chosen by board revision |
-| **Bluetooth firmware** | btbcm asks for `BCM.samsung,gtactive3.hcd` (Wi-Fi keeps the T570 names via `brcm,board-type`) | — | — | the firmware import provides that name |
+| **Bluetooth firmware** | btbcm asks for `BCM.samsung,gtactive3.hcd` (Wi-Fi keeps the T570 names via `brcm,board-type`); `tools/fw_index.py` stages the patchram under both names | — | — | test on a T575 |
 
 ## CPU DVFS and idle (2026-10-22, measured)
 
