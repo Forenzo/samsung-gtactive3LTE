@@ -39,6 +39,13 @@ while read -r ui ch tag variant; do
 		[ "$v" -gt "$max" ] && max=$v
 	done
 done < <(sh ci/channels)
+# versions only grow: also above what went out under a legacy image name
+while read -r _ _ ltag _ _; do
+	for v in $(gh release view "$ltag" -R "$REPO" --json assets -q '.assets[].name' 2>/dev/null |
+		sed -n 's/.*_\([0-9]\{8\}\)\.efi$/\1/p'); do
+		[ "$v" -gt "$max" ] && max=$v
+	done
+done < <(scripts/config legacy-channels)
 
 if upstream=$(curl -fsSL --retry 3 https://duranium.nura.eco/images/mkosi.version | tr -dc 0-9) &&
 	[ ${#upstream} = 8 ]; then
@@ -51,7 +58,7 @@ else
 	warn "duranium.nura.eco unreachable: assuming postmarketOS base $upstream"
 fi
 ours=$(git rev-parse HEAD:pmos)
-for f in config.toml scripts/config ci/prepare ci/channels ci/publish ci/check-image .github/workflows/images.yml; do
+for f in config.toml scripts/config ci/prepare ci/channels ci/publish ci/publish-legacy ci/check-image .github/workflows/images.yml; do
 	ours="$ours-$(git rev-parse "HEAD:$f")"
 done
 fingerprint="pmos-$upstream/ours-$(echo "$ours" | sha256sum | cut -c1-16)"

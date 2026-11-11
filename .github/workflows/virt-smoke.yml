@@ -50,7 +50,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        tag: [samsung-gtactive3wifi_phosh_edge-dev, samsung-gtactive3wifi_gnome_edge-dev]
+        tag: [samsung-gtactive3-wifi_phosh_edge-dev, samsung-gtactive3-wifi_gnome_edge-dev]
     steps:
       - uses: actions/checkout@v4
       - name: Host tools

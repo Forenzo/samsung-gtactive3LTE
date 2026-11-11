@@ -5,6 +5,19 @@ If you are the agent reading this after compaction: **you are the lead**. You
 coordinate, integrate, flash the tablet and test every change on the device
 yourself, autonomously, overnight. Keep going until the mission is met.
 
+## State 2026-11-11 (session "Multi-variant port"): image names
+
+- Images have their own names now (`image_id`): `samsung-gtactive3-wifi_*`
+  and `samsung-gtactive3-lte_*` (Wi-Fi was `samsung-gtactive3wifi_*`, the
+  device id). Legacy routing, owner's choice, to delete later
+  (`legacy_image_ids`): CI mirrors each Wi-Fi build under the old tags
+  (`ci/publish-legacy`), the images recognise old-named UKIs/extensions
+  (duranium-build 0045, tested on postmarketOS's transfers in a fake image
+  root), and the tablet scripts match both (common package r50). Not yet
+  run in CI (the images build fails at postmarketOS's registry) nor on a
+  tablet: TESTPLAN V4. The org site now points at the renamed repo
+  (pushed with the owner's consent).
+
 ## State 2026-11-11 (session "Multi-variant port"): repository renamed
 
 - The repository is `exynos-linux/samsung-gtactive3` (renamed from

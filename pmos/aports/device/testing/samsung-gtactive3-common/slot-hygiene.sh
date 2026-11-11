@@ -49,7 +49,8 @@ for f in "$esp"/*.efi; do
 		continue
 	fi
 	case ${f##*/} in
-	samsung-gtactive3wifi_"$ui"_edge_*) keep="$keep $u $v" ;;
+	# the old and the new image name (samsung-gtactive3wifi, -gtactive3-wifi)
+	samsung-gtactive3*_"$ui"_edge_*) keep="$keep $u $v" ;;
 	esac
 done
 

@@ -122,6 +122,13 @@ for t in "$M"/lib/sysupdate.d/*.transfer; do
 done
 [ "$n" -ge 3 ] || fail "only $n sysupdate transfers"
 grep -qx "UPDATE_CHANNEL=$TAG" "$M${CHANNEL_FILE#/usr}" || fail "update-channel is not $TAG"
+# the image is named like its channel (IMAGE_ID: what sysupdate's %M is)
+grep -qx "IMAGE_ID=${PREFIX%%_*}" "$M/lib/os-release" || fail "os-release IMAGE_ID is not ${PREFIX%%_*}"
+# files installed under each legacy name still count (the UKI's target)
+for old in $("$CONFIG" get "variants.$VARIANT.legacy_image_ids"); do
+	grep -q "^MatchPattern=.*${old}_%W_%w_@v" "$M"/lib/sysupdate.d/*uki*.transfer ||
+		fail "the UKI transfer does not recognise files named $old"
+done
 grep -q '^Verify=no' "$M"/lib/sysupdate.d/*.transfer && fail "a transfer has Verify=no"
 
 pkgs=$M/share/duranium/base.packages

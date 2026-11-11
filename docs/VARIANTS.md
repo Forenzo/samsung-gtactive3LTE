@@ -7,7 +7,7 @@ values; this file says what they are based on and what is still open.
 
 | Variant (codename) | Models | Device id, images, channels | State |
 |---|---|---|---|
-| Wi-Fi (`gtactive3wifi`) | SM-T570 | `samsung-gtactive3wifi`, `samsung-gtactive3wifi_<ui>_edge[-dev]` | testing: the port's tablets run it ([STATUS.md](STATUS.md)) |
+| Wi-Fi (`gtactive3wifi`) | SM-T570 | `samsung-gtactive3wifi`, images `samsung-gtactive3-wifi_<ui>_edge[-dev]` (legacy name `samsung-gtactive3wifi_*` routed until no tablet needs it) | testing: the port's tablets run it ([STATUS.md](STATUS.md)) |
 | LTE (`gtactive3`) | SM-T575, SM-T575N | `samsung-gtactive3`, no images yet (`images = false`) | bring-up: not booted; DTS, U-Boot board, device package and loaders exist, untested |
 | LTE, US (`gtactive3`) | SM-T577U, SM-T577 | (would be the LTE variant) | not accepted: no confirmed bootloader unlock (below) |
 
@@ -54,9 +54,13 @@ stock DTBO).
   (`gtactive3_chain_defconfig`), the boot-chain release
   (`samsung-gtactive3_bootchain`), the installer (`gtactive3-setup`), the
   build tree (`contrib/samsung-gtactive3/`, `DEVICE=`).
-- **Never renamed** (baked into installed SM-T570s): the Wi-Fi codename and
-  device id, its channel tags and asset names (`samsung-gtactive3wifi_*`),
-  its channel file `/usr/lib/gtactive3wifi/update-channel`, the signing key.
+- **Image names** are the variants' own (`image_id`):
+  `samsung-gtactive3-wifi_*` and `samsung-gtactive3-lte_*`. The Wi-Fi
+  images were `samsung-gtactive3wifi_*` until 26102403; installed tablets
+  move over through the legacy routing (docs/RELEASES.md, "Image names").
+- **Never renamed** (in installed SM-T570s): the Wi-Fi codename and device
+  id (package names), its channel file `/usr/lib/gtactive3wifi/update-channel`,
+  the signing key.
   File names inside the common package keep their `gtactive3wifi` names for
   now: renaming them changes what installed tablets run and needs its own
   on-device test.

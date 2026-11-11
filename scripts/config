@@ -6,6 +6,8 @@
     scripts/config json           everything, derived values filled in
     scripts/config channels       "ui flavour tag variant" lines, one per update channel
     scripts/config matrix         the image job matrix for GitHub Actions (JSON)
+    scripts/config legacy-channels "ui flavour legacy-tag variant tag": where each build is
+                                  also published under an earlier image name
     scripts/config variants       "codename id status images models..." lines, one per variant
     scripts/config variant-of M   the variant (codename) of model number M, e.g. SM-T575
     scripts/config check          validate; non-zero exit on an error
@@ -161,6 +163,12 @@ def load_variants(c):
         v.setdefault("u_boot_match", "")
         v["android"] = {**family_android, **v.get("android", {})}
         v["id"] = f"{d.get('vendor', '')}-{cn}"
+        # the images' name (IMAGE_ID: release tags, asset and UKI names)
+        v["image_id"] = v.get("image_id") or v["id"]
+        # earlier image names: CI keeps publishing under them and the images
+        # still recognise files installed under them; delete when no tablet
+        # runs such an image any more
+        v.setdefault("legacy_image_ids", [])
         v["package"] = f"device-{v['id']}"
         v["aport"] = f"pmos/aports/device/testing/device-{v['id']}"
         v["dtb"] = v.get("dtb") or f"exynos/{d.get('soc', '')}-{cn}.dtb"
@@ -202,9 +210,10 @@ def get(c, key):
     return v
 
 
-def channels(c):
+def channels(c, legacy=False):
     """(ui, flavour, tag, variant): the sysupdate source directory %M_%W_%w
-    (IMAGE_ID = the variant's device id), + -dev. Only variants with images."""
+    (IMAGE_ID = the variant's image_id), + -dev. Only variants with images.
+    legacy: (ui, flavour, legacy tag, variant, tag) for every legacy name."""
     out = []
     for cn, v in c["variants"].items():
         if not v["images"]:
@@ -213,8 +222,12 @@ def channels(c):
             for fl in FLAVOURS:
                 if not c["channels"].get(fl):
                     continue
-                tag = f"{v['id']}_{ui}_{c['images']['release']}" + ("-dev" if fl == "dev" else "")
-                out.append((ui, fl, tag, cn))
+                sfx = f"_{ui}_{c['images']['release']}" + ("-dev" if fl == "dev" else "")
+                tag = v["image_id"] + sfx
+                if legacy:
+                    out += [(ui, fl, old + sfx, cn, tag) for old in v["legacy_image_ids"]]
+                else:
+                    out.append((ui, fl, tag, cn))
     return out
 
 
@@ -302,8 +315,16 @@ def check(c):
             t = v["android"].get("tested_firmware", "")
             if t and not pat.fullmatch(t):
                 e(f"variant {cn}: tested_firmware {t} does not match firmware_pattern")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", v["image_id"]):
+            e(f"variant {cn}: image_id must be lower case letters, digits, '.' and '-'")
+        for old in v["legacy_image_ids"]:
+            if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", str(old)) or old == v["image_id"]:
+                e(f"variant {cn}: bad legacy_image_ids entry {old!r}")
         if v["status"] == "bring-up" and v["images"] and c["channels"].get("release"):
             w(f"variant {cn} is in bring-up but publishes images (images = true)")
+    names = [n for v in c["variants"].values() for n in [v["image_id"], *v["legacy_image_ids"]]]
+    for n in sorted({n for n in names if names.count(n) > 1}):
+        e(f"image name {n} is used by more than one variant")
     if not any(v["images"] for v in c["variants"].values()):
         e("no variant publishes images (variant.images)")
     if not re.fullmatch(r"edge|v[0-9]{2}\.[0-9]{2}", im["release"]):
@@ -424,8 +445,13 @@ def main():
             print(ui, fl, tag, cn)
     elif cmd == "matrix":
         print(json.dumps({"include": [
-            {"ui": ui, "channel": fl, "tag": tag, "variant": cn, "device": c["variants"][cn]["id"]}
+            {"ui": ui, "channel": fl, "tag": tag, "variant": cn, "device": c["variants"][cn]["id"],
+             "image_id": c["variants"][cn]["image_id"],
+             "legacy": ",".join(c["variants"][cn]["legacy_image_ids"])}
             for ui, fl, tag, cn in channels(c)]}))
+    elif cmd == "legacy-channels":
+        for row in channels(c, legacy=True):
+            print(*row)
     elif cmd == "variants":
         for cn, v in c["variants"].items():
             print(cn, v["id"], v["status"], "true" if v["images"] else "false", *v["models"])

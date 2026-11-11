@@ -46,7 +46,7 @@ Options:
   --download-stock      download the stock firmware from Samsung (tools/fusdl.py)
   --firmware-dir DIR    vendor firmware already extracted (lib/firmware layout)
   --stock-recovery      restore-android: also flash the stock recovery image
-  --channel ID          image channel (e.g. samsung-gtactive3wifi_phosh_edge)
+  --channel ID          image channel (e.g. samsung-gtactive3-wifi_phosh_edge)
   --version V           image version (default: newest)
   --image FILE          a local disk image (.raw / .raw.zst) instead of a download
   --payload DIR|TAR     a local boot-chain payload instead of the published one

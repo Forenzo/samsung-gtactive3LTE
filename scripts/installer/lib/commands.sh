@@ -290,8 +290,8 @@ for d in /etc/sysupdate.d /usr/lib/sysupdate.d; do [ -d $d ] && find $d -type f 
 update_test() {
 	local dir=${1:-$GTA3_REPO/build/wt/duranium/mkosi.output} ver=${2:-} ui name uki osv booted l before after stage f dev
 	step "Install a test build as an A/B update"
-	# the tablet's variant (setup restores it from the state): its IMAGE_ID
-	dev=$(vcfg id)
+	# the tablet's variant (setup restores it from the state): its image name
+	dev=$(vcfg image_id)
 	# the build's UI: UI=, else the image directory given, else the booted
 	# one (a test build may switch UI, e.g. Phosh on a tablet running GNOME)
 	case ${dir%/} in
@@ -326,7 +326,7 @@ update_test() {
 	# with stat, which would see a symbolic link's size
 	stage=$(mktemp -d "$dir/.update-test.XXXXXX")
 	for f in "$dir/${name}_$ver".*; do ln "$f" "$stage/" 2>/dev/null || cp "$f" "$stage/"; done
-	act "A/B update to $ver" env OUT="$stage" UI="$ui" DEVICE="$dev" EXTENSIONS="" \
+	act "A/B update to $ver" env OUT="$stage" UI="$ui" IMAGE="$dev" EXTENSIONS="" \
 		"${GTA3_DURANIUM_UPDATE:-$GTA3_REPO/scripts/duranium-update}" "$ver" || { rm -rf "$stage"; die "the update failed; the booted version is unchanged"; }
 	rm -rf "$stage"
 	after=$(dur_sh remote "$REMOTE_CFG") || die "cannot read the tablet's update configuration"

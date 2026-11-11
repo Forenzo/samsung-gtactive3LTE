@@ -39,6 +39,14 @@ bring-up Linux (`uniLoader-linux-gtactive3` in BOOT) reaches the USB
 console; `/proc/iomem` shows 0xf0000000-0xfb1fffff reserved; dmesg has no
 errors from the modem regions. Way back: Download mode + stock BOOT.
 
+**V4. Legacy image name** (the first Wi-Fi build after the image rename):
+a tablet on 26102403 (`samsung-gtactive3wifi`) runs `updatectl update`: it
+takes the build from the old tag, boots it with boot counting, and then
+`/usr/lib/os-release` says `IMAGE_ID=samsung-gtactive3-wifi`, `updatectl
+list` shows the old-named UKI as installed (not as a stranger) and the
+next update comes from `samsung-gtactive3-wifi_<ui>_edge-dev`; the old UKI
+is vacuumed after that. The boot menu's default is the new image.
+
 **V3. LTE chained boot**: U-Boot's log names board `gtactive3` and
 `exynos9810-gtactive3.dtb` (S-Boot's `androidboot.bootloader=T575...`).
 

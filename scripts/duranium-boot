@@ -13,8 +13,9 @@
 # Needs the tablet in the bring-up Linux (console on TCP 23) at the start.
 set -euo pipefail
 P=$(cd "$(dirname "$0")/.." && pwd)
-IMGDIR=$P/build/wt/duranium/mkosi.output/samsung-gtactive3wifi_gnome_edge
-RAW=$(ls -t "$IMGDIR"/samsung-gtactive3wifi_gnome_edge_*.raw | grep -vE "usr|esp|ext" | head -1)
+IMG=$("$P/scripts/config" get "variants.$("$P/scripts/config" get device.codename).image_id")
+IMGDIR=$P/build/wt/duranium/mkosi.output/${IMG}_gnome_edge
+RAW=$(ls -t "$IMGDIR"/"${IMG}"_gnome_edge_*.raw | grep -vE "usr|esp|ext" | head -1)
 CHAIN=$P/build/images/boot-chain.img
 GOOD=$P/build/images/boot-good.img
 t() { flock "$P/build/tab.lock" "$P/scripts/tab" "$@"; }

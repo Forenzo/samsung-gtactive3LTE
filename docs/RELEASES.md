@@ -76,10 +76,11 @@ images. Today only the Wi-Fi variant publishes:
 
 | Channel (release tag) | For |
 |---|---|
-| `samsung-gtactive3wifi_phosh_edge` | everyone, Phosh |
-| `samsung-gtactive3wifi_gnome_edge` | everyone, GNOME |
-| `samsung-gtactive3wifi_phosh_edge-dev` | development tablets: + USB debug layer |
-| `samsung-gtactive3wifi_gnome_edge-dev` | development tablets: + USB debug layer |
+| `samsung-gtactive3-wifi_phosh_edge` | everyone, Phosh |
+| `samsung-gtactive3-wifi_gnome_edge` | everyone, GNOME |
+| `samsung-gtactive3-wifi_phosh_edge-dev` | development tablets: + USB debug layer |
+| `samsung-gtactive3-wifi_gnome_edge-dev` | development tablets: + USB debug layer |
+| `samsung-gtactive3wifi_*` (the four above under the old name) | LEGACY: tablets on images up to 26102403 (below, "Image names") |
 
 The **dev** images add `duranium-usb-debug` + `-adb` (USB network with a
 root shell, ssh, adb and the bring-up register console, **no password**).
@@ -130,8 +131,30 @@ GitHub Pages URLs are not redirected (404): the installer reads
 `update.pages` from config.toml at run time. `ci/check-plumbing` keeps old
 names out of the code.
 
-The image id, channel tags and asset names (`samsung-gtactive3wifi_*`) are
-the Wi-Fi variant's, not the repository's, and never change.
+## Image names
+
+Each variant's images have their own name (`image_id` in config.toml:
+IMAGE_ID in os-release, which is sysupdate's `%M`: the release tag, asset,
+UKI and extension names): `samsung-gtactive3-wifi` and
+`samsung-gtactive3-lte`. Until 26102403 the Wi-Fi images were named after
+the device id, `samsung-gtactive3wifi`, and tablets running those only
+accept updates of that name from that tag. The **legacy routing**
+(`legacy_image_ids = ["samsung-gtactive3wifi"]`) bridges them:
+
+- CI publishes every Wi-Fi build twice: to the new channel and, hard-linked
+  under the old name, to the old tag (`ci/publish-legacy`, signed like any
+  other). An old tablet updates from there as usual; the image it gets
+  names itself `samsung-gtactive3-wifi`, so after that boot sysupdate
+  follows the new channel.
+- The new images list the old name as a further `MatchPattern` of every
+  sysupdate target (duranium-build 0045), so the UKI and extensions the
+  bridge update installed under the old name stay installed versions: the
+  booted one is protected, older ones are vacuumed. The tablet scripts
+  (boot default, slot hygiene, `tablet-phosh`) match both names.
+- Delete it once no tablet runs an old-named image: remove
+  `legacy_image_ids` (that ends the mirror and the extra patterns), then
+  the old tags' releases. ci/check-image checks both halves while it
+  exists.
 
 The 2026-11-11 rename went ahead of the "image with the new address first"
 order of `.claude/rules/releases.md`, on the owner's word: the redirect was
@@ -168,7 +191,7 @@ in duranium-build before `build-image.sh`), never renamed afterwards:
 sysupdate protects the booted version by the `IMAGE_VERSION` in its
 os-release (`ProtectVersion=%A`), which has to match the partition labels.
 The update lands like a sysupdate one (partitions `duranium_<V>_usr` /
-`_vty`, UKI `samsung-gtactive3wifi_<ui>_edge_<V>+2-0.efi`), so on the
+`_vty`, UKI `samsung-gtactive3-wifi_<ui>_edge_<V>+2-0.efi`), so on the
 tablet:
 
 ```
@@ -239,7 +262,7 @@ installer; new fields are only ever added):
 
 ```
 {"schema": 1, "generated": "<iso8601>", "repo": "exynos-linux/samsung-gtactive3",
- "channels": [{"id": "samsung-gtactive3wifi_phosh_edge-dev", "ui": "phosh",
+ "channels": [{"id": "samsung-gtactive3-wifi_phosh_edge-dev", "ui": "phosh",
    "flavour": "release" | "dev", "title": "Phosh", "description": "...",
    "prerelease": bool, "verified": bool, "latest": "<version>",
    "versions": [{"version": "26102214", "date": "<iso8601>",

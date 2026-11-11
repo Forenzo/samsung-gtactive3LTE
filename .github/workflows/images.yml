@@ -238,8 +238,11 @@ jobs:
           # where the image records its channel (the Wi-Fi variant's historic path)
           GTA3_CHANNEL_FILE=$(scripts/config get "variants.${{ matrix.variant }}.channel_file")
           echo "update base: $GTA3_UPDATE_BASE, channel file: $GTA3_CHANNEL_FILE"
+          # the image's name and its earlier names (config.toml image_id,
+          # legacy_image_ids)
           GTA3_ROOT=$PWD/ci-root PMAPORTS=$PWD/work/pmaports PKGS=$PWD/pkgs SKIP_APKS=1 FRESH=1 \
             GTA3_UPDATE_BASE=$GTA3_UPDATE_BASE GTA3_CHANNEL_FILE=$GTA3_CHANNEL_FILE \
+            GTA3_IMAGE_ID=${{ matrix.image_id }} GTA3_LEGACY_IMAGE_IDS=${{ matrix.legacy }} \
             sh work/duranium-build/contrib/samsung-gtactive3/build-image.sh --profile=compressed
           ls -l work/duranium-build/mkosi.output/*/
       - name: Check the image (keyring, update channel, debug layer)
@@ -287,3 +290,11 @@ jobs:
           EOF
           )"
           ci/publish "$tag" "work/duranium-build/mkosi.output/$base" "$VERSION" $pre
+          # LEGACY routing (config.toml legacy_image_ids; goes away with
+          # them): the same build under each earlier name, so tablets on an
+          # image of that name take it as a normal update; once booted it
+          # follows the new channel above
+          scripts/config legacy-channels | while read -r ui ch ltag variant ntag; do
+            [ "$ntag" = "$tag" ] || continue
+            ci/publish-legacy "$ltag" "$tag" "work/duranium-build/mkosi.output/$base" "$VERSION" $pre
+          done

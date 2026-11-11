@@ -11,6 +11,7 @@ scripts/config shell            # CFG_* assignments: eval "$(scripts/config shel
 scripts/config json             # everything, derived values filled in
 scripts/config channels         # "ui flavour tag variant" per update channel
 scripts/config matrix           # the image job matrix (GitHub Actions)
+scripts/config legacy-channels  # "ui flavour legacy-tag variant tag": legacy image names
 scripts/config variants         # "codename id status images models..." per variant
 scripts/config variant-of SM-T575   # the variant of a model number
 ```
@@ -75,6 +76,8 @@ One table per variant; without any, `scripts/config` makes one from
 | `status` | `bring-up`, `testing`, `stable` | the installer refuses `bring-up` without `--bring-up` |
 | `modem` | bool | the variant has a modem (documentation and the site; nothing reads it yet) |
 | `images` | bool | CI builds and publishes its images and channels (`false` until it boots) |
+| `image_id` | `[a-z0-9.-]+` | the images' name: IMAGE_ID, release tags, asset/UKI/extension names. Default: `id` |
+| `legacy_image_ids` | list | earlier image names: CI also publishes every build under them (`scripts/config legacy-channels`, `ci/publish-legacy`) and the images still recognise files installed under them. Delete when no device runs such an image |
 | `u_boot_match` | string | the model prefix U-Boot's board table matches in S-Boot's `androidboot.bootloader` (checked against `models`) |
 | `[variant.android]` | table | the `[android]` keys below that differ per variant: `product_device`, `firmware_pattern`, `tested_firmware`, `tested_bootloader_rev`, `fus_model` |
 | `id`, `package`, `aport` | derived | `<vendor>-<codename>`, `device-<id>`, its aport |

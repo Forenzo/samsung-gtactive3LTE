@@ -107,8 +107,8 @@ fx_payload() {
 
 # a small 4 KiB-sector Duranium-like disk: GPT + ESP (FAT16) + "usr"
 fx_image() {
-	local d=$RUN/fx/img ch=samsung-gtactive3wifi_phosh_edge-dev v=26102213 n
-	n=samsung-gtactive3wifi_phosh_edge_$v
+	local d=$RUN/fx/img ch=samsung-gtactive3-wifi_phosh_edge-dev v=26102213 n
+	n=samsung-gtactive3-wifi_phosh_edge_$v
 	mkdir -p "$d"
 	mkfs.fat -F 16 -S 4096 -s 1 -n ESP -C "$d/esp.img" 32768 >/dev/null
 	MTOOLS_SKIP_CHECK=1 mmd -i "$d/esp.img" ::/EFI ::/EFI/Linux
@@ -245,9 +245,9 @@ new_tablet() {
 		    "sys.oem_unlock_allowed": "1", "knox.kg.state": "Completed"},
 		  "settings": {"development_settings_enabled": "1"},
 		  "vendor_readable": True, "image_flavour": "dev", "events": [], "log": [],
-		  "os_release": 'ID="nura"\nIMAGE_ID=samsung-gtactive3wifi\nIMAGE_VERSION="26102213"\nVARIANT_ID=phosh\n',
+		  "os_release": 'ID="nura"\nIMAGE_ID=samsung-gtactive3-wifi\nIMAGE_VERSION="26102213"\nVARIANT_ID=phosh\n',
 		  "sh": {"remote": "1111  -\n", "versions": "26102213\n26102201\n",
-		         "status": "image:   samsung-gtactive3wifi_phosh_edge 26102213 (phosh)\n",
+		         "status": "image:   samsung-gtactive3-wifi_phosh_edge 26102213 (phosh)\n",
 		         "updatectl-check": "26102213 (current)\n", "updatectl-update": "started\n",
 		         "update-state": "inactive\n", "updatectl-result": "Installed 26102214\n"}}, open(path, "w"), indent=1)
 	PY

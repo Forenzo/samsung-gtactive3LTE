@@ -63,11 +63,26 @@ class PortConfig(unittest.TestCase):
     def test_channels_only_for_variants_with_images(self):
         lines = [ln.split() for ln in ok("channels").splitlines()]
         self.assertEqual(sorted(ln[2] for ln in lines), [
-            "samsung-gtactive3wifi_gnome_edge", "samsung-gtactive3wifi_gnome_edge-dev",
-            "samsung-gtactive3wifi_phosh_edge", "samsung-gtactive3wifi_phosh_edge-dev"])
+            "samsung-gtactive3-wifi_gnome_edge", "samsung-gtactive3-wifi_gnome_edge-dev",
+            "samsung-gtactive3-wifi_phosh_edge", "samsung-gtactive3-wifi_phosh_edge-dev"])
         self.assertTrue(all(ln[3] == "gtactive3wifi" for ln in lines))
         m = json.loads(ok("matrix"))["include"]
         self.assertEqual({x["device"] for x in m}, {"samsung-gtactive3wifi"})
+
+    def test_legacy_routing(self):
+        # every new Wi-Fi channel is mirrored under the name installed
+        # tablets still have (delete with legacy_image_ids)
+        rows = [ln.split() for ln in ok("legacy-channels").splitlines()]
+        self.assertEqual({(r[2], r[4]) for r in rows}, {
+            (f"samsung-gtactive3wifi_{ui}_edge{d}", f"samsung-gtactive3-wifi_{ui}_edge{d}")
+            for ui in ("phosh", "gnome") for d in ("", "-dev")})
+        m = json.loads(ok("matrix"))["include"]
+        self.assertEqual({(x["image_id"], x["legacy"]) for x in m},
+                         {("samsung-gtactive3-wifi", "samsung-gtactive3wifi")})
+
+    def test_image_names_unique(self):
+        t = TOML.replace('image_id = "samsung-gtactive3-lte"', 'image_id = "samsung-gtactive3wifi"')
+        self.assertIn("used by more than one variant", run("check", toml=t).stderr)
 
     def test_variants(self):
         v = {ln.split()[0]: ln.split() for ln in ok("variants").splitlines()}
