@@ -778,3 +778,59 @@ NOT YET CONFIRMED:
   [ ] Long-term touch stability, panel resume or interaction with compositor.
 
 No Android partition data was accessed by a write operation for this test.
+
+======================================================================
+15. HIMAX MULTITOUCH EVENT TEST: TWO CONCURRENT CONTACTS VERIFIED
+======================================================================
+
+Final live diagnostic test on 2026-11-13, on the same SM-T575
+Linux 7.3.0 kernel. Test used the already-registered
+Himax Touchscreen at /dev/input/event2.
+
+Command:
+  evread /dev/input/event2 3000 3
+
+Host script decoded evdev event types/codes from hexadecimal and tracked
+multitouch slots via ABS_MT_SLOT (0x2f) and ABS_MT_TRACKING_ID (0x39).
+
+Exact user-provided test summary:
+  START: Tap, swipe, then use TWO fingers!
+
+  === HIMAX TOUCHSCREEN RESULTS ===
+  Total events: 1098
+  Finger contact: 18 events, values 0 to 1
+  Finger X position: 96 events, values 408 to 676
+  Finger Y position: 95 events, values 926 to 1843
+  Tracking IDs: 26 events, values -1 to 12
+  Finger size: 202 events, values 15 to 113
+  Maximum simultaneous fingers observed: 2
+  Test complete!
+
+Interpretation:
+  - BTN_TOUCH (0x14a) changed between 0 and 1: finger contact/release.
+  - ABS_MT_POSITION_X (0x35) / ABS_MT_POSITION_Y (0x36)
+    changed during touch interactions: live finger position reports.
+  - ABS_MT_TRACKING_ID (0x39) contained -1 (contact ended) and
+    nonnegative contact identifiers. IDs are NOT a simultaneous
+    finger count.
+  - ABS_MT_TOUCH_MAJOR (0x30) changed with reported contact size.
+  - Tracking the active slots showed TWO contacts at the same time,
+    confirming multitouch input rather than single-touch only.
+
+CONFIRMED on physical SM-T575 under Linux 7.3.0:
+  [X] Himax HX83102E probe by hardware ID on SPI mode 3 at 10 MHz.
+  [X] Himax event2 receives finger contact, movement and release events.
+  [X] Two simultaneous finger contacts are separately tracked.
+  [X] Wacom W9019 S Pen reports hovering, pen contact, pressure,
+      tilt and side-button events (see sections 12 and 13).
+
+NOT YET TESTED:
+  [ ] Full-screen edge coordinate mapping and screen orientation.
+  [ ] Three or more simultaneous contacts (the maximum observed was 2).
+  [ ] Palm rejection and interaction with Wacom pen.
+  [ ] End-to-end GUI/compositor interaction and drawing.
+  [ ] Suspend/resume, battery endurance and long-running input stability.
+
+The successful first-boot input test campaign is complete for now.
+No extra tests were requested from the owner, and no Android userdata
+or non-BOOT partitions were written by these tests.
