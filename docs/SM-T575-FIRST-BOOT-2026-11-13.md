@@ -20,7 +20,7 @@ This was a **diagnostic-only BOOT partition experiment**, not a postmarketOS ins
 
 - Kernel `Linux 7.3.0` ARM64, compiled on Ubuntu runner on 2026-11-13; `/proc/version` received over TCP diagnostic console.
 - Display showed kernel and initramfs logs. Model property reads **Samsung Galaxy Tab Active3 LTE (SM-T575)**.
-- Mac recognized USB NCM host interface `en7`, MAC `02:57:0a:00:00:02`, and connected successfully to IPv6 `fe80::57:aff:fe00:1%en7` TCP **23**. The greeting says “SM-T570” because it is a static string inherited from the common initramfs.
+- Mac recognized a USB NCM network interface and connected successfully to the diagnostic IPv6 link-local console on TCP **23**. The greeting says “SM-T570” because it is a static string inherited from the common initramfs.
 - Kernel uptime was **622.99 seconds** when queried.
 - Memory: `MemTotal: 3761204 kB`, `MemAvailable: 3696040 kB` during diagnostic boot.
 - UFS exposed `sda` through `sde`, with 31 visible `sda` partitions. `sda12` has 60,416 KiB (61,865,984 bytes), matching the BOOT backup geometry. Visibility alone is not a read/write integrity test.
