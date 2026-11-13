@@ -1,0 +1,145 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 16:16:55 +1100
+Subject: [PATCH] contrib: gtactive3: image names of their own, earlier names
+ still count
+
+GTA3_IMAGE_ID names the image (IMAGE_ID in os-release: release tags,
+asset, UKI and extension names), the device id by default; build-image.sh
+passes it and names the output after it. The images are renamed from the
+device id (samsung-gtactive3wifi) to samsung-gtactive3-wifi and
+samsung-gtactive3-lte.
+
+GTA3_LEGACY_IMAGE_IDS lists earlier names: every [Target] MatchPattern
+with %M gets the same pattern with each of them as a further
+MatchPattern, so the UKIs and extensions a tablet installed under an
+older name are still installed versions (the booted one protected, the
+others vacuumed). The channel file names the new channel. Delete the
+legacy names once no tablet runs an image with one.
+
+Tested on postmarketOS's transfers in a fake image root: os-release,
+channel file, UKI/usr/sysext targets as described; a bad id is refused.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ contrib/samsung-gtactive3/build-image.sh |  8 +++-
+ contrib/samsung-gtactive3/mkosi.finalize | 51 +++++++++++++++++++++++-
+ 2 files changed, 55 insertions(+), 4 deletions(-)
+
+diff --git a/contrib/samsung-gtactive3/build-image.sh b/contrib/samsung-gtactive3/build-image.sh
+index 4642ea6..a49e9fb 100755
+--- a/contrib/samsung-gtactive3/build-image.sh
++++ b/contrib/samsung-gtactive3/build-image.sh
+@@ -17,7 +17,9 @@
+ # UKI .efi, split partitions). Every heavy step takes build/kbuild.lock.
+ #
+ # Environment: DEVICE, UI (gnome, phosh, ...: any postmarketOS UI), PKGS,
+-# PMAPORTS, MKOSI, SKIP_APKS, CHANNEL, GTA3_UPDATE_BASE, GTA3_CHANNEL_FILE. Extra arguments go to mkosi (e.g.
++# PMAPORTS, MKOSI, SKIP_APKS, CHANNEL, GTA3_UPDATE_BASE, GTA3_CHANNEL_FILE,
++# GTA3_IMAGE_ID (the image's name, default DEVICE), GTA3_LEGACY_IMAGE_IDS
++# (its earlier names, comma separated; mkosi.finalize). Extra arguments go to mkosi (e.g.
+ # --profile=compressed).
+ #
+ # CHANNEL=dev (default here): development image with the USB debug layer
+@@ -82,7 +84,7 @@ fi
+ ln -sfn "$PMAPORTS" "$DUR/pmaports"
+ cd "$DUR"
+ [ -s mkosi.version ] || "$MKOSI" bump
+-IMAGE_ID="${DEVICE}_${UI}_${RELEASE}"
++IMAGE_ID="${GTA3_IMAGE_ID:-$DEVICE}_${UI}_${RELEASE}"
+ # Once a build has cached the repository metadata, do not refresh it: every
+ # sub-image (base, initrd, sysexts) ran "apk update" and any flaky lookup
+ # killed the build. FRESH=1 refreshes on purpose (to pull upstream updates);
+@@ -105,6 +107,8 @@ for attempt in 1 2 3; do
+ 			--environment=GTA3_CHANNEL="$GTA3_CHANNEL" \
+ 			--environment=GTA3_UPDATE_BASE="${GTA3_UPDATE_BASE:-}" \
+ 			--environment=GTA3_CHANNEL_FILE="${GTA3_CHANNEL_FILE:-}" \
++			--environment=GTA3_IMAGE_ID="${GTA3_IMAGE_ID:-$DEVICE}" \
++			--environment=GTA3_LEGACY_IMAGE_IDS="${GTA3_LEGACY_IMAGE_IDS:-}" \
+ 			--environment=DURANIUM_EXTRA_PACKAGES="$EXTRA" \
+ 			--release="$RELEASE" \
+ 			--package-directory="$PKGS" \
+diff --git a/contrib/samsung-gtactive3/mkosi.finalize b/contrib/samsung-gtactive3/mkosi.finalize
+index c3cd83d..f3f6c31 100755
+--- a/contrib/samsung-gtactive3/mkosi.finalize
++++ b/contrib/samsung-gtactive3/mkosi.finalize
+@@ -26,6 +26,13 @@
+ # variants.<codename>.channel_file); the Wi-Fi variant keeps its historic
+ # /usr/lib/gtactive3wifi/update-channel.
+ #
++# GTA3_IMAGE_ID: the image's own name (IMAGE_ID: release tags, asset, UKI
++# and extension names), config.toml variants.<codename>.image_id; the
++# device id when unset. GTA3_LEGACY_IMAGE_IDS: earlier names of the same
++# images (comma separated, variants.<codename>.legacy_image_ids): what an
++# older image installed under them still counts (below). Both go away
++# from here once no tablet runs an image with a legacy name.
++#
+ # One hook for every variant: contrib/<PMOS_DEVICE>/mkosi.finalize is this
+ # file (samsung-gtactive3, the LTE variant) or a link to it.
+ set -eu
+@@ -36,6 +43,17 @@ case "$PMOS_DEVICE" in
+ samsung-gtactive3wifi) CHFILE=${GTA3_CHANNEL_FILE:-/usr/lib/gtactive3wifi/update-channel} ;;
+ *) CHFILE=${GTA3_CHANNEL_FILE:-/usr/lib/$PMOS_DEVICE/update-channel} ;;
+ esac
++IMG=${GTA3_IMAGE_ID:-$PMOS_DEVICE}
++case $IMG in "" | *[!a-z0-9.-]*) echo "bad GTA3_IMAGE_ID '$IMG'" >&2; exit 1 ;; esac
++LEGACY=$(printf '%s' "${GTA3_LEGACY_IMAGE_IDS:-}" | tr ',' ' ')
++for old in $LEGACY; do
++	case $old in "$IMG" | *[!a-z0-9.-]*) echo "bad legacy image id '$old'" >&2; exit 1 ;; esac
++done
++
++# the image's name: the top-level hook set the device id
++sed -i "s/^IMAGE_ID=.*/IMAGE_ID=$IMG/" "$BUILDROOT/usr/lib/os-release"
++grep -qx "IMAGE_ID=$IMG" "$BUILDROOT/usr/lib/os-release" || { echo "could not set IMAGE_ID" >&2; exit 1; }
++
+ case "${GTA3_CHANNEL:-}" in
+ 	"") suffix= ;;
+ 	dev) suffix=-dev ;;
+@@ -51,7 +69,36 @@ for t in "$BUILDROOT"/usr/lib/sysupdate.d/*.transfer; do
+ 	n=$((n + 1))
+ done
+ [ "$n" -gt 0 ] || { echo "no sysupdate transfer pointed at the postmarketOS server" >&2; exit 1; }
+-echo "sysupdate: $n transfers -> ${BASE}%M_%W_%w${suffix}/"
++echo "sysupdate: $n transfers -> ${BASE}%M_%W_%w${suffix}/ (%M = $IMG)"
++
++# Legacy names: a tablet that updated from an image with an older name
++# (through the legacy channel CI keeps publishing) has UKIs and extensions
++# named after it. Every [Target] MatchPattern with %M gets the same pattern
++# with each legacy name as a further MatchPattern (the first one still
++# names new installs), so sysupdate sees them as installed versions: it
++# protects the booted one and vacuums the others as usual.
++for old in $LEGACY; do
++	for t in "$BUILDROOT"/usr/lib/sysupdate.d/*.transfer; do
++		[ -f "$t" ] || continue
++		awk -v old="$old" '
++			/^\[/ { sec = $0 }
++			sec == "[Target]" && (more || /^MatchPattern=/) {
++				print
++				l = $0
++				sub(/^MatchPattern=/, "", l)
++				more = (l ~ /\\$/)
++				sub(/\\$/, "", l)
++				n = split(l, w, /[ \t]+/)
++				for (i = 1; i <= n; i++)
++					if (w[i] ~ /%M/) { x = w[i]; gsub(/%M/, old, x); add = add (add == "" ? "" : " ") x }
++				if (!more && add != "") { print "MatchPattern=" add; add = "" }
++				next
++			}
++			{ print }' "$t" > "$t.new"
++		mv -f "$t.new" "$t"
++	done
++	echo "sysupdate: installed files named $old still count"
++done
+ 
+ # duranium-set-channel only knows the postmarketOS server layout
+ # (/images/ vs /images/staging/): on this device it would copy every transfer
+@@ -91,5 +138,5 @@ rm -rf "$gh"
+ # which channel this image follows, for duranium-update and humans
+ mkdir -p "$BUILDROOT$(dirname "$CHFILE")"
+ printf 'UPDATE_BASE=%s\nUPDATE_CHANNEL=%s_%s_%s%s\n' "$BASE" \
+-	"$PMOS_DEVICE" "$PMOS_VARIANT" "${RELEASE:-edge}" "$suffix" \
++	"$IMG" "$PMOS_VARIANT" "${RELEASE:-edge}" "$suffix" \
+ 	> "$BUILDROOT$CHFILE"
+-- 
+2.53.0
+

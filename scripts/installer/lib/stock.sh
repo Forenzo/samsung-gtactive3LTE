@@ -31,7 +31,21 @@ brcm/BCM.samsung,gtactive3wifi.hcd"
 STOCK_DIR() { echo "$STATE_DIR/stock"; }
 
 # version in a Samsung file name: AP_T570XXSFEYI1_... -> T570XXSFEYI1
-fw_version_of() { basename "$1" | grep -oE 'T570[A-Z0-9]{8}' | head -1; }
+# (the variant's android.firmware_pattern)
+fw_version_of() { basename "$1" | grep -oE "$(vcfg android.firmware_pattern)" | head -1; }
+
+# check_fw_model FILE: refuse another variant's firmware package (its boot
+# image would be the other board's: undo would flash it onto this tablet)
+check_fw_model() {
+	local f cn v
+	[ -z "$(fw_version_of "$1")" ] || return 0
+	f=$(basename "$1")
+	for cn in $("$GTA3_REPO/scripts/config" variants | awk '{ print $1 }'); do
+		[ "$cn" = "$VARIANT" ] && continue
+		v=$(printf '%s' "$f" | grep -oE "$("$GTA3_REPO/scripts/config" get "variants.$cn.android.firmware_pattern")" | head -1 || true)
+		[ -z "$v" ] || die "$f is firmware $v for the $("$GTA3_REPO/scripts/config" get "variants.$cn.name"), not for this $(vcfg name)"
+	done
+}
 
 check_fw_matches() {
 	local v=$1 pda
@@ -73,6 +87,7 @@ save_stock_boot() { # SRC(.img|.lz4) [recovery SRC]
 stock_from_ap() { # AP tar
 	local ap=$1 w
 	[ -f "$ap" ] || die "no such file: $ap"
+	check_fw_model "$ap"
 	check_fw_matches "$(fw_version_of "$ap")"
 	info "checking $(basename "$ap") (md5)..."
 	PY_APTAR check "$ap" >> "$LOG_FILE" || die "the AP file is damaged or incomplete (md5): download it again"
@@ -93,6 +108,7 @@ stock_from_ap() { # AP tar
 stock_from_zip() { # decrypted firmware zip
 	local z=$1 w
 	[ -f "$z" ] || die "no such file: $z"
+	check_fw_model "$z"
 	check_fw_matches "$(fw_version_of "$z")"
 	w=$CACHE_DIR/stock-zip
 	mkdir -p "$w"
@@ -124,11 +140,11 @@ stock_download() {
 	region=$(aprop ro.csc.sales_code)
 	[ -n "$serial" ] && [ -n "$region" ] || die "the download needs the tablet in Android (serial and region)"
 	need_space "$d" $((12 << 30)) "the firmware download (~5 GB) and its decrypted copy" || die "not enough space"
-	info "downloading the newest SM-T570 firmware for region $region from Samsung (about 5 GB)..."
+	info "downloading the newest $(vcfg android.fus_model) firmware for region $region from Samsung (about 5 GB)..."
 	info "(the tablet's serial number is sent to Samsung only, as Samsung's own tools do)"
 	# not through act: its log line would carry the serial number
-	dry && { act "download the stock firmware (tools/fusdl.py SM-T570 $region <serial>)" true; return 0; }
-	"$py" -I "$GTA3_REPO/tools/fusdl.py" SM-T570 "$region" "$serial" "$d" || die "the download failed"
+	dry && { act "download the stock firmware (tools/fusdl.py $(vcfg android.fus_model) $region <serial>)" true; return 0; }
+	"$py" -I "$GTA3_REPO/tools/fusdl.py" "$(vcfg android.fus_model)" "$region" "$serial" "$d" || die "the download failed"
 	stock_from_zip "$(find "$d" -maxdepth 1 -name '*.zip' -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)"
 }
 
@@ -152,7 +168,7 @@ stock_acquire() {
 	else
 		box "The installer needs your tablet's stock firmware" \
 			"Samsung's files cannot be shipped with this project. Get the" \
-			"firmware matching your tablet ($(state_get PDA unknown)) for SM-T570:" \
+			"firmware matching your tablet ($(state_get PDA unknown)) for $(vcfg android.fus_model):" \
 			"  SamFW / Frija / Bifrost, or samloader with your serial number," \
 			"then run:  ./setup.sh --stock-ap /path/to/AP_....tar.md5" \
 			"Or let the installer fetch it: ./setup.sh --download-stock" \

@@ -5,6 +5,96 @@ If you are the agent reading this after compaction: **you are the lead**. You
 coordinate, integrate, flash the tablet and test every change on the device
 yourself, autonomously, overnight. Keep going until the mission is met.
 
+## State 2026-11-11 (session "Multi-variant port"): image names
+
+- Images have their own names now (`image_id`): `samsung-gtactive3-wifi_*`
+  and `samsung-gtactive3-lte_*` (Wi-Fi was `samsung-gtactive3wifi_*`, the
+  device id). Legacy routing, owner's choice, to delete later
+  (`legacy_image_ids`): CI mirrors each Wi-Fi build under the old tags
+  (`ci/publish-legacy`), the images recognise old-named UKIs/extensions
+  (duranium-build 0045, tested on postmarketOS's transfers in a fake image
+  root), and the tablet scripts match both (common package r50). Not yet
+  run in CI (the images build fails at postmarketOS's registry) nor on a
+  tablet: TESTPLAN V4. The org site now points at the renamed repo
+  (pushed with the owner's consent).
+
+## State 2026-11-11 (session "Multi-variant port"): repository renamed
+
+- The repository is `exynos-linux/samsung-gtactive3` (renamed from
+  samsung-gtactive3wifi on the owner's word; description and homepage
+  updated). Checked right after: the old release download URL answers 301
+  to the new name and the asset downloads (installed tablets keep
+  updating); the old Pages URL is 404, the new one serves releases.json.
+  References updated here (config.toml project.repo, docs, scripts, aport
+  urls, duranium-build 0044), `ci/check-plumbing` now refuses the old name.
+  The org site (exynos-linux.github.io) still lists the old repo and Pages
+  URL in `site.config.toml`, so its records for this device fail until
+  that is changed: the change (repo, pages, name, models) was prepared but
+  pushing to the site was not allowed from this session; it waits for the
+  owner.
+  Never create a repository named samsung-gtactive3wifi again.
+- The images build after the merge (run 42956428304) failed before
+  building: postmarketOS's container registry refused a token for
+  docker-postmarketos:edge, as in the run before the merge. Nothing new
+  was published; the tablets stay on 26102403.
+- The local folder is still named samsung-gtactive3wifi (only the remote
+  moved; `git remote` points at the new URL).
+
+## State 2026-11-11 (session "Multi-variant port"): `variants` merged into main
+
+- Merged into main on the owner's instruction, before TESTPLAN V1: the
+  next CI build publishes it to the Wi-Fi dev channels, and tablets on a
+  dev channel update to it. Run V1 against that dev image first thing
+  (one `.dtb` in the UKI, the initrd's usb-prep and watchdog, the package
+  list, B1-B5); the previous version stays in the other A/B slot (boot
+  counting). Release channels are unchanged until `scripts/pmos-verify`.
+- Two Fable reviews (branch plumbing; setup.sh and the installer) found and
+  this session fixed: the installer forgot a T575's variant after the first
+  command, update --test on a variant without images, Python 3.11, stale
+  test fixtures, the CI container's tools, a check for one .dtb per UKI,
+  another model's firmware package refused. check.yml runs only on
+  branches and pull requests, so on main the image build is the first
+  compile of the device trees; the installer suite has not run anywhere.
+
+## Earlier the same day 10:17 AEDT (branch `variants`, before the merge)
+
+- The repo becomes the port of the whole Galaxy Tab Active3 family: Wi-Fi
+  SM-T570 (`gtactive3wifi`, unchanged for installed tablets) and LTE
+  SM-T575/T575N (`gtactive3`, bring-up, never booted). Research (three
+  agents) in docs/VARIANTS.md and docs/re/modem.md. Found on the way: the
+  GPL tree the docs called "T570 family" (`build/ref/gtactive3cs`) is the
+  SM-T577U's; HARDWARE.md's Wi-Fi PCIe row was wrong (pcie0, not pcie1).
+- A third party forked us for the T575: Forenzo/samsung-gtactive3LTE (live
+  FDT facts used here; their branch rewrote uniLoader relocation, not
+  taken). Inviting them to contribute here is the owner's call.
+- Branch `variants` (local, not pushed): config `[[variant]]` +
+  `device.family`, CI matrix per variant (LTE `images = false`), board DT
+  split (patches/linux/0153: common dtsi + per-variant DTS) and the Shannon
+  CP remoteproc sketch (0154, not enabled), kernel r26 with one DTB
+  subpackage per variant, `samsung-gtactive3-common` (all shared device
+  files, installed paths unchanged) + thin device packages (Wi-Fi r49, LTE
+  r0), duranium-build 0043 (`contrib/samsung-gtactive3`, `DEVICE=`), U-Boot
+  `gtactive3_defconfig` with both DTs and a T575 board entry, per-variant
+  bring-up loaders, installer variant detection (`--bring-up`), check.yml.
+- Not verified: nothing compiled here (this PC is a container without dtc
+  or cross compilers; the owner chose CI-only), the installer suite cannot
+  run here (no mkbootimg/avbtool/sfdisk/zstd; fails the same on main).
+  Passed here: scripts/config check, tests/config (12), tests/firmware (7),
+  shellcheck as on main, the regenerated kernel patch reproduces the kernel
+  tree exactly, the Wi-Fi DTS preprocesses to the same tree.
+- This PC has none of the laptop's worktrees (src/linux drv/* branches,
+  build/wt/pmaports-duranium, build/wt/duranium): src/linux here was
+  rebuilt from the export (base + gtactive3wifi.patch = r25, byte-exact)
+  plus 0153/0154. On the laptop: apply patches/linux/0153-0154 to the
+  kernel branch, and rebase any unexported device-package work (the audio
+  session's r49 mic slider) onto samsung-gtactive3-common, before the next
+  `scripts/pmos-export`.
+- Next three steps: as PLAN.md "Next three steps (2026-11-11)".
+- Waits for the owner: push the branch / open the PR (CI check.yml); the
+  repository rename (docs/RELEASES.md, "Moving the repository");
+  TESTPLAN V1 on the tablet before merging; a T575 owner for V2/V3; the
+  modem's EFS read decision (docs/re/modem.md).
+
 ## State 2026-10-25 17:58 AEDT (session "Docs refresh")
 
 - The owner reports (2026-10-25): rotation works, both cameras work, all

@@ -8,6 +8,11 @@
 #                     Linux is the fallback after a failed chained boot
 #   uniLoader-linux   uniLoader that always starts the bring-up Linux (the
 #                     installer's live environment, USB console on TCP 23)
+#   uniLoader-{chain,linux}-<codename>
+#                     the same for every other variant (config.toml
+#                     [[variant]]): its bring-up Linux carries its DTB; the
+#                     default variant's are the unsuffixed ones. U-Boot is
+#                     one for all and picks the DT by S-Boot's model.
 #   ramdisk.cpio.gz   the bring-up Linux's initramfs (init + modules +
 #                     mkfs.f2fs for "restore-android")
 #   MANIFEST          versions and sources
@@ -33,8 +38,17 @@ W=$(mkdir -p "${WORK:-$R/build/bootchain}" && cd "${WORK:-$R/build/bootchain}" &
 JOBS=${JOBS:-$(nproc)}
 CC=aarch64-linux-gnu-
 AP=$R/$CFG_KERNEL_APORT
-KPATCH=$AP/$CFG_DEVICE_CODENAME.patch
-DTB=$CFG_BOOTCHAIN_DTB
+KPATCH=$AP/$CFG_DEVICE_FAMILY.patch
+# every variant: "codename dtb" lines, the default variant (bootchain.dtb)
+# first
+VARIANTS=$("$R/scripts/config" json | python3 -I -c '
+import json, sys
+c = json.load(sys.stdin)
+for cn, v in sorted(c["variants"].items(), key=lambda kv: not kv[1]["default"]):
+    print(cn, v["dtb"])
+')
+[ "$(awk 'NR == 1 { print $2 }' <<<"$VARIANTS")" = "$CFG_BOOTCHAIN_DTB" ] ||
+	{ echo "bootchain.dtb is not the default variant's DTB" >&2; exit 1; }
 log() { echo "== $*"; }
 
 for d in "$R/bootchain/u-boot" "$R/bootchain/uniLoader" "$R/initramfs/init.c" "$R/$CFG_BOOTCHAIN_BRINGUP_CONFIG" "$KPATCH"; do
@@ -140,7 +154,9 @@ if ls "$P"/build/initramfs/modules/*.ko >/dev/null 2>&1; then
 	${CC}strip --strip-debug "$P"/build/initramfs/modules/*.ko
 fi
 gen_list > "$P/build/initramfs.list"
-$MK -j"$JOBS" Image "$DTB"   # relink with the modules
+# relink with the modules; every variant's DTB
+# shellcheck disable=SC2046
+$MK -j"$JOBS" Image $(awk '{ print $2 }' <<<"$VARIANTS")
 "$B/usr/gen_init_cpio" "$P/build/initramfs.list" | gzip -9n > "$OUT/ramdisk.cpio.gz"
 
 log "U-Boot ($CFG_BOOTCHAIN_U_BOOT_DEFCONFIG)"
@@ -152,18 +168,60 @@ make -s -C "$UB" O="$UBO" CROSS_COMPILE=$CC -j"$JOBS"
 
 log "uniLoader ($CFG_BOOTCHAIN_UNILOADER_DEFCONFIG: chain, linux)"
 cp "$B/arch/arm64/boot/Image" "$UL/blob/Image"
-cp "$B/arch/arm64/boot/dts/$DTB" "$UL/blob/dtb"
 cp "$OUT/ramdisk.cpio.gz" "$UL/blob/ramdisk"
 cp "$UBO/u-boot.bin" "$UL/blob/u-boot.bin"
-for m in chain:0 linux:1; do
-	make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC clean >/dev/null 2>&1 || true
-	make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC "$CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
-	sed -i "s/^CONFIG_CHAINLOAD_DEFAULT=.*/CONFIG_CHAINLOAD_DEFAULT=${m#*:}/" "$UL/.config"
-	make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC -j"$JOBS"
-	grep -q "^#define CONFIG_CHAINLOAD_DEFAULT ${m#*:}\$" "$UL/include/generated/autoconf.h" ||
-		{ echo "CONFIG_CHAINLOAD_DEFAULT did not stick" >&2; exit 1; }
-	cp "$UL/uniLoader" "$OUT/uniLoader-${m%:*}"
-done
+PAYLOAD=()
+first=1
+while read -r cn dtb; do
+	# The default Wi-Fi variant retains its existing boot chain.
+	sfx=-$cn
+	[ "$first" = 1 ] && sfx=
+	first=0
+	cp "$B/arch/arm64/boot/dts/$dtb" "$UL/blob/dtb"
+
+	case "$cn" in
+		gtactive3wifi)
+			ul_config="$CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
+			modes="chain:0 linux:1"
+			;;
+		gtactive3)
+			ul_config=gtactive3lte_defconfig
+			modes="linux:1"
+			;;
+		*)
+			echo "No audited uniLoader board for $cn" >&2
+			exit 1
+			;;
+	esac
+
+	for m in $modes; do
+		make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC clean >/dev/null 2>&1 || true
+		make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC "$ul_config"
+
+		if [ "$cn" = gtactive3wifi ]; then
+			sed -i "s/^CONFIG_CHAINLOAD_DEFAULT=.*/CONFIG_CHAINLOAD_DEFAULT=${m#*:}/" "$UL/.config"
+		fi
+
+		make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC -j"$JOBS"
+
+		if [ "$cn" = gtactive3wifi ]; then
+			grep -q "^#define CONFIG_CHAINLOAD_DEFAULT ${m#*:}\$" "$UL/include/generated/autoconf.h" ||
+				{ echo "CONFIG_CHAINLOAD_DEFAULT did not stick" >&2; exit 1; }
+		else
+			grep -q '^#define CONFIG_SAMSUNG_GTACTIVE3LTE 1$' "$UL/include/generated/autoconf.h" ||
+				{ echo "LTE board selection failed" >&2; exit 1; }
+			grep -q '^#define CONFIG_LINUX_KRNL_HEADER_IMG 1$' "$UL/include/generated/autoconf.h" ||
+				{ echo "LTE ARM64 Image header disabled" >&2; exit 1; }
+			if grep -q '^#define CONFIG_CHAINLOAD 1$' "$UL/include/generated/autoconf.h"; then
+				echo "LTE chainloading unexpectedly enabled" >&2
+				exit 1
+			fi
+		fi
+
+		cp "$UL/uniLoader" "$OUT/uniLoader-${m%:*}$sfx"
+		PAYLOAD+=("uniLoader-${m%:*}$sfx")
+	done
+done <<<"$VARIANTS"
 
 tree_id() { git -C "$R" rev-parse "HEAD:$1" 2>/dev/null || echo unknown; }
 {
@@ -173,12 +231,13 @@ tree_id() { git -C "$R" rev-parse "HEAD:$1" 2>/dev/null || echo unknown; }
 	echo "linux-config: $CFG_BOOTCHAIN_BRINGUP_CONFIG"
 	echo "init: initramfs/init.c"
 	echo "u-boot: bootchain/u-boot (tree $(tree_id bootchain/u-boot)), $CFG_BOOTCHAIN_U_BOOT_DEFCONFIG"
+	echo "variants: $(awk '{ printf "%s%s=%s", NR > 1 ? " " : "", $1, $2 }' <<<"$VARIANTS")"
 	echo "uniloader: bootchain/uniLoader (tree $(tree_id bootchain/uniLoader)), $CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
 	echo "f2fs-tools: $F2FS_VER (https://dl-cdn.alpinelinux.org/alpine/v3.22/main, aarch64)"
 	echo "licenses: GPL-2.0 (Linux, U-Boot, uniLoader, init), GPL-2.0/LGPL-2.1 (f2fs-tools), MIT (musl)"
 	echo "contains no Samsung files: the installer adds the owner's stock DTB and the AVB footer"
-	(cd "$OUT" && sha256sum uniLoader-chain uniLoader-linux ramdisk.cpio.gz)
+	(cd "$OUT" && sha256sum "${PAYLOAD[@]}" ramdisk.cpio.gz)
 } > "$OUT/MANIFEST"
-tar -C "$OUT" -czf "$OUT/${CFG_DEVICE_CODENAME}-bootchain_$VER.tar.gz" uniLoader-chain uniLoader-linux ramdisk.cpio.gz MANIFEST
-log "payload: $OUT/${CFG_DEVICE_CODENAME}-bootchain_$VER.tar.gz"
+tar -C "$OUT" -czf "$OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz" "${PAYLOAD[@]}" ramdisk.cpio.gz MANIFEST
+log "payload: $OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz"
 cat "$OUT/MANIFEST"

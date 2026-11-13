@@ -286,6 +286,7 @@ restore_android_backup() {
 
 install_duranium() {
 	local wipe=${1:-} vlen want got
+	[ "$VARIANT" != gtactive3 ] || die "SM-T575 installation is disabled until diagnostic boot and recovery are verified"
 	step "Install Duranium"
 	[ -n "${IMG_CHANNEL:-}" ] || [ -n "${OPT_IMAGE:-}" ] || choose_image
 	fetch_image

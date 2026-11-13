@@ -4,7 +4,7 @@ Our own description of the A-Box as used on the SM-T570 (Galaxy Tab Active3),
 written from:
 
 - Samsung's GPL A-Box driver: `sound/soc/samsung/abox/` and
-  `include/sound/samsung/abox_ipc.h` in the T570-family kernel
+  `include/sound/samsung/abox_ipc.h` in the Tab Active3 family kernel (the SM-T577U's tree, ../VARIANTS.md)
   (`build/ref/gtactive3cs`) and the Galaxy S9 kernel (`src/samsung-9810-ref`);
 - the stock device tree (`firmware/stock/stock-0.dts` abox, abox_gic,
   sysmmu_aud; `dtbo-4.dts` sound, rt5665, rt5510);

@@ -6,16 +6,16 @@ maintain the kernel, the drivers and the device packages. postmarketOS
 maintains everything else, and our images follow theirs automatically.
 
 Official record of what is published (versions, files, sizes, sha256,
-signature key): **https://exynos-linux.github.io/samsung-gtactive3wifi/**
-(machine-readable: [`releases.json`](https://exynos-linux.github.io/samsung-gtactive3wifi/releases.json)).
+signature key): **https://exynos-linux.github.io/samsung-gtactive3/**
+(machine-readable: [`releases.json`](https://exynos-linux.github.io/samsung-gtactive3/releases.json)).
 To install, see [INSTALL.md](INSTALL.md).
 
 ## Who maintains what
 
 | Piece | Where | Who |
 |---|---|---|
-| Kernel (mainline + our Exynos 9810 / SM-T570 drivers) | `pmos/aports/device/testing/linux-postmarketos-exynos9810` = torvalds/linux at `_base` + `gtactive3wifi.patch` | us |
-| Device package (deviceinfo, early boot, UCM, defaults), USB debug layer, two GNOME Shell extensions | `pmos/aports/` | us |
+| Kernel (mainline + our Exynos 9810 / Galaxy Tab Active3 drivers) | `pmos/aports/device/testing/linux-postmarketos-exynos9810` = torvalds/linux at `_base` + `gtactive3.patch`, one DTB subpackage per variant | us |
+| Device packages (`samsung-gtactive3-common`: early boot, UCM, defaults; `device-samsung-<codename>`: deviceinfo, command line), USB debug layer, two GNOME Shell extensions | `pmos/aports/` | us |
 | duranium-build changes (device hook, build scripts) | `pmos/duranium-build/*.patch` on upstream `BASE` | us |
 | Image builder (mkosi config, A/B layout, first boot, sysupdate) | upstream duranium-build `main` | postmarketOS |
 | Every other package, every UI | postmarketOS + Alpine binary repositories | postmarketOS |
@@ -68,29 +68,39 @@ only window is the second between replacing `SHA256SUMS` and
 
 ## Channels
 
-One GitHub release per channel. The tag is what sysupdate looks for
-(`%M_%W_%w` = image id, UI, release):
+One GitHub release per channel and variant (config.toml `[[variant]]`
+with `images = true`; `scripts/config channels` lists them). The tag is
+what sysupdate looks for (`%M_%W_%w` = image id, UI, release); the image id
+is the variant's device id, so a tablet only ever sees its own variant's
+images. Today only the Wi-Fi variant publishes:
 
 | Channel (release tag) | For |
 |---|---|
-| `samsung-gtactive3wifi_phosh_edge` | everyone, Phosh |
-| `samsung-gtactive3wifi_gnome_edge` | everyone, GNOME |
-| `samsung-gtactive3wifi_phosh_edge-dev` | development tablets: + USB debug layer |
-| `samsung-gtactive3wifi_gnome_edge-dev` | development tablets: + USB debug layer |
+| `samsung-gtactive3-wifi_phosh_edge` | everyone, Phosh |
+| `samsung-gtactive3-wifi_gnome_edge` | everyone, GNOME |
+| `samsung-gtactive3-wifi_phosh_edge-dev` | development tablets: + USB debug layer |
+| `samsung-gtactive3-wifi_gnome_edge-dev` | development tablets: + USB debug layer |
+| `samsung-gtactive3wifi_*` (the four above under the old name) | LEGACY: tablets on images up to 26102403 (below, "Image names") |
 
 The **dev** images add `duranium-usb-debug` + `-adb` (USB network with a
 root shell, ssh, adb and the bring-up register console, **no password**).
 Never use them on a tablet that strangers can plug a cable into. The dev
 channels are GitHub pre-releases. The boot-chain payload (uniLoader +
 U-Boot for the BOOT partition, used by the installer) has its own release,
-`samsung-gtactive3wifi_bootchain`, signed with the same key and built by
-its own workflow (`bootchain.yml`, `ci/bootchain/`); `releases.json` lists
-it under `bootchain`.
+`samsung-gtactive3_bootchain` (one for the family: U-Boot picks each
+variant's device tree, and the payload has one bring-up loader per
+variant), signed with the same key and built by its own workflow
+(`bootchain.yml`, `ci/bootchain/`); `releases.json` lists it under
+`bootchain`. The LTE variant's channels will be
+`samsung-gtactive3_<ui>_edge[-dev]`.
 
-Every image carries, from `contrib/samsung-gtactive3wifi/mkosi.finalize`:
+Every image carries, from `contrib/samsung-gtactive3/mkosi.finalize`
+(`DEVICE=` picks the variant):
 
 - `/usr/lib/sysupdate.d/*.transfer` sourcing
-  `https://github.com/exynos-linux/samsung-gtactive3wifi/releases/download/<channel>/`
+  `https://github.com/exynos-linux/samsung-gtactive3/releases/download/<channel>/`
+  (images built before the rename name the old repository, which GitHub
+  redirects)
   (upstream's transfers with only `Path=` rewritten: usr + verity into the
   inactive A/B slot, the UKI with boot counting `+2-0`, sysexts/confexts
   behind the disabled `dev-tools` / `waydroid` features)
@@ -98,12 +108,58 @@ Every image carries, from `contrib/samsung-gtactive3wifi/mkosi.finalize`:
   `pmos/sysupdate-public-key.asc` (fingerprint
   `D0FE 850A F01A 4783 1B6E  F808 5831 61CE 787F F5B5`), so a tablet only
   installs what this project signed (`Verify=` stays on)
-- `/usr/lib/gtactive3wifi/update-channel` (also printed by
+- the variant's channel file (`variants.<codename>.channel_file`: the
+  Wi-Fi images' historic `/usr/lib/gtactive3wifi/update-channel`, the LTE
+  images' `/usr/lib/samsung-gtactive3/update-channel`; also printed by
   `duranium-set-channel`; there is no staging channel)
 
 The 26102201 images (the first two pre-releases) had **no keyring** (gpg
 under keyboxd ignored `--keyring` in CI) and cannot update with sysupdate;
 tablets running them need one `scripts/duranium-update` to a newer image.
+
+## The repository's names
+
+`exynos-linux/samsung-gtactive3` since 2026-11-11 (the family's port);
+before that `exynos-linux/samsung-gtactive3wifi` (from 2026-10-23) and
+`dixonSolutions/gtactive3-mainline`. Images built before a rename fetch
+updates from the old name: GitHub answers its `releases/download/...`,
+`releases/latest/download/...` and API URLs with a 301 to the new one
+(checked after both moves; systemd-pull follows redirects) as long as no
+repository takes an old name again, so **never create a repository named
+`samsung-gtactive3wifi` or `gtactive3-mainline` in those accounts**. Old
+GitHub Pages URLs are not redirected (404): the installer reads
+`update.pages` from config.toml at run time. `ci/check-plumbing` keeps old
+names out of the code.
+
+## Image names
+
+Each variant's images have their own name (`image_id` in config.toml:
+IMAGE_ID in os-release, which is sysupdate's `%M`: the release tag, asset,
+UKI and extension names): `samsung-gtactive3-wifi` and
+`samsung-gtactive3-lte`. Until 26102403 the Wi-Fi images were named after
+the device id, `samsung-gtactive3wifi`, and tablets running those only
+accept updates of that name from that tag. The **legacy routing**
+(`legacy_image_ids = ["samsung-gtactive3wifi"]`) bridges them:
+
+- CI publishes every Wi-Fi build twice: to the new channel and, hard-linked
+  under the old name, to the old tag (`ci/publish-legacy`, signed like any
+  other). An old tablet updates from there as usual; the image it gets
+  names itself `samsung-gtactive3-wifi`, so after that boot sysupdate
+  follows the new channel.
+- The new images list the old name as a further `MatchPattern` of every
+  sysupdate target (duranium-build 0045), so the UKI and extensions the
+  bridge update installed under the old name stay installed versions: the
+  booted one is protected, older ones are vacuumed. The tablet scripts
+  (boot default, slot hygiene, `tablet-phosh`) match both names.
+- Delete it once no tablet runs an old-named image: remove
+  `legacy_image_ids` (that ends the mirror and the extra patterns), then
+  the old tags' releases. ci/check-image checks both halves while it
+  exists.
+
+The 2026-11-11 rename went ahead of the "image with the new address first"
+order of `.claude/rules/releases.md`, on the owner's word: the redirect was
+checked right after it (old download URL: 301 to the new name, the asset
+200).
 
 ## Versions
 
@@ -135,7 +191,7 @@ in duranium-build before `build-image.sh`), never renamed afterwards:
 sysupdate protects the booted version by the `IMAGE_VERSION` in its
 os-release (`ProtectVersion=%A`), which has to match the partition labels.
 The update lands like a sysupdate one (partitions `duranium_<V>_usr` /
-`_vty`, UKI `samsung-gtactive3wifi_<ui>_edge_<V>+2-0.efi`), so on the
+`_vty`, UKI `samsung-gtactive3-wifi_<ui>_edge_<V>+2-0.efi`), so on the
 tablet:
 
 ```
@@ -205,8 +261,8 @@ from the release assets. `releases.json` (schema 1, consumed by the
 installer; new fields are only ever added):
 
 ```
-{"schema": 1, "generated": "<iso8601>", "repo": "exynos-linux/samsung-gtactive3wifi",
- "channels": [{"id": "samsung-gtactive3wifi_phosh_edge-dev", "ui": "phosh",
+{"schema": 1, "generated": "<iso8601>", "repo": "exynos-linux/samsung-gtactive3",
+ "channels": [{"id": "samsung-gtactive3-wifi_phosh_edge-dev", "ui": "phosh",
    "flavour": "release" | "dev", "title": "Phosh", "description": "...",
    "prerelease": bool, "verified": bool, "latest": "<version>",
    "versions": [{"version": "26102214", "date": "<iso8601>",

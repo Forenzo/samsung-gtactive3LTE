@@ -1,0 +1,32 @@
+#!/bin/bash
+# LEGACY routing: publish a build that went to TAG under an earlier image
+# name as well (config.toml variants.<codename>.legacy_image_ids):
+#
+#   ci/publish-legacy LEGACY_TAG TAG DIR VERSION [prerelease]
+#
+# Tablets running an image of the earlier name only accept files named
+# after it from LEGACY_TAG (their sysupdate's %M). The build's files are
+# hard-linked under that name and published there by ci/publish (signed
+# SHA256SUMS, the previous version kept). The content is the new image: once
+# booted, its os-release names the new image, so the tablet follows TAG from
+# then on. Delete with the legacy names, once no tablet runs such an image.
+set -euo pipefail
+LTAG=$1 TAG=$2 DIR=$3 VERSION=$4 PRE=${5:-}
+NEW=${TAG%-dev} OLD=${LTAG%-dev}
+[ "${TAG#"$NEW"}" = "${LTAG#"$OLD"}" ] || { echo "$LTAG and $TAG are not the same kind of channel" >&2; exit 1; }
+HERE=$(cd "$(dirname "$0")" && pwd)
+L=$(mktemp -d "$(dirname "$DIR")/legacy.XXXXXX")
+trap 'rm -rf "$L"' EXIT
+n=0
+for f in "$DIR/${NEW}_${VERSION}".*; do
+	[ -f "$f" ] || continue
+	b=${f##*/}
+	ln "$f" "$L/${OLD}${b#"$NEW"}" 2>/dev/null || cp "$f" "$L/${OLD}${b#"$NEW"}"
+	n=$((n + 1))
+done
+[ "$n" -gt 0 ] || { echo "no files of $VERSION in $DIR" >&2; exit 1; }
+NOTES="Legacy channel **$LTAG**: the same builds as **$TAG** under the image name tablets installed before the rename use. A tablet updating from here switches to $TAG on its next boot. This channel stops once no tablet needs it.
+
+$(printf '%s\n' "$NOTES" | sed -n '/^Fingerprint:/p')"
+export NOTES
+"$HERE/publish" "$LTAG" "$L" "$VERSION" ${PRE:+"$PRE"}

@@ -2,7 +2,7 @@
 # Back to Phosh, with no version numbers to type. Run in the tablet's
 # Console:
 #
-#   wget https://exynos-linux.github.io/samsung-gtactive3wifi/phosh
+#   wget https://exynos-linux.github.io/samsung-gtactive3/phosh
 #   sudo sh phosh
 #
 # It makes the newest Phosh image the boot default (and remembers Phosh as
@@ -16,16 +16,18 @@ set -eu
 E=/boot/EFI/Linux
 C=/boot/loader/loader.conf
 
-ls "$E"/samsung-gtactive3wifi_phosh_edge_*.efi > /dev/null 2>&1 ||
+# images named samsung-gtactive3wifi_... (until 26102403) or
+# samsung-gtactive3-wifi_...: both are this tablet's
+ls "$E"/samsung-gtactive3*_phosh_edge_*.efi > /dev/null 2>&1 ||
 	{ echo "there is no Phosh image on this tablet: nothing changed" >&2; exit 1; }
 
 mkdir -p /var/lib/gtactive3wifi
 echo phosh > /var/lib/gtactive3wifi/ui
-{ grep -v '^default' "$C" 2> /dev/null || :; echo 'default samsung-gtactive3wifi_phosh_edge_*@main'; } > "$C.new"
+{ grep -v '^default' "$C" 2> /dev/null || :; echo 'default samsung-gtactive3*_phosh_edge_*@main'; } > "$C.new"
 mv -f "$C.new" "$C"
 for f in "$E"/*.efi; do
 	case ${f##*/} in
-	samsung-gtactive3wifi_phosh_edge_*) ;;
+	samsung-gtactive3*_phosh_edge_*) ;;
 	*) rm -f "$f" && echo "removed boot entry ${f##*/}" ;;
 	esac
 done
@@ -33,7 +35,7 @@ sync
 echo "boot default: the newest Phosh image"
 
 echo "setting up Tailscale remote access..."
-if wget -qO /tmp/gta3-remote https://exynos-linux.github.io/samsung-gtactive3wifi/remote; then
+if wget -qO /tmp/gta3-remote https://exynos-linux.github.io/samsung-gtactive3/remote; then
 	sh /tmp/gta3-remote || echo "Tailscale setup failed (see above); Phosh is still the boot default"
 else
 	echo "could not download the Tailscale setup (no internet?); Phosh is still the boot default"

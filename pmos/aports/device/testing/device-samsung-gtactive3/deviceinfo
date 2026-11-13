@@ -1,0 +1,38 @@
+# Reference: <https://postmarketos.org/deviceinfo>
+# Please use double quotes only. You can source this file in shell scripts.
+#
+# Galaxy Tab Active3 LTE (SM-T575, SM-T575N), bring-up. Duranium only, the
+# same chain as the Wi-Fi variant (device-samsung-gtactive3wifi): S-Boot ->
+# BOOT (uniLoader -> U-Boot, which picks this variant's DT by the model in
+# S-Boot's command line) -> systemd-boot -> UKI with this DTB, the Duranium
+# GPT nested in the Android userdata partition. Not booted on a T575 yet;
+# the partition layout is assumed to match the T570's (to be checked from
+# the T575's PIT before the installer accepts it).
+
+deviceinfo_format_version="0"
+deviceinfo_name="Samsung Galaxy Tab Active3 (LTE)"
+deviceinfo_manufacturer="Samsung"
+deviceinfo_codename="samsung-gtactive3"
+deviceinfo_year="2020"
+deviceinfo_dtb="exynos/exynos9810-gtactive3"
+deviceinfo_arch="aarch64"
+
+# Device related
+deviceinfo_chassis="tablet"
+deviceinfo_drm="true"
+deviceinfo_keyboard="false"
+deviceinfo_external_storage="true"
+deviceinfo_screen_width="1200"
+deviceinfo_screen_height="1920"
+# UFS with 4096-byte logical sectors on the T570; assumed the same here
+deviceinfo_rootfs_image_sector_size="4096"
+
+# Bootloader related
+# Heimdall to BOOT from Download mode. Never set a vbmeta partition here:
+# S-Boot refuses an unsigned vbmeta and stays in Odin mode.
+deviceinfo_flash_method="heimdall-bootimg"
+deviceinfo_flash_heimdall_partition_kernel="BOOT"
+deviceinfo_initfs_compression="gzip"
+# as the Wi-Fi variant: the DTB is not copied into /boot separately
+# (duranium-build mkosi.prepare), the UKI embeds it
+deviceinfo_append_dtb="true"

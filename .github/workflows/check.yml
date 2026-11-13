@@ -1,0 +1,137 @@
+# Compile checks for branches and pull requests: nothing is published.
+#
+#  - offline: config.toml (scripts/config check + tests/config), the
+#    firmware tools' tests, shellcheck of the plumbing
+#  - installer: tests/installer in a Fedora container (its tools)
+#  - kernel: torvalds/linux at the kernel aport's _base + its patch, with the
+#    aport's config: every variant's DTB, the Wi-Fi DTB compared with the
+#    one main builds (sorted, so only real differences show), and the
+#    sketch drivers that no image enables
+#  - u-boot: the family's defconfig with every variant's device tree
+#
+# The image and boot-chain workflows run on main only (they publish).
+name: check
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: scripts/config check
+      - run: python3 -I tests/config/test_config.py
+      - run: bash tests/firmware/run.sh
+      - name: shellcheck (what the variant work touched)
+        run: |
+          shellcheck -x ci/state ci/channels ci/check-image ci/bootchain/build ci/bootchain/publish \
+            bootchain/build.sh scripts/pmos-export
+          shellcheck -x -P scripts/installer -S error scripts/installer/setup scripts/installer/lib/*.sh
+
+  # the installer's offline suite (fake tablet, fake console, local HTTP
+  # server): Fedora's android-tools has the mkbootimg, avbtool, lpmake and
+  # simg2img the fixtures need (Ubuntu packages no avbtool/lpmake)
+  installer:
+    runs-on: ubuntu-24.04
+    container: fedora:43
+    timeout-minutes: 30
+    steps:
+      - name: Tools
+        run: |
+          # what preflight (scripts/installer/lib/host.sh) checks for, minus
+          # adb/heimdall/lsusb (the tests' mock tablet stands in)
+          dnf -y -q install git android-tools dosfstools util-linux mtools zstd lz4 gnupg2 \
+            python3 e2fsprogs which findutils tar gzip openssl iproute curl coreutils
+      - uses: actions/checkout@v5
+      - name: tests/installer
+        run: |
+          git config --global --add safe.directory "$PWD"
+          bash tests/installer/run.sh
+
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu \
+            make bc bison flex libssl-dev libelf-dev device-tree-compiler patch
+      - name: Kernel source (the aport's _base + patch)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          K=$(scripts/config get kernel.aport)
+          base=$(sed -n 's/^_base="\(.*\)"/\1/p' "$K/APKBUILD")
+          t=linux-$base.tar.gz
+          gh release download sources -R "$GITHUB_REPOSITORY" -p "$t" 2>/dev/null ||
+            curl -fL --retry 5 --retry-delay 30 -H "Authorization: Bearer $GH_TOKEN" \
+              -o "$t" "https://github.com/torvalds/linux/archive/$base.tar.gz"
+          for d in new old; do mkdir -p "$d" && tar -xzf "$t" -C "$d" --strip-components=1; done
+          patch -d new -p1 -s < "$K/$(scripts/config get device.family).patch"
+          # main's kernel, for the Wi-Fi DTB comparison
+          old=$(git show origin/main:"$K/APKBUILD" | sed -n 's/^\t\(gtactive3[a-z]*\.patch\)$/\1/p')
+          git show origin/main:"$K/$old" | patch -d old -p1 -s
+          cp "$K/config-postmarketos-exynos9810.aarch64" new/.config
+          cp "$K/config-postmarketos-exynos9810.aarch64" old/.config
+      - name: Device trees
+        run: |
+          set -eu
+          M="make -s ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-"
+          for d in new old; do (cd "$d" && $M olddefconfig); done
+          dtbs=$(scripts/config get bootchain.dtbs)
+          (cd new && $M $dtbs)
+          (cd old && $M exynos/exynos9810-gtactive3wifi.dtb)
+          for f in old new; do
+            dtc -q -s -I dtb -O dts "$f/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dtb" > "wifi-$f.dts"
+          done
+          if diff -u wifi-old.dts wifi-new.dts; then
+            echo "Wi-Fi DTB: identical to main's"
+          else
+            echo "::warning::the Wi-Fi DTB differs from main's (diff above)"
+          fi
+          dtc -q -s -I dtb -O dts new/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dtb > lte.dts
+          diff -u wifi-new.dts lte.dts || true
+      - name: Sketch drivers (not in any image)
+        run: |
+          set -eu
+          cd new
+          M="make -s ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-"
+          scripts/config -e REMOTEPROC -m SAMSUNG_SHANNON_CP
+          $M olddefconfig
+          grep -q '^CONFIG_SAMSUNG_SHANNON_CP=m' .config
+          $M -j"$(nproc)" prepare
+          $M W=1 drivers/remoteproc/samsung_shannon_cp.o
+
+  u-boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            make bc bison flex libssl-dev libelf-dev libgnutls28-dev uuid-dev device-tree-compiler \
+            swig python3-dev python3-setuptools python3-pyelftools
+      - name: U-Boot for every variant
+        run: |
+          set -eu
+          O=$PWD/u-boot-out
+          make -s -C bootchain/u-boot O="$O" CROSS_COMPILE=aarch64-linux-gnu- "$(scripts/config get bootchain.u_boot_defconfig)"
+          make -s -C bootchain/u-boot O="$O" CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)"
+          for d in $(scripts/config get bootchain.dtbs); do
+            find "$O" -name "$(basename "$d")" | grep -q . || { echo "no $d in the U-Boot build" >&2; exit 1; }
+          done
+          ls -l "$O/u-boot.bin"

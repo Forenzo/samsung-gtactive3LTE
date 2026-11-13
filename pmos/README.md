@@ -6,7 +6,7 @@ the published images from this directory plus upstream postmarketOS.
 
 - `aports/`: our aports, added to upstream pmaports (never replacing one);
   `aports/BUILD` lists the ones the images need. The kernel is torvalds/linux
-  at `_base` plus `gtactive3wifi.patch`.
+  at `_base` plus `gtactive3.patch`.
 - `pmaports.BASE`: upstream pmaports commit they were last tested on
 - `duranium-build/`: our duranium-build commits as a patch series on `BASE`
 - `sysupdate-public-key.asc`: the key that signs every channel's SHA256SUMS

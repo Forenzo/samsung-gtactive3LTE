@@ -949,7 +949,7 @@ class Checks:
 
     def update_source(self):
         """The image's sysupdate points at this project's channel and trusts
-        only the project key (contrib/samsung-gtactive3wifi/mkosi.finalize)."""
+        only the project key (contrib/samsung-gtactive3/mkosi.finalize)."""
         out = self.sh.out(
             "grep -h '^Path=http' /usr/lib/sysupdate.d/*.transfer | sort -u\n"
             "test -e /usr/lib/systemd/system/duranium-usb-debug.service && echo DEV\n"

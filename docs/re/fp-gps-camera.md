@@ -1,7 +1,7 @@
 # Fingerprint, GNSS and cameras: what mainline can reach
 
 Feasibility notes for the SM-T570 (board hw_rev 4, `firmware/stock/dtbo-4.dts`).
-Sources: the stock DT, Samsung's GPL kernel for the T570 family
+Sources: the stock DT, Samsung's GPL kernel for the Tab Active3 family (the SM-T577U's tree, ../VARIANTS.md)
 (`build/ref/gtactive3cs`, defconfig `exynos9810-gtactive3ue_defconfig`), the
 vendor partition (`firmware/fs/vendor`) and the REA/Ghidra inventory in
 `firmware/re-targets/`. So far REA has only binary overviews (procedure and

@@ -65,7 +65,7 @@ pack_boot() {
 	local mode=$1 out=$2 stock ul
 	stock=$(state_get STOCK_BOOT)
 	[ -s "$stock" ] || die "no stock boot image"
-	ul=$PAYLOAD/uniLoader-$mode
+	ul=$PAYLOAD/uniLoader-$mode$(payload_suffix)
 	[ -s "$ul" ] || die "no $ul in the payload"
 	[ "$(stat -c %s "$stock")" = "$BOOT_PART_BYTES" ] ||
 		warn "the stock boot image is $(stat -c %s "$stock") bytes, BOOT is $BOOT_PART_BYTES"
@@ -99,8 +99,13 @@ build_boot_images() {
 	local d=$STATE_DIR/boot
 	dry && { act "build boot-linux.img and boot-chain.img from the payload and the stock boot image" true; return 0; }
 	pack_boot linux "$d/boot-linux.img"
-	pack_boot chain "$d/boot-chain.img"
 	state_set BOOT_LINUX "$d/boot-linux.img"
-	state_set BOOT_CHAIN "$d/boot-chain.img"
-	ok "BOOT images built for this tablet: $d/boot-linux.img, $d/boot-chain.img"
+	if [ "$VARIANT" = gtactive3 ]; then
+		state_set BOOT_CHAIN ""
+		ok "LTE diagnostic BOOT image prepared; no chainloader"
+	else
+		pack_boot chain "$d/boot-chain.img"
+		state_set BOOT_CHAIN "$d/boot-chain.img"
+		ok "BOOT images built for this tablet: $d/boot-linux.img, $d/boot-chain.img"
+	fi
 }

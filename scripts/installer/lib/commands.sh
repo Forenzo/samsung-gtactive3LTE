@@ -163,6 +163,12 @@ published_newest() {
 	PY_REL newest "$idx"
 }
 
+# has_channels: the tablet's variant publishes images (config.toml
+# variants.<codename>.images); a variant in bring-up has none yet
+has_channels() {
+	"$GTA3_REPO/scripts/config" channels | awk -v v="$VARIANT" '$4 == v { f = 1 } END { exit !f }'
+}
+
 # tablet_test_versions: ~test versions on the tablet (partition labels, UKIs)
 tablet_versions() {
 	dur_sh versions '# gta3:versions
@@ -172,7 +178,13 @@ ls /boot/EFI/Linux 2>/dev/null | sed -n "s/.*_edge_\([^+]*\)\(+.*\)\{0,1\}\.efi$
 
 next_test_version() {
 	local l base n max=0 v
-	l=$(published_newest) || die "cannot find the newest published version"
+	if has_channels; then
+		l=$(published_newest) || die "cannot find the newest published version"
+	else
+		# nothing published for this variant: above the booted version
+		l=$(con_probe 2>/dev/null | awk '{ print $2 }' | sed 's/~.*//')
+		[[ $l =~ ^[0-9]{8}$ ]] || l=$(date -u +%y%m%d)00
+	fi
 	base=$(printf '%08d' $((10#$l + 1)))
 	for v in $( { con_is_duranium && tablet_versions; state_get TEST_VERSIONS | tr ' ' '\n'; } 2>/dev/null); do
 		case $v in "$base~test"*) n=${v#"$base~test"}; [ "$n" -gt "$max" ] 2>/dev/null && max=$n ;; esac
@@ -266,7 +278,7 @@ systemctl is-active gta3-setup-update 2>/dev/null || true' | grep -qvx 'active\|
 
 # what decides where the tablet updates from: must not change in a test update
 REMOTE_CFG='# gta3:remote
-cat /usr/lib/gtactive3wifi/update-channel 2>/dev/null
+cat /usr/lib/gtactive3wifi/update-channel /usr/lib/samsung-gtactive3/update-channel 2>/dev/null
 for d in /etc/sysupdate.d /usr/lib/sysupdate.d; do [ -d $d ] && find $d -type f | sort | xargs cat 2>/dev/null; done | sha256sum'
 
 # update --test [DIR] [VERSION]: a local build as a one-off A/B update.
@@ -276,16 +288,18 @@ for d in /etc/sysupdate.d /usr/lib/sysupdate.d; do [ -d $d ] && find $d -type f 
 # the next official update replaces it. The tablet's update channel is not
 # touched.
 update_test() {
-	local dir=${1:-$GTA3_REPO/build/wt/duranium/mkosi.output} ver=${2:-} ui name uki osv booted l before after stage f
+	local dir=${1:-$GTA3_REPO/build/wt/duranium/mkosi.output} ver=${2:-} ui name uki osv booted l before after stage f dev
 	step "Install a test build as an A/B update"
+	# the tablet's variant (setup restores it from the state): its image name
+	dev=$(vcfg image_id)
 	# the build's UI: UI=, else the image directory given, else the booted
 	# one (a test build may switch UI, e.g. Phosh on a tablet running GNOME)
 	case ${dir%/} in
-		*/samsung-gtactive3wifi_*_edge) ui=${dir%/}; ui=${ui##*/samsung-gtactive3wifi_}; ui=${ui%_edge} ;;
+		*/"${dev}"_*_edge) ui=${dir%/}; ui=${ui##*/"${dev}"_}; ui=${ui%_edge} ;;
 		*) ui= ;;
 	esac
 	ui=${UI:-${ui:-$(con_probe | awk '{ print $3 }')}}
-	name=samsung-gtactive3wifi_${ui}_edge
+	name=${dev}_${ui}_edge
 	[ -d "$dir/$name" ] && dir=$dir/$name
 	if [ -z "$ver" ]; then
 		ver=$(find "$dir" -maxdepth 1 -name "${name}_*~test*.efi" -printf '%f\n' |
@@ -299,16 +313,20 @@ update_test() {
 	con_is_duranium || die "the tablet is not running a Duranium dev image (USB console)"
 	booted=$(con_probe | awk '{ print $2 }')
 	[ "$(vercmp "$ver" "$booted")" = ">" ] || die "$ver is not newer than the booted $booted: systemd-boot would not start it"
-	l=$(published_newest) && [ "$(vercmp "$ver" "$l")" = ">" ] ||
-		die "$ver is not above the newest published version ${l:-?}"
-	info "$ver > booted $booted > published $l; the next official update (>= $(printf '%08d' $((10#$l + 1)))) replaces it"
+	if has_channels; then
+		l=$(published_newest) && [ "$(vercmp "$ver" "$l")" = ">" ] ||
+			die "$ver is not above the newest published version ${l:-?}"
+		info "$ver > booted $booted > published $l; the next official update (>= $(printf '%08d' $((10#$l + 1)))) replaces it"
+	else
+		warn "the $(vcfg name) has no published images (bring-up): nothing replaces $ver but your next test build"
+	fi
 	before=$(dur_sh remote "$REMOTE_CFG") || die "cannot read the tablet's update configuration"
 	sysupdate_clean_slots
 	# hard links in a directory of its own: duranium-update sizes the files
 	# with stat, which would see a symbolic link's size
 	stage=$(mktemp -d "$dir/.update-test.XXXXXX")
 	for f in "$dir/${name}_$ver".*; do ln "$f" "$stage/" 2>/dev/null || cp "$f" "$stage/"; done
-	act "A/B update to $ver" env OUT="$stage" UI="$ui" EXTENSIONS="" \
+	act "A/B update to $ver" env OUT="$stage" UI="$ui" IMAGE="$dev" EXTENSIONS="" \
 		"${GTA3_DURANIUM_UPDATE:-$GTA3_REPO/scripts/duranium-update}" "$ver" || { rm -rf "$stage"; die "the update failed; the booted version is unchanged"; }
 	rm -rf "$stage"
 	after=$(dur_sh remote "$REMOTE_CFG") || die "cannot read the tablet's update configuration"
@@ -324,7 +342,7 @@ status_duranium() {
 	dur_sh status '# gta3:status
 . /usr/lib/os-release; echo "image:   $IMAGE_ID $IMAGE_VERSION ($VARIANT_ID)"
 echo "kernel:  $(uname -r)"
-echo "channel: $(cat /usr/lib/gtactive3wifi/update-channel 2>/dev/null)"
+echo "channel: $(cat /usr/lib/gtactive3wifi/update-channel /usr/lib/samsung-gtactive3/update-channel 2>/dev/null)"
 echo "slots:"; lsblk -no NAME,PARTLABEL,SIZE /dev/loop0 2>/dev/null | sed "s/^/  /"
 echo "boot entries:"; ls /boot/EFI/Linux 2>/dev/null | sed "s/^/  /"
 echo "firmware: $(find /var/lib/firmware -type f 2>/dev/null | wc -l) files"' || true

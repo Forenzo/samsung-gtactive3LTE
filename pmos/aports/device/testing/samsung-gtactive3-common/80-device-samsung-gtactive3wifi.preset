@@ -1,0 +1,5 @@
+enable gtactive3wifi-usb-prep.service
+enable gta3-debug-console.socket
+# No modem: the Wi-Fi SM-T570 has none, and the LTE SM-T575's (the SoC's
+# Shannon CP) has no driver yet (docs/re/modem.md)
+disable ModemManager.service

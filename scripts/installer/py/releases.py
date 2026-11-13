@@ -13,15 +13,33 @@ Only the signed SHA256SUMS of a release is trusted for hashes; the sha256
 fields here are for display and an early mismatch check.
 """
 import json
+import os
 import re
+import subprocess
 import sys
+from pathlib import Path
 
-CHANNELS = {
-    "samsung-gtactive3wifi_phosh_edge": ("phosh", "release", "Phosh"),
-    "samsung-gtactive3wifi_gnome_edge": ("gnome", "release", "GNOME"),
-    "samsung-gtactive3wifi_phosh_edge-dev": ("phosh", "dev", "Phosh (dev)"),
-    "samsung-gtactive3wifi_gnome_edge-dev": ("gnome", "dev", "GNOME (dev)"),
-}
+CONFIG = Path(__file__).resolve().parents[2] / "config"
+
+
+def load_channels():
+    """{tag: (ui, flavour, title)} from config.toml (scripts/config channels),
+    for one variant: GTA3_VARIANT (the connected tablet's), else the default."""
+    def cfg(*a):
+        return subprocess.run([sys.executable, "-I", str(CONFIG), *a], check=True,
+                              capture_output=True, text=True).stdout
+    variant = os.environ.get("GTA3_VARIANT") or cfg("get", "device.codename").strip()
+    out = {}
+    for line in cfg("channels").splitlines():
+        ui, flavour, tag, v = line.split()
+        if v != variant:
+            continue
+        title = cfg("get", f"ui.{ui}.title").strip()
+        out[tag] = (ui, flavour, title + (" (dev)" if flavour == "dev" else ""))
+    return out
+
+
+CHANNELS = load_channels()
 
 
 def kind_of(name):

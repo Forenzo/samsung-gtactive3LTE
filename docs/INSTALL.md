@@ -10,7 +10,7 @@ It is a development port: read [STATUS.md](STATUS.md) for what works.
 ## In short
 
 ```sh
-git clone https://github.com/exynos-linux/samsung-gtactive3wifi
+git clone https://github.com/exynos-linux/samsung-gtactive3
 cd gtactive3-mainline
 ./setup.sh --stock-ap ~/Downloads/AP_T570XXSFEYI1_....tar.md5
 ```
@@ -38,9 +38,13 @@ identity and boot security (EFS, PARAM, PERSISTENT, VBMETA, the bootloader,
 
 ## What you need
 
-- A Samsung Galaxy Tab Active3 **SM-T570** (Wi-Fi). Not the LTE models
-  (SM-T575/T577). Tested with firmware **T570XXSFEYI1** (bootloader revision
-  F), hardware revision 4.
+- A Samsung Galaxy Tab Active3 **SM-T570** (Wi-Fi). Tested with firmware
+  **T570XXSFEYI1** (bootloader revision F), hardware revision 4. The LTE
+  SM-T575/T575N is in bring-up: `./setup.sh --bring-up` accepts it, for
+  developers with a USB console only (the installer records it, so later
+  commands need no flag), and there are no images for it yet: test builds
+  go on with `./setup.sh update --test` (docs/VARIANTS.md). Not the US
+  SM-T577U. Python 3.11 or newer on the PC.
 - A Linux PC (Fedora, Debian, Ubuntu, Arch, Alpine, ...) with these tools;
   `./setup.sh doctor` checks them and prints the install command:
 
@@ -332,7 +336,7 @@ Samsung's firmware and your backups stay on your PC: do not share them.
 - The boot chain payload (uniLoader + U-Boot + our bring-up Linux, all GPL,
   no Samsung files) is built by `ci/bootchain/build` and published by
   `.github/workflows/bootchain.yml` to the release
-  `samsung-gtactive3wifi_bootchain` with a signed SHA256SUMS. The installer
+  `samsung-gtactive3_bootchain` (one for both variants) with a signed SHA256SUMS. The installer
   packs it with the owner's stock DTB and header exactly as
   `scripts/mkboot-chain.sh` does (byte-identical before the AVB footer).
 - `--image FILE.raw[.zst]` and `--payload DIR` take local builds.
@@ -344,7 +348,7 @@ To reach a tablet over Wi-Fi (also behind enterprise networks that isolate
 clients, and next to a VPN on the PC), join it to your Tailscale tailnet:
 log in, connect to Wi-Fi, open Console and run
 
-    wget -qO- https://exynos-linux.github.io/samsung-gtactive3wifi/remote | sudo sh
+    wget -qO- https://exynos-linux.github.io/samsung-gtactive3/remote | sudo sh
 
 Scan the QR code it shows with a phone signed in to your tailnet and
 approve the tablet; then `tailscale ssh root@gtactive3` from the PC. The

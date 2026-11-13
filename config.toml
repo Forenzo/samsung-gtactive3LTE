@@ -16,30 +16,80 @@ schema = 1
 template = false
 # owner/name on GitHub. CI uses $GITHUB_REPOSITORY when it is set, so a
 # fork (and this repo until it has moved to exynos-linux) publishes to itself.
-repo = "exynos-linux/samsung-gtactive3wifi"
+repo = "exynos-linux/samsung-gtactive3"
 title = "Galaxy Tab Active3: mainline Linux"
 maintainers = ["@dixonSolutions"]
 community = "https://discord.gg/exynos-linux"
 license = "GPL-2.0-only"
 
+# The board family. Its variants ([[variant]] below) share the kernel, the
+# boot chain, the installer, the common device package and this repository;
+# each has its own codename, device package, images and update channels.
+# docs/VARIANTS.md: what differs and how a variant is added.
 [device]
 vendor = "samsung"
+# shared names: samsung-gtactive3_bootchain, gtactive3-setup,
+# samsung-gtactive3-common, U-Boot's gtactive3_defconfig
+family = "gtactive3"
+# the default variant: device.id, [android] and update.channel_file below
+# are its values (the Wi-Fi tablets that are installed today)
 codename = "gtactive3wifi"
-name = "Samsung Galaxy Tab Active3 (Wi-Fi)"
-models = ["SM-T570"]
+name = "Samsung Galaxy Tab Active3"
+# every variant's models (the site lists them)
+models = ["SM-T570", "SM-T575", "SM-T575N"]
 form_factor = "tablet"
 arch = "aarch64"
 soc = "exynos9810"
 soc_name = "Exynos 9810"
 status = "testing"
 
-[android]
+# Wi-Fi only: the port's first variant, installed and updated today.
+[[variant]]
+codename = "gtactive3wifi"
+name = "Samsung Galaxy Tab Active3 (Wi-Fi)"
+models = ["SM-T570"]
+status = "testing"
+modem = false
+images = true
+# the images' name (IMAGE_ID: release tags, asset and UKI names)
+image_id = "samsung-gtactive3-wifi"
+# LEGACY, delete once no tablet runs an image named so (images up to
+# 26102403 were named after the device id): CI also publishes every build
+# under these names, and the images still recognise files installed under
+# them (docs/RELEASES.md, "Image names")
+legacy_image_ids = ["samsung-gtactive3wifi"]
+# U-Boot's board table: S-Boot's androidboot.bootloader starts with this
+u_boot_match = "T570"
+[variant.android]
 product_device = "gtactive3wifi"
 firmware_pattern = "T570[A-Z0-9]{8}"
 # The firmware the boot chain was tested on: the installer warns on others.
 tested_firmware = "T570XXSFEYI1"
 tested_bootloader_rev = "F"
 fus_model = "SM-T570"
+
+# LTE: the same board plus the SoC's modem (Shannon CP). Not booted yet:
+# no images until it boots on a T575 (images = true then, dev channels
+# first). The US SM-T577/SM-T577U share the codename but are left out
+# until an unlock is confirmed first-hand (docs/VARIANTS.md).
+[[variant]]
+codename = "gtactive3"
+name = "Samsung Galaxy Tab Active3 (LTE)"
+models = ["SM-T575", "SM-T575N"]
+status = "bring-up"
+modem = true
+images = false
+image_id = "samsung-gtactive3-lte"
+u_boot_match = "T575"
+[variant.android]
+product_device = "gtactive3"
+# T575XX... (international), T575NKO... (Korea)
+firmware_pattern = "T575N?[A-Z0-9]{8}"
+# the stock firmware of the one T575 measured (docs/VARIANTS.md); no
+# boot chain test on it yet
+tested_firmware = "T575XXSFEYI1"
+tested_bootloader_rev = "F"
+fus_model = "SM-T575"
 
 [firmware]
 # Where the firmware tools keep Samsung's files on a developer PC
@@ -71,8 +121,12 @@ uis = ["phosh", "gnome"]
 default_ui = "phosh"
 extra_packages = ["postmarketos-base-ui-audio-backend-pipewire"]
 dev_packages = ["duranium-usb-debug", "duranium-usb-debug-adb"]
-debug_package_regex = "^(duranium-usb-debug(-adb|-initramfs)?)$"
-debug_file_regex = "duranium-usb-debug|duranium-debug-"
+# the USB debug layer (root over USB without a password): release images
+# must not contain these packages or files (ci/check-image), base image and
+# initrd. The register console moved to the common package; the old name
+# stays listed for images built before.
+debug_package_regex = "^(duranium-usb-debug(-adb|-initramfs)?|samsung-gtactive3-common-console|device-samsung-gtactive3wifi-console)$"
+debug_file_regex = "duranium-usb-debug|duranium-debug-|gta3-debug-console|gta3-console"
 
 [ui.phosh]
 title = "Phosh"
@@ -112,14 +166,15 @@ fingerprint = "D0FE850AF01A47831B6EF808583161CE787FF5B5"
 [bootchain]
 # A boot-chain payload release for the installer (bootchain/, ci/bootchain).
 enabled = true
-# derived: <device.id>_bootchain
+# derived: <vendor>-<family>_bootchain (no release of it published yet)
 tag = ""
-# The board in the vendored trees (bootchain/build.sh).
-# derived: <codename>_defconfig (bootchain/u-boot/configs/)
+# The board in the vendored trees (bootchain/build.sh), one for the family.
+# derived: <family>_defconfig (bootchain/u-boot/configs/)
 u_boot_defconfig = ""
-# derived: <codename>_chain_defconfig (bootchain/uniLoader/configs/)
+# derived: <family>_chain_defconfig (bootchain/uniLoader/configs/)
 uniloader_defconfig = ""
-# derived: exynos/<soc>-<codename>.dtb (the bring-up Linux's DTB)
+# derived: the default variant's exynos/<soc>-<codename>.dtb (the bring-up
+# Linux's DTB); bootchain.dtbs lists every variant's
 dtb = ""
 # The bring-up kernel's config fragment (merged onto allnoconfig); also
 # what scripts/build.sh builds the development bring-up image with.
@@ -128,7 +183,7 @@ bringup_config = "configs/gtactive3-bringup.config"
 f2fs = true
 
 [installer]
-# derived: <device.codename>-setup (state, cache and backup directory names)
+# derived: <device.family>-setup (state, cache and backup directory names)
 name = "gtactive3-setup"
 # Samsung Download mode USB id (heimdall).
 download_usb = "04e8:685d"

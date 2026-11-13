@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/*
+ * Samsung Galaxy Tab Active3 LTE (gtactive3/SM-T575, SM-T575N): U-Boot's
+ * device tree. The same board as the Wi-Fi SM-T570, plus the SoC's modem,
+ * whose shared memory and log buffer stay reserved (from the stock
+ * T575XXSFEYI1 tree: modem_if, cp_ram_logging), so they are marked reserved
+ * in the EFI memory map too. Not booted on a T575 yet.
+ *
+ * The first compatible, "samsung,gtactive3", is what systemd-stub matches
+ * against the kernel DTBs when a UKI carries several (.dtbauto).
+ */
+
+#include "exynos9810-gtactive3wifi.dts"
+
+/ {
+	model = "Samsung Galaxy Tab Active3 LTE (SM-T575)";
+	compatible = "samsung,gtactive3", "samsung,exynos9810";
+
+	reserved-memory {
+		modem@f0000000 {
+			reg = <0x0 0xf0000000 0x09200000>;
+			no-map;
+		};
+
+		modem-log@f9200000 {
+			reg = <0x0 0xf9200000 0x02000000>;
+			no-map;
+		};
+	};
+};

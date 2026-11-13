@@ -87,8 +87,8 @@ check_tools() {
 }
 
 check_python() {
-	python3 -c 'import sys; sys.exit(sys.version_info < (3, 8))' ||
-		die "python3 is older than 3.8"
+	python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' ||
+		die "python3 is older than 3.11 (scripts/config reads config.toml with tomllib)"
 }
 
 # USB access rules for Samsung's IDs (adb 04e8:6860, Download mode 04e8:685d)

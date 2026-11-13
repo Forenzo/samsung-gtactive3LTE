@@ -1,6 +1,8 @@
 # Galaxy Tab Active3 Wi-Fi (SM-T570, gtactive3wifi): hardware notes
 
 Collected over ADB from stock Android on 2026-10-21 (before the unlock).
+The LTE variant (SM-T575, `gtactive3`) is the same board plus the SoC's
+modem and a second grip sensor: [docs/VARIANTS.md](docs/VARIANTS.md).
 
 ## Identity
 - Model SM-T570, region XSA, serial <serial>
@@ -65,7 +67,8 @@ Unsigned vbmeta (flags=2, no key) is refused by S-Boot rev F:
 | PMIC bus | samsung,exynos-speedy | 0x141c0000 | S2MPS18 sits on SPEEDY, not I²C; ACPM also talks to it |
 | Thermal | samsung,exynos9810-tmu ×4 | 0x10070000 (BIG) … | |
 | GPU | arm,mali | | Mali-G72 |
-| Wi-Fi | samsung,exynos-pcie (pcie1) | 0x116b0000 | |
+| Wi-Fi | samsung,exynos-pcie (pcie0, channel 0) | 0x116a0000 | stock pcie0@116A0000, enabled by DTBO fragment@73; pcie1 (0x116b0000) unused (patches/linux/0071; the T575's live FDT agrees, docs/VARIANTS.md) |
+| Modem (LTE variant only) | exynos,modem_if + sec_modem,modem_pdata (Shannon CP "ss360ap") | shared memory 0xf0000000 (0x9200000), log 0xf9200000 (0x2000000), mailbox 0x14170000 | none on the SM-T570; the T575's and the S9's stock DTs: docs/re/modem.md |
 
 Keys (DTBO hw_rev 5): vol- gpa0-4, vol+ gpa0-3, power gpa2-4, home gpa3-5,
 back gpg3-0, recent gpg3-1, "Active" key gpa0-5.

@@ -36,7 +36,10 @@ case $ui in
 "" | -* | *[!a-z0-9-]*) echo "bad UI in $pref: $ui" >&2; exit 1 ;;
 esac
 
-want="default samsung-gtactive3wifi_${ui}_edge_*@main"
+# every name these images had (samsung-gtactive3wifi_..., then
+# samsung-gtactive3-wifi_...): systemd-boot sorts entries by their image id
+# and the new name sorts first, so the newest new-named image wins
+want="default samsung-gtactive3*_${ui}_edge_*@main"
 [ -f "$conf" ] || { echo "no $conf"; exit 0; }
 if grep -qx "$want" "$conf" && [ "$(grep -c '^default' "$conf")" = 1 ]; then
 	exit 0

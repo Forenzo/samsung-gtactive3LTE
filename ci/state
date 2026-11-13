@@ -32,34 +32,44 @@ fi
 
 declare -A have
 max=0
-while read -r ui ch tag; do
+while read -r ui ch tag variant; do
 	json=$(gh release view "$tag" -R "$REPO" --json body,assets 2>/dev/null || echo '{}')
-	have[$ui-$ch]=$(jq -r '.body // ""' <<<"$json" | fp_of)
+	have[$variant-$ui-$ch]=$(jq -r '.body // ""' <<<"$json" | fp_of)
 	for v in $(jq -r '.assets[]?.name' <<<"$json" | sed -n 's/.*_\([0-9]\{8\}\)\.efi$/\1/p'); do
 		[ "$v" -gt "$max" ] && max=$v
 	done
 done < <(sh ci/channels)
+# versions only grow: also above what went out under a legacy image name
+while read -r _ _ ltag _ _; do
+	for v in $(gh release view "$ltag" -R "$REPO" --json assets -q '.assets[].name' 2>/dev/null |
+		sed -n 's/.*_\([0-9]\{8\}\)\.efi$/\1/p'); do
+		[ "$v" -gt "$max" ] && max=$v
+	done
+done < <(scripts/config legacy-channels)
 
 if upstream=$(curl -fsSL --retry 3 https://duranium.nura.eco/images/mkosi.version | tr -dc 0-9) &&
 	[ ${#upstream} = 8 ]; then
 	:
 else
 	# their server is down: build on the base the dev channel was built on
-	upstream=$(sed -n 's|^pmos-\([0-9]\{8\}\)/.*|\1|p' <<<"${have[phosh-dev]:-}")
+	read -r ui0 _ _ v0 < <(sh ci/channels | awk '$2 == "dev"' | head -1)
+	upstream=$(sed -n 's|^pmos-\([0-9]\{8\}\)/.*|\1|p' <<<"${have[$v0-$ui0-dev]:-}")
 	[ -n "$upstream" ] || { echo "cannot read postmarketOS's mkosi.version" >&2; exit 1; }
 	warn "duranium.nura.eco unreachable: assuming postmarketOS base $upstream"
 fi
 ours=$(git rev-parse HEAD:pmos)
-for f in config.toml scripts/config ci/prepare ci/channels ci/publish ci/check-image .github/workflows/images.yml; do
+for f in config.toml scripts/config ci/prepare ci/channels ci/publish ci/publish-legacy ci/check-image .github/workflows/images.yml; do
 	ours="$ours-$(git rev-parse "HEAD:$f")"
 done
 fingerprint="pmos-$upstream/ours-$(echo "$ours" | sha256sum | cut -c1-16)"
 
 build=no
-for ui in phosh gnome; do
-	[ "${have[$ui-dev]:-}" = "$fingerprint" ] || build=yes
-	[ $verified = no ] || [ "${have[$ui-release]:-}" = "$fingerprint" ] || build=yes
-done
+while read -r ui ch _ variant; do
+	case $ch in
+	dev) [ "${have[$variant-$ui-dev]:-}" = "$fingerprint" ] || build=yes ;;
+	release) [ $verified = no ] || [ "${have[$variant-$ui-release]:-}" = "$fingerprint" ] || build=yes ;;
+	esac
+done < <(sh ci/channels)
 [ "${FORCE:-}" = 1 ] && build=yes
 
 floor=${MIN_VERSION:-0}

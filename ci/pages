@@ -17,7 +17,7 @@ themselves.
 
 releases.json:
   {"schema": 1, "generated": iso8601, "repo": "owner/name",
-   "channels": [{"id", "ui", "flavour": "release"|"dev", "title",
+   "channels": [{"id", "ui", "flavour": "release"|"dev", "title", "variant", "models",
      "description", "prerelease", "verified", "latest",
      "versions": [{"version", "date",
        "files": [{"name", "size", "sha256", "url", "kind"}]}]}],
@@ -307,8 +307,11 @@ def main():
                                         check=True, capture_output=True).stdout)
         fpr = fingerprint(ring)
         chans = []
-        for ui, flavour, tag in channels():
+        for ui, flavour, tag, variant in channels():
             if tag in rels and (c := channel(ui, flavour, tag, rels[tag], ring, tmp)):
+                # which Galaxy Tab Active3 variant (config.toml [[variant]])
+                c["variant"] = variant
+                c["models"] = CFG["variants"][variant]["models"]
                 chans.append(c)
         bc = bootchain(rels[BOOTCHAIN_TAG], ring, tmp) if BOOTCHAIN_TAG in rels else None
     now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

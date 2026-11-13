@@ -3,7 +3,7 @@
 Our own description of how the SM-T570 (Galaxy Tab Active3) sleeps, wakes
 up and powers off, and of what the mainline port does with it. Written from:
 
-- Samsung's GPL kernel for the T570 family (`build/ref/gtactive3cs`, Linux
+- Samsung's GPL kernel for the Tab Active3 family (the SM-T577U's tree, ../VARIANTS.md) (`build/ref/gtactive3cs`, Linux
   4.9): `drivers/soc/samsung/exynos-pm.c`, `exynos-powermode.c`,
   `exynos-reboot.c`, `acpm/acpm.c`, `cal-if/` (PMUCAL tables
   `exynos9810/flexpmu_cal_*_exynos9810.h`), `drivers/firmware/psci.c`,

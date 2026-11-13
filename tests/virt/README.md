@@ -53,7 +53,7 @@ testable (kernel without virt drivers and `--kernel none`).
   installs a plain `.dtb` unconditionally, which would replace QEMU's DT
   with the tablet's. Everything else in the UKI is unchanged.
 - The kernel needs `virt.config` (duranium-build
-  `contrib/samsung-gtactive3wifi/kernel/virt.config`). For images built
+  `contrib/samsung-gtactive3/kernel/virt.config`). For images built
   before it, `build-kernel.sh` builds a virt Image from the aport revision
   that built the image (`APORT_REV`, config must match: e.g. CONFIG_PM
   changes struct device) and `--kernel IMAGE` puts it into the UKI. That

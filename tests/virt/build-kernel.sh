@@ -30,7 +30,7 @@ set -eu
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PMAPORTS=${PMAPORTS:-$ROOT/build/wt/pmaports-duranium}
-CONTRIB=${CONTRIB:-$ROOT/build/wt/duranium/contrib/samsung-gtactive3wifi}
+CONTRIB=${CONTRIB:-$ROOT/build/wt/duranium/contrib/samsung-gtactive3}
 APORT=${APORT:-device/testing/linux-postmarketos-exynos9810}
 REV=${APORT_REV:-HEAD}
 BUILDER=${BUILDER:-gta3-pkgbuilder}

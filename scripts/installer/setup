@@ -1,7 +1,8 @@
 #!/bin/bash
 # shellcheck source-path=SCRIPTDIR
 # gtactive3-mainline installer for the Samsung Galaxy Tab Active3 Wi-Fi
-# (SM-T570): postmarketOS Duranium, from a Linux PC, over USB.
+# (SM-T570; the LTE SM-T575 in bring-up): postmarketOS Duranium, from a
+# Linux PC, over USB.
 # Entry point: ./setup.sh (repo root). User guide: docs/INSTALL.md.
 set -euo pipefail
 
@@ -45,10 +46,12 @@ Options:
   --download-stock      download the stock firmware from Samsung (tools/fusdl.py)
   --firmware-dir DIR    vendor firmware already extracted (lib/firmware layout)
   --stock-recovery      restore-android: also flash the stock recovery image
-  --channel ID          image channel (e.g. samsung-gtactive3wifi_phosh_edge)
+  --channel ID          image channel (e.g. samsung-gtactive3-wifi_phosh_edge)
   --version V           image version (default: newest)
   --image FILE          a local disk image (.raw / .raw.zst) instead of a download
   --payload DIR|TAR     a local boot-chain payload instead of the published one
+  --bring-up            accept a variant in bring-up (config.toml status), e.g.
+                        the LTE SM-T575: for developers with a USB console
   --serial SERIAL       which adb device, if several are connected
   --debug-tools         install the USB debug tool without asking
   --no-debug-tools      do not install it (the default is to ask, answer yes)
@@ -107,6 +110,7 @@ while [ $# -gt 0 ]; do
 		--version) OPT_VERSION=${2:?}; shift ;;
 		--image) OPT_IMAGE=$(realpath "${2:?}"); shift ;;
 		--payload) OPT_PAYLOAD=$(realpath "${2:?}"); shift ;;
+		--bring-up) OPT_BRING_UP=1 ;;
 		--serial) ANDROID_SERIAL=${2:?}; export ANDROID_SERIAL; shift ;;
 		--debug-tools) OPT_DEBUG_TOOLS=1 ;;
 		--no-debug-tools) OPT_DEBUG_TOOLS=0 ;;
@@ -126,8 +130,13 @@ done
 export YES YES_WIPE DRY_RUN VERBOSE
 
 state_init
+# the tablet's variant as recorded by the Android check (android_inspect),
+# for every command that does not run it again; a variant in bring-up also
+# needs --bring-up, recorded once
+set_variant "$(state_get VARIANT "$VARIANT")"
+[ "$(state_get VARIANT)" = "" ] || bring_up_check
 _log "gtactive3-setup $CMD ${ARGS[*]:-} (repo $(git -C "$GTA3_REPO" describe --always --dirty 2>/dev/null || echo ?))"
-say "${C_B}Galaxy Tab Active3 (SM-T570): postmarketOS Duranium installer${C_0}"
+say "${C_B}Galaxy Tab Active3: postmarketOS Duranium installer${C_0}"
 say "${C_DIM}Log: $LOG_FILE${C_0}"
 [ "$DRY_RUN" = 1 ] && say "${C_Y}Dry run: nothing on the tablet or this PC is changed.${C_0}"
 

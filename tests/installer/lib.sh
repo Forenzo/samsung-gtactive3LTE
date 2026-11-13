@@ -82,23 +82,33 @@ fx_ap() {
 	AP_TAR=$d/$n.md5
 }
 
+# the boot-chain payload as bootchain/build.sh makes it: the default
+# variant's loaders unsuffixed, every other variant's with -<codename>
 fx_payload() {
-	local d=$RUN/fx/payload/gtactive3wifi-bootchain_1.0
+	local fam tag d cn
+	fam=$("$REPO/scripts/config" get device.family)
+	tag=$("$REPO/scripts/config" get bootchain.tag)
+	d=$RUN/fx/payload/$fam-bootchain_1.0
 	mkdir -p "$d"
 	pad_file "$d/uniLoader-chain" FAKE-UNILOADER-CHAIN 131072
 	pad_file "$d/uniLoader-linux" FAKE-UNILOADER-LINUX 131072
+	for cn in $("$REPO/scripts/config" variants | awk '{ print $1 }'); do
+		[ "$cn" = "$("$REPO/scripts/config" get device.codename)" ] && continue
+		pad_file "$d/uniLoader-chain-$cn" "FAKE-UNILOADER-CHAIN-$(echo "$cn" | tr a-z A-Z)" 131072
+		pad_file "$d/uniLoader-linux-$cn" "FAKE-UNILOADER-LINUX-$(echo "$cn" | tr a-z A-Z)" 131072
+	done
 	printf 'fallback ramdisk' | gzip > "$d/ramdisk.cpio.gz"
 	printf 'version: 1.0\nsources: test fixture\n' > "$d/MANIFEST"
-	mkdir -p "$RUN/srv/dl/samsung-gtactive3wifi_bootchain"
-	tar -C "$d" -czf "$RUN/srv/dl/samsung-gtactive3wifi_bootchain/gtactive3wifi-bootchain_1.0.tar.gz" .
-	sign_sums "$RUN/srv/dl/samsung-gtactive3wifi_bootchain"
+	mkdir -p "$RUN/srv/dl/$tag"
+	tar -C "$d" -czf "$RUN/srv/dl/$tag/$fam-bootchain_1.0.tar.gz" .
+	sign_sums "$RUN/srv/dl/$tag"
 	PAYLOAD_DIR=$d
 }
 
 # a small 4 KiB-sector Duranium-like disk: GPT + ESP (FAT16) + "usr"
 fx_image() {
-	local d=$RUN/fx/img ch=samsung-gtactive3wifi_phosh_edge-dev v=26102213 n
-	n=samsung-gtactive3wifi_phosh_edge_$v
+	local d=$RUN/fx/img ch=samsung-gtactive3-wifi_phosh_edge-dev v=26102213 n
+	n=samsung-gtactive3-wifi_phosh_edge_$v
 	mkdir -p "$d"
 	mkfs.fat -F 16 -S 4096 -s 1 -n ESP -C "$d/esp.img" 32768 >/dev/null
 	MTOOLS_SKIP_CHECK=1 mmd -i "$d/esp.img" ::/EFI ::/EFI/Linux
@@ -135,17 +145,19 @@ fx_image() {
 		json.dump(idx, open(f"{srv}/pages/releases.json.in", "w"))
 		api = [{"tag_name": ch, "prerelease": True,
 		        "assets": [{"name": f["name"], "size": f["size"]} for f in files]},
-		       {"tag_name": "samsung-gtactive3wifi_bootchain", "prerelease": True, "assets": []}]
+		       {"tag_name": "samsung-gtactive3_bootchain", "prerelease": True, "assets": []}]
 		os.makedirs(f"{srv}/api", exist_ok=True)
 		json.dump(api, open(f"{srv}/api/releases.json", "w"))
 	PY
 }
 
 build_fixtures() {
-	local t
+	local t miss=
 	for t in mkbootimg avbtool lpmake simg2img mke2fs mkfs.fat sfdisk mmd mcopy zstd lz4 gpg python3 debugfs; do
-		need "$t" || { echo "the installer tests need $t" >&2; exit 2; }
+		need "$t" || miss="$miss $t"
 	done
+	# return, not exit: run.sh prints this before its EXIT trap cleans up
+	[ -z "$miss" ] || { echo "the installer tests need these tools, missing on this PC:$miss" >&2; return 2; }
 	mkdir -p "$RUN/bin" "$RUN/srv"
 	for t in adb heimdall lsusb; do ln -sf "$MOCK/mockdev.py" "$RUN/bin/$t"; done
 	fx_gpg
@@ -233,9 +245,9 @@ new_tablet() {
 		    "sys.oem_unlock_allowed": "1", "knox.kg.state": "Completed"},
 		  "settings": {"development_settings_enabled": "1"},
 		  "vendor_readable": True, "image_flavour": "dev", "events": [], "log": [],
-		  "os_release": 'ID="nura"\nIMAGE_ID=samsung-gtactive3wifi\nIMAGE_VERSION="26102213"\nVARIANT_ID=phosh\n',
+		  "os_release": 'ID="nura"\nIMAGE_ID=samsung-gtactive3-wifi\nIMAGE_VERSION="26102213"\nVARIANT_ID=phosh\n',
 		  "sh": {"remote": "1111  -\n", "versions": "26102213\n26102201\n",
-		         "status": "image:   samsung-gtactive3wifi_phosh_edge 26102213 (phosh)\n",
+		         "status": "image:   samsung-gtactive3-wifi_phosh_edge 26102213 (phosh)\n",
 		         "updatectl-check": "26102213 (current)\n", "updatectl-update": "started\n",
 		         "update-state": "inactive\n", "updatectl-result": "Installed 26102214\n"}}, open(path, "w"), indent=1)
 	PY

@@ -198,7 +198,8 @@ def main():
             kv = dict(ln.split("=", 1) for ln in r.splitlines() if "=" in ln)
             # Duranium images say ID=nura (upstream's name); the bring-up
             # Linux has no os-release at all
-            if kv.get("IMAGE_ID", "").strip('"').startswith("samsung-gtactive3wifi"):
+            # any Galaxy Tab Active3 variant (samsung-gtactive3wifi, -gtactive3)
+            if kv.get("IMAGE_ID", "").strip('"').startswith("samsung-gtactive3"):
                 print("duranium", kv.get("IMAGE_VERSION", "?").strip('"'),
                       kv.get("VARIANT_ID", "?").strip('"'))
             else:

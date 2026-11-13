@@ -194,11 +194,54 @@ t_stage1_several_devices_need_serial() {
 
 t_stage1_wrong_model() {
 	new_tablet android; start_console
+	mock 's["props"]["ro.product.model"] = "SM-T577U"; s["props"]["ro.product.device"] = "gtactive3"'
+	setup live --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 1
+	out_has "this is not a supported Galaxy Tab Active3"
+	boot_is stock
+}
+
+t_stage1_model_device_mismatch() {
+	new_tablet android; start_console
 	mock 's["props"]["ro.product.model"] = "SM-T575"'
 	setup live --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
 	rc_is 1
-	out_has "only the Wi-Fi model SM-T570"
+	out_has "expected 'gtactive3'"
 	boot_is stock
+}
+
+# the LTE variant is in bring-up (config.toml): refused without --bring-up
+t_stage1_lte_needs_bring_up() {
+	new_tablet android; start_console
+	mock 's["props"].update({"ro.product.model": "SM-T575", "ro.product.device": "gtactive3"})'
+	setup live --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 1
+	out_has "only with --bring-up"
+	boot_is stock
+	no_violation
+}
+
+# with --bring-up: the LTE loaders go into BOOT, the variant is recorded,
+# and later commands (no Android check) keep using it
+t_stage1_lte_bring_up() {
+	new_tablet android; start_console
+	mock 's["props"].update({"ro.product.model": "SM-T575", "ro.product.device": "gtactive3"})'
+	# the fixture's stock boot image (the AP fixture is an SM-T570 one)
+	setup live --yes --bring-up --stock-boot "$RUN/fx/stock/boot.img.lz4" --payload "$PAYLOAD_DIR"
+	rc_is 0
+	st_is VARIANT gtactive3
+	st_is BRING_UP 1
+	boot_is linux
+	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-linux.img" FAKE-UNILOADER-LINUX-GTACTIVE3 ||
+		fail "BOOT does not hold the LTE bring-up loader"
+	setup prepare --yes --stock-boot "$RUN/fx/stock/boot.img.lz4" --payload "$PAYLOAD_DIR"
+	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-chain.img" FAKE-UNILOADER-CHAIN-GTACTIVE3 ||
+		fail "prepare packed another variant's chain loader"
+	# the other model's firmware package is refused
+	setup prepare --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
+	rc_is 1
+	out_has "for the Samsung Galaxy Tab Active3 (Wi-Fi), not for this"
+	no_violation
 }
 
 t_stage1_untested_bootloader_stops() {
@@ -333,12 +376,12 @@ t_backup_and_restore_android_raw() {
 
 t_install_needs_both_confirmations() {
 	live_tablet
-	setup install --yes --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 1
 	out_has "typed confirmation (ERASE)"
 	userdata_starts ANDROID-DATA
 	mock 's["tablet_key"] = 115'
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 1
 	out_has "not confirmed on the tablet"
 	userdata_starts ANDROID-DATA
@@ -349,7 +392,7 @@ t_install_needs_both_confirmations() {
 t_install_duranium_dev_image() {
 	live_tablet
 	mock 's["sh"]["status"] = "image: x\n"'
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	out_has "SHA256SUMS signature: good"
 	out_has "vendor firmware added to the image's ESP"
@@ -376,10 +419,10 @@ t_install_duranium_dev_image() {
 
 t_install_bad_signature_refused() {
 	live_tablet
-	cp -r "$RUN/srv/dl/samsung-gtactive3wifi_phosh_edge-dev" "$CASE/chan.bak"
-	echo "0000  extra" >> "$RUN/srv/dl/samsung-gtactive3wifi_phosh_edge-dev/SHA256SUMS"
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
-	cp "$CASE/chan.bak/SHA256SUMS" "$RUN/srv/dl/samsung-gtactive3wifi_phosh_edge-dev/SHA256SUMS"
+	cp -r "$RUN/srv/dl/samsung-gtactive3-wifi_phosh_edge-dev" "$CASE/chan.bak"
+	echo "0000  extra" >> "$RUN/srv/dl/samsung-gtactive3-wifi_phosh_edge-dev/SHA256SUMS"
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
+	cp "$CASE/chan.bak/SHA256SUMS" "$RUN/srv/dl/samsung-gtactive3-wifi_phosh_edge-dev/SHA256SUMS"
 	rc_is 1
 	out_has "NOT signed by the project key"
 	userdata_starts ANDROID-DATA
@@ -387,10 +430,10 @@ t_install_bad_signature_refused() {
 
 t_install_bad_image_hash_refused() {
 	live_tablet
-	f=$(ls "$RUN"/srv/dl/samsung-gtactive3wifi_phosh_edge-dev/*.raw.zst)
+	f=$(ls "$RUN"/srv/dl/samsung-gtactive3-wifi_phosh_edge-dev/*.raw.zst)
 	cp "$f" "$CASE/img.bak"
 	printf 'X' >> "$f"
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	cp "$CASE/img.bak" "$f"
 	rc_is 1
 	out_has "has the wrong hash"
@@ -399,14 +442,14 @@ t_install_bad_image_hash_refused() {
 
 t_install_index_falls_back_to_github_api() {
 	live_tablet
-	PAGES_PATH=nonexistent setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	PAGES_PATH=nonexistent setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	st_is STAGE chain
 }
 
 t_install_userdata_too_small() {
 	live_tablet
-	EXTRA_ENV="GTA3_FIRST_BOOT_EXTRA=$((1 << 40))" setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	EXTRA_ENV="GTA3_FIRST_BOOT_EXTRA=$((1 << 40))" setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 1
 	out_has "is smaller than Duranium needs"
 	userdata_starts ANDROID-DATA
@@ -431,7 +474,7 @@ t_undo_from_live_restores_android() {
 
 t_undo_after_install_warns_and_needs_typing() {
 	live_tablet
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	setup undo --yes
 	rc_is 1
@@ -450,7 +493,7 @@ t_undo_after_install_warns_and_needs_typing() {
 
 t_restore_android_formats_userdata() {
 	live_tablet
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	mock 's["sh"] = {}'
 	sed -i '/^ANDROID_BACKUP=/d' "$CASE/st/state.env"   # the install made one; pretend there is none
@@ -468,7 +511,7 @@ t_restore_android_formats_userdata() {
 
 t_restore_android_refuses_claimed_super() {
 	live_tablet
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	mock 's["sh"] = {}'
 	sed -i '/^ANDROID_BACKUP=/d' "$CASE/st/state.env"
@@ -486,7 +529,7 @@ t_restore_android_refuses_claimed_super() {
 t_restore_android_offers_backup() {
 	live_tablet
 	setup backup-android --yes
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	setup restore-android --yes-wipe
 	rc_is 0
@@ -497,11 +540,11 @@ t_restore_android_offers_backup() {
 
 t_wipe_reinstalls_with_typed_wipe() {
 	live_tablet
-	setup install --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
-	setup wipe --yes --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup install --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
+	setup wipe --yes --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 1
 	out_has "typed confirmation (WIPE)"
-	setup wipe --yes-wipe --channel samsung-gtactive3wifi_phosh_edge-dev
+	setup wipe --yes-wipe --channel samsung-gtactive3-wifi_phosh_edge-dev
 	rc_is 0
 	st_is STAGE chain
 	mode_is duranium
@@ -518,7 +561,7 @@ t_update_next_test_version() {
 }
 
 mk_test_build() { # DIR VERSION [OSREL-VERSION]
-	local n=samsung-gtactive3wifi_phosh_edge
+	local n=samsung-gtactive3-wifi_phosh_edge
 	mkdir -p "$1/$n"
 	python3 "$MOCK/mkuki.py" "$1/$n/${n}_$2.efi" "${3:-$2}"
 	echo usr > "$1/$n/${n}_$2.usr-arm64.abababababababababababababababab.raw"
