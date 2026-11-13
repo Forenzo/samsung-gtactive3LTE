@@ -1,0 +1,588 @@
+SM-T575 LTE - FIRST MAINLINE LINUX BOOT AND HARDWARE DIAGNOSTIC LOG
+Date: 2026-11-13
+Project: Galaxy Tab Active3 LTE mainline Linux bring-up
+Device: Samsung Galaxy Tab Active3 LTE, SM-T575 (Exynos 9810)
+Source build repository: https://github.com/Forenzo/samsung-gtactive3LTE
+Source branch: integration/upstream-active3-family-firstboot
+Upstream destination repository: https://github.com/exynos-linux/samsung-gtactive3
+Document: docs/SM-T575-FIRST-BOOT-2026-11-13.txt
+
+======================================================================
+1. EXECUTIVE SUMMARY
+======================================================================
+
+CONFIRMED: SM-T575 successfully booted an experimental mainline
+Linux 7.3.0 kernel and diagnostic initramfs from its BOOT partition.
+
+The diagnostic console appeared on the tablet's own display. The Mac
+enumerated a USB NCM network device; a TCP/23 connection over IPv6
+succeeded and /proc/version was read directly from running Linux.
+
+Further read-only diagnostics confirmed:
+  - Correct LTE board model in the live device tree.
+  - 3,761,204 kB of usable RAM (~3.59 GiB).
+  - UFS block devices sda, sdb, sdc, sdd, sde, with partition nodes.
+  - Battery capacity, voltage, charging state and temperature values.
+  - Exynos DRM framebuffer and an active 1200x1920 DSI connector.
+  - GPIO-keys input device.
+  - Present Himax and Wacom kernel module files, but neither was loaded
+    and neither appeared as an input device.
+  - I2C clients enumerated; SPI bus had no visible devices at test time.
+
+These observations were taken on the owner's actual LTE tablet using
+an experimental BOOT image assembled from the development fork.
+They do NOT imply that the upstream repository's own build or
+installation path has been tested on the LTE model.
+
+This was a diagnostic BOOT-only experiment, NOT a complete Linux
+distribution or postmarketOS installation. There has been no successful
+touchscreen, S Pen, Wi-Fi, Bluetooth, modem, audio, safe suspend,
+graphical compositor or filesystem-mount test yet.
+
+======================================================================
+2. BUILD AND BOOT IMAGE PROVENANCE
+======================================================================
+
+GitHub Actions run: 43447101392 (successful)
+https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/43447101392
+Artifact: t575-compile-only-diagnostic-payload
+Artifact ID: 14049356990
+Build date from live /proc/version: Fri Nov 13 15:03:44 UTC 2026
+
+Linux diagnostic BOOT candidate:
+  File: boot-t575-diagnostic-OFFLINE-ONLY.img
+  Size: 61,865,984 bytes
+  SHA256: 2c3981705053be7ae26289669b2e068ed66b830796b251117fbd188da715f0b2
+
+LTE diagnostic uniLoader:
+  SHA256: f3e6c5a78735df48e82173c2abfc9a6aa72056c6c8c9d71043d5997cdeebe17b
+
+Diagnostic initramfs:
+  SHA256: 5d21b8cefe195f0cd722a805f1f018cf566610be57ba77f884fa1864b0db4b55
+
+Original rooted Android BOOT backup:
+  File: boot-current.img
+  Size: 61,865,984 bytes
+  SHA256: a69a724b75a51821a0baa4ccda424173a003b17de19e2b381bb7d4f30596e372
+
+BOOT image construction was Android BOOT header v2, retaining a
+byte-identical copy of the owner's embedded Samsung DTB. The candidate
+contained a locally generated experimental AVB v1 footer; this did NOT
+independently establish production trust or broader AVB compatibility.
+
+Offline tools reported PASS for image structure, provenance and PIT
+geometry, but no offline check substitutes for hardware testing.
+
+Heimdall: v2.2.2, at /opt/homebrew/bin/heimdall (macOS/Apple Silicon).
+Earlier live PIT output: 39 entries; BOOT id 12, offset 27792 blocks,
+count 15104 blocks of 4096 bytes = 61,865,984 bytes.
+
+======================================================================
+3. FLASH AND BOOT CHRONOLOGY
+======================================================================
+
+First transfer:
+  Used Heimdall BOOT-only flash after PIT print with --no-reboot;
+  flash invocation included --resume --no-reboot.
+
+  Uploading BOOT
+  100%
+  BOOT upload successful
+  Ending session...
+  ERROR: Failed to receive session end confirmation!
+
+After the first transfer, tablet restarted into normal Samsung One UI
+with a short "Optimizing apps" stage. Android remained bootable.
+Read-only Android checks:
+
+  adb shell getprop ro.product.model
+  -> SM-T575
+
+  adb shell su -c 'sha256sum /dev/block/by-name/boot'
+  -> a69a724b75a51821a0baa4ccda424173a003b17de19e2b381bb7d4f30596e372
+     /dev/block/by-name/boot
+
+  adb shell uname -r
+  -> 4.9.191-27282692
+
+The hash was EXACTLY the original rooted Android BOOT hash. Therefore
+the first transfer had not left the experimental candidate in BOOT.
+The cause was not conclusively established; the Heimdall session-end
+error is evidence, not a verified root cause.
+
+Second transfer:
+  Fresh Download Mode session, BOOT-only Heimdall flash with normal
+  session completion/reboot (no --resume and no --no-reboot).
+
+  100%
+  BOOT upload successful
+  Ending session...
+  Rebooting device...
+  Releasing device interface...
+
+The device booted Linux: the screen showed Linux startup messages and
+diagnostic initialization, and the host subsequently established an
+interactive Linux console over USB networking.
+
+Android USERDATA, EFS, DTBO, VBMETA, RECOVERY and other partitions
+were NOT deliberately flashed during this Linux experiment. The
+ability to restore Android after this successful Linux boot has not
+yet been re-tested in this session; the rooted Android BOOT backup
+should remain available.
+
+======================================================================
+4. LIVE KERNEL AND USB DIAGNOSTIC CONSOLE
+======================================================================
+
+Host: macOS, Apple Silicon, USB attached
+Mac's interface: en7
+Mac interface: status active; media 100baseTX full-duplex
+Tablet console IPv6: fe80::57:aff:fe00:1%en7
+TCP console port: 23
+
+Command connection output:
+
+  Connecting to SM-T575 Linux via en7...
+  CONNECTED TO MAINLINE LINUX!
+  SM-T570 mainline bring-up console. Commands: dmesg,
+  peek ADDR, dump ADDR N, poke ADDR VAL, cat PATH,
+  write PATH VALUE, put PATH LEN, run PATH [ARGS],
+  insmod PATH [ARGS], rmmod NAME, ls DIR,
+  i2cw ADDR B.., i2cr ADDR REG N, evread PATH [N] [SECS],
+  ulog, reboot [download|recovery|normal], kexec PATH
+  >
+
+The SM-T570 wording is a static inherited diagnostic greeting, NOT
+a misidentified board. Direct live board property reported SM-T575.
+
+Direct response to 'cat /proc/version':
+
+  Linux version 7.3.0 (runner@runnervm8axu0)
+  (aarch64-linux-gnu-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0,
+  GNU ld (GNU Binutils for Ubuntu) 2.42)
+  #2 SMP PREEMPT Fri Nov 13 15:03:44 UTC 2026
+
+Direct response to 'cat /sys/firmware/devicetree/base/model':
+
+  Samsung Galaxy Tab Active3 LTE (SM-T575)
+
+Direct response to 'cat /proc/uptime':
+
+  622.99 2502.11
+
+A test of the board model initially produced a host-side response
+timeout, but a subsequent independent connection returned the exact
+SM-T575 model property. Commands are served by a small custom TCP
+debug console, not a normal interactive Linux shell.
+
+======================================================================
+5. MEMORY DIAGNOSTICS (RAW /proc/meminfo)
+======================================================================
+
+MemTotal:        3761204 kB
+MemFree:         3715540 kB
+MemAvailable:    3696040 kB
+Buffers:               0 kB
+Cached:             5940 kB
+SwapCached:            0 kB
+Active:             1844 kB
+Inactive:           4124 kB
+Active(anon):       1844 kB
+Inactive(anon):     4124 kB
+Active(file):          0 kB
+Inactive(file):        0 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:            48 kB
+Mapped:               28 kB
+Shmem:              5940 kB
+KReclaimable:       7224 kB
+Slab:              17520 kB
+SReclaimable:       7224 kB
+SUnreclaim:        10296 kB
+KernelStack:        1248 kB
+PageTables:          132 kB
+SecPageTables:         0 kB
+NFS_Unstable:          0 kB
+Bounce:               0 kB
+WritebackTmp:          0 kB
+CommitLimit:     1880600 kB
+Committed_AS:       6652 kB
+VmallocTotal:   135288315904 kB
+VmallocUsed:        2680 kB
+VmallocChunk:          0 kB
+Percpu:             1024 kB
+CmaTotal:         131072 kB
+CmaFree:          120784 kB
+Balloon:               0 kB
+GPUActive:             0 kB
+GPUReclaim:            0 kB
+
+Interpretation: available memory and CMA are detected. These values
+were captured during minimal diagnostic initramfs execution. They
+cannot predict full desktop memory usage or performance.
+
+======================================================================
+6. UFS STORAGE DIAGNOSTICS (RAW /proc/partitions)
+======================================================================
+
+major minor  #blocks  name
+
+   8       32       4096 sdc
+   8       48       8192 sdd
+   8       49       6144 sdd1
+   8       16       4096 sdb
+   8        0   62464000 sda
+   8        1      20480 sda1
+   8        2      20480 sda2
+   8        3       8192 sda3
+   8        4       8192 sda4
+   8        5      30720 sda5
+   8        6        512 sda6
+   8        7       4096 sda7
+   8        8       2048 sda8
+   8        9       4096 sda9
+   8       10       8192 sda10
+   8       11         64 sda11
+   8       12      60416 sda12
+   8       13      69440 sda13
+   8       14      71680 sda14
+   8       15       5120 sda15
+ 259        0       1024 sda16
+ 259        1        512 sda17
+ 259        2       1024 sda18
+ 259        3      16384 sda19
+ 259        4      16384 sda20
+ 259        5      16384 sda21
+ 259        6         64 sda22
+ 259        7         64 sda23
+ 259        8      32768 sda24
+ 259        9    6963200 sda25
+ 259       10     614400 sda26
+ 259       11      30720 sda27
+ 259       12     204800 sda28
+ 259       13      30720 sda29
+ 259       14      51200 sda30
+ 259       15   54161408 sda31
+   8       64       8192 sde
+
+Additional 'ls /sys/block' output:
+  sdd
+  sdb
+  sde
+  sdc
+  sda
+
+Observations:
+  - All five primary UFS block-device nodes are present.
+  - sda has 31 partition entries (sda1 to sda31).
+  - sdd has one partition entry (sdd1).
+  - sda12 size = 60416 KiB = 61,865,984 bytes, matching BOOT
+    partition size/geometry. Size match is not by itself a verified
+    partition-name mapping or integrity check.
+  - sda31 size = 54,161,408 KiB (~51.65 GiB), compatible with a
+    large userdata volume, but its identity was not read from GPT
+    during this test.
+  - No Android partitions were mounted or formatted in this test.
+
+======================================================================
+7. POWER, BATTERY AND CHARGER TELEMETRY
+======================================================================
+
+/sys/class/power_supply nodes:
+  max77705-charger
+  max77705-usb
+  max170xx_battery
+
+Raw read-only results:
+  cat /sys/class/power_supply/max170xx_battery/capacity
+  -> 52
+
+  cat /sys/class/power_supply/max170xx_battery/voltage_now
+  -> 3837812
+
+  cat /sys/class/power_supply/max170xx_battery/status
+  -> Charging
+
+  cat /sys/class/power_supply/max77705-charger/status
+  -> Charging
+
+  cat /sys/class/power_supply/max170xx_battery/temp
+  -> 185
+
+Interpreted values (standard power_supply conventions):
+  capacity ~52%; voltage ~3.838 V; temperature ~18.5 C.
+  Both fuel-gauge and charger report Charging. No independently
+  calibrated comparison, current measurement, battery stress test,
+  thermal stability test or charger safety validation has been done.
+
+======================================================================
+8. DISPLAY AND INPUT
+======================================================================
+
+'cat /proc/fb':
+  0 exynosdrmfb
+
+'ls /sys/class/drm':
+  card0-DSI-1
+  card0
+  version
+
+'cat /sys/class/drm/card0-DSI-1/status':
+  connected
+
+'cat /sys/class/drm/card0-DSI-1/modes':
+  1200x1920
+
+'ls /sys/class/backlight':
+  16080000.backlight
+
+'ls /sys/class/input':
+  input0
+  event0
+
+'cat /sys/class/input/input0/name':
+  gpio-keys
+
+'cat /proc/bus/input/devices':
+  I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+  N: Name="gpio-keys"
+  P: Phys=gpio-keys/input0
+  S: Sysfs=/devices/platform/gpio-keys/input/input0
+  U: Uniq=
+  H: Handlers=kbd event0
+  B: PROP=0
+  B: EV=23
+  B: KEY=100040100000 11c000000000000 0
+  B: SW=1
+
+Interpretation:
+  - Linux framebuffer and connected 1200x1920 DSI mode present.
+  - Tablet display visibly displayed Linux startup/diagnostic text.
+  - Native modesetting, graphical compositor and backlight adjustment
+    have NOT yet been exercised.
+  - Physical GPIO keys are exposed through input0/event0.
+  - Touchscreen and S Pen were NOT enumerated as input devices.
+
+======================================================================
+9. MODULE AND DEVICE-BUS INVENTORY
+======================================================================
+
+'ls /lib/modules' (observed packaged module files):
+  wacom_w9000.ko
+  ufshcd-pltfrm.ko
+  ufshcd-core.ko
+  ufs-exynos.ko
+  tunnel4.ko
+  thermal-generic-adc.ko
+  spi-s3c64xx.ko
+  snd-soc-s3c-dma.ko
+  snd-soc-rt5665.ko
+  snd-soc-rl6231.ko
+  snd-soc-mt6660.ko
+  snd-soc-gtactive3-rt5665.ko
+  snd-soc-exynos9810-abox.ko
+  sit.ko
+  simple-mfd-i2c.ko
+  sha256.ko
+  serial_base.ko
+  sec-core.ko
+  sec-acpm.ko
+  samsung_tty.ko
+  s3fwrn5_i2c.ko
+  s3fwrn5.ko
+  s2mps11.ko
+  rfkill.ko
+  rfcomm.ko
+  phy-exynos5-usbdrd.ko
+  phy-exynos-ufs.ko
+  pcie-exynos9810.ko
+  panfrost.ko
+  nfc.ko
+  nci.ko
+  max77705_usbc_psy.ko
+  max77705_charger.ko
+  max77705.ko
+  max77705-hwmon.ko
+  max17042_battery.ko
+  libaes.ko
+  leds-rt8547.ko
+  led-class-flash.ko
+  kpp.ko
+  ip_tunnel.ko
+  industrialio.ko
+  i2c-gpio.ko
+  i2c-exynos5.ko
+  i2c-algo-bit.ko
+  himax_hx83112b.ko
+  hci_uart.ko
+  gpu-sched.ko
+  gpio-vibra.ko
+  exynos_adc.ko
+  exynos9810_tmu.ko
+  exynos9810-dsim-bl.ko
+  exynos-usi.ko
+  exynos-mailbox.ko
+  extcon-sm5502.ko
+  ecdh_generic.ko
+  ecc.ko
+  dwc3.ko
+  dwc3-of-simple.ko
+  dwc3-haps.ko
+  dwc3-generic-plat.ko
+  dwc3-exynos.ko
+  crc16.ko
+  cpufreq-dt.ko
+  clk-acpm.ko
+  cfg80211.ko
+  btbcm.ko
+  brcmutil.ko
+  brcmfmac.ko
+  brcmfmac-wcc.ko
+  brcmfmac-cyw.ko
+  brcmfmac-bca.ko
+  bnep.ko
+  bluetooth.ko
+  acpm-protocol.ko
+  a96t3x6.ko
+
+'cat /proc/modules' (observed active modules):
+  panfrost 81920 0 - Live 0xffff800078e7f000
+  gpu_sched 32768 1 panfrost, Live 0xffff800078e6c000
+  max17042_battery 28672 0 - Live 0xffff800078e3f000
+  max77705_hwmon 12288 0 - Live 0xffff800078e56000
+  simple_mfd_i2c 16384 0 - Live 0xffff800078e3b000
+  max77705_charger 24576 0 - Live 0xffff800078e35000
+  max77705_usbc_psy 16384 0 - Live 0xffff800078de5000
+  max77705 12288 0 - Live 0xffff800078e06000
+  cpufreq_dt 16384 0 - Live 0xffff800078df0000
+  clk_acpm 12288 3 - Live 0xffff800078dd8000
+  s2mps11 131072 0 - Live 0xffff800078e0b000
+  sec_acpm 16384 0 - Live 0xffff800078dd4000
+  sec_core 28672 1 sec_acpm, Live 0xffff800078df3000
+  acpm_protocol 16384 4 clk_acpm,sec_acpm, Live 0xffff800078de7000
+  exynos_mailbox 12288 13 - Live 0xffff800078ddd000
+  exynos9810_tmu 16384 0 - Live 0xffff800078dbd000
+  exynos9810_dsim_bl 28672 0 - Live 0xffff800078dab000
+  i2c_exynos5 20480 0 - Live 0xffff800078dc1000
+  exynos_usi 16384 0 - Live 0xffff800078db1000
+  ufs_exynos 36864 0 - Live 0xffff800078d9f000
+  ufshcd_pltfrm 20480 1 ufs_exynos, Live 0xffff800078d66000
+  ufshcd_core 196608 2 ufs_exynos,ufshcd_pltfrm, Live 0xffff800078d6b000
+  phy_exynos_ufs 16384 1 - Live 0xffff800078d5f000
+  dwc3_exynos 12288 0 - Live 0xffff800078d3d000
+  dwc3 98304 0 - Live 0xffff800078d43000
+  phy_exynos5_usbdrd 36864 1 - Live 0xffff800078d30000
+
+Interpretation:
+  - Himax module file himax_hx83112b.ko exists but is NOT loaded.
+  - Wacom module file wacom_w9000.ko exists but is NOT loaded.
+  - SPI controller module file spi-s3c64xx.ko exists but is NOT loaded.
+  - Loaded Panfrost is proof of successful module insertion, NOT yet
+    proof of working GPU rendering/acceleration.
+  - Charger, fuel-gauge, USB and UFS modules are loaded.
+
+'ls /sys/bus/spi/devices':
+  (no entries)
+
+'ls /sys/bus/i2c/devices':
+  i2c-3
+  0-0014
+  i2c-10
+  8-0027
+  5-002d
+  0-0069
+  i2c-8
+  i2c-6
+  6-0037
+  9-0056
+  7-000c
+  0-0025
+  i2c-4
+  3-001b
+  7-0058
+  10-0020
+  i2c-0
+  i2c-9
+  0-0066
+  i2c-7
+  0-0036
+  i2c-5
+
+The 9-0056 I2C client is consistent with a Wacom digitizer
+description at address 0x56, but its identity and functionality were
+NOT yet confirmed by an input-device probe. Device-tree and clock,
+pinctrl, IRQ and regulator dependencies must be checked first.
+
+======================================================================
+10. OPEN ITEMS / PRIORITIES FOR CONTRIBUTORS
+======================================================================
+
+A. Verify the touchscreen SPI controller and LTE pinctrl/clock path;
+   /sys/bus/spi/devices was empty. Compare stock T575 touch IRQ/reset
+   and chip-select wiring with the effective mainline DTS.
+
+B. Inspect the T575 Himax HX83102E panel/touch hardware against
+   himax_hx83112b.ko support. The existence of the module does NOT
+   mean it supports this panel without modifications.
+
+C. Inspect Wacom I2C 0x56, power supply, IRQ and pen-detect wiring.
+   Only then consider a supervised, recoverable module load.
+
+D. Run non-destructive GPU, display/backlight, input and storage
+   integrity checks. No compositor or write test has occurred.
+
+E. Independently check battery charging current, temperature readings
+   and power safety before extended desktop use.
+
+F. Prepare full userspace in a non-destructive test path and keep
+   a verified Android restoration procedure. Delay Wi-Fi, Bluetooth
+   and LTE modem enablement until their power and bus dependencies
+   have been separately validated.
+
+G. Do not change Android USERDATA, EFS, modem calibration partitions,
+   DTBO, VBMETA or unrelated device partitions during these checks.
+
+======================================================================
+11. TEST CONCLUSIONS AND SCOPE
+======================================================================
+
+SUCCESS:
+  [X] BOOT-only flash completed in a fresh Heimdall session.
+  [X] Linux 7.3.0 executed on the physical SM-T575.
+  [X] Visible kernel/initramfs output on the tablet's screen.
+  [X] USB NCM network enumerated on macOS (en7).
+  [X] Interactive IPv6 TCP/23 console answered /proc/version.
+  [X] Live LTE board model matched SM-T575.
+  [X] RAM and UFS block devices enumerated.
+  [X] Battery and charger interfaces gave plausible values.
+  [X] DSI connector, DRM framebuffer and backlight nodes present.
+  [X] GPIO-keys input present.
+  [X] Himax and Wacom module files packaged.
+
+NOT YET VERIFIED:
+  [ ] Touchscreen functional input.
+  [ ] S Pen functional input.
+  [ ] SPI bus/touch driver initialization.
+  [ ] Wacom driver initialization.
+  [ ] GPU-accelerated graphics/compositor.
+  [ ] Full Linux userspace installation.
+  [ ] UFS partition contents/integrity.
+  [ ] Wi-Fi, Bluetooth, modem, audio, cameras, NFC, haptics.
+  [ ] Suspend/resume, thermals and safe charging over time.
+  [ ] Non-wiping Android restore following this successful flash.
+
+Safety note: the first boot displayed some MAX77705-related driver
+lookup/initialization warnings in photographs. Exact log lines were not
+captured as text in this transcript, so they are NOT quoted or treated
+as fully diagnosed. Do not equate nonfatal probe messages with validated
+device support.
+
+No private firmware image, personal serial number, IMEI, unlock key
+or partition dump is included in this shareable log.
+
+End of test log - 2026-11-13.
