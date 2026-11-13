@@ -586,3 +586,82 @@ No private firmware image, personal serial number, IMEI, unlock key
 or partition dump is included in this shareable log.
 
 End of test log - 2026-11-13.
+
+
+======================================================================
+12. LIVE WACOM S PEN DRIVER / HOVER TEST (2026-11-13)
+======================================================================
+
+After the original inventory, the Wacom digitizer was probed from the
+same running Linux 7.3.0 diagnostic session.
+
+Read-only device-tree identity:
+  cat /sys/bus/i2c/devices/9-0056/of_node/compatible
+  -> wacom,w9019
+
+One supervised module load:
+  insmod /lib/modules/wacom_w9000.ko
+  -> ok
+
+Registered input device (cat /proc/bus/input/devices):
+  I: Bus=0018 Vendor=056a Product=0000 Version=0265
+  N: Name="Wacom W9019 Digitizer"
+  S: Sysfs=/devices/platform/soc@0/109100c0.usi/10910000.i2c/i2c-9/9-0056/input/input1
+  H: Handlers=event1
+  B: EV=b
+  B: KEY=c03 0 0 0 0 0
+  B: ABS=f000003
+
+Relevant live kernel messages:
+  [2456.643731] wacom_w9000 9-0056: Wacom W9019 Digitizer size X17222Y10764
+  [2456.650982] input: Wacom W9019 Digitizer as .../input/input1
+
+Two short diagnostic input captures were then recorded using:
+  evread /dev/input/event1 100 8
+
+First capture (representative):
+  2549.728633 3 0 4870       ABS_X = 4870
+  2549.728633 3 1 12460      ABS_Y = 12460
+  2549.728633 3 19 66        ABS_DISTANCE (0x19) = 66
+  2549.728633 1 140 1        BTN_TOOL_PEN (0x140) = 1
+  2549.728633 0 0 0          SYN_REPORT
+  2549.729250 3 0 4829       ABS_X = 4829
+  2549.729250 3 1 12365      ABS_Y = 12365
+  2549.729250 3 19 79        ABS_DISTANCE = 79
+
+Second capture (representative):
+  2572.676606 3 0 6251       ABS_X = 6251
+  2572.676606 3 1 13269      ABS_Y = 13269
+  2572.676606 3 19 53        ABS_DISTANCE = 53
+  2572.677249 3 0 6228       ABS_X = 6228
+  2572.677249 3 19 45        ABS_DISTANCE = 45
+  2572.800387 3 0 6579       ABS_X = 6579
+  2572.800387 3 1 12356      ABS_Y = 12356
+
+Event fields are printed as timestamp, hexadecimal type, hexadecimal
+code, and decimal value by the custom diagnostic TCP console.
+
+CONFIRMED:
+  [X] The Wacom driver loads without reported failure.
+  [X] Digitizer successfully queried over I2C and registered as event1.
+  [X] Pen proximity/key notification occurred (BTN_TOOL_PEN = 1).
+  [X] Continuous changing X/Y values report pen movement.
+  [X] Changing ABS_DISTANCE values report pen hover distance.
+  [X] SYN_REPORT event frames were received.
+
+STILL UNTESTED:
+  [ ] BTN_TOUCH (hex 14a) pen-down/pen-up behavior.
+  [ ] ABS_PRESSURE (hex 18) nonzero values and pressure curve.
+  [ ] BTN_STYLUS side-button events.
+  [ ] ABS_TILT_X / ABS_TILT_Y and coordinate orientation mapping.
+  [ ] Extended input stability / reconnect and suspend handling.
+
+The first input script printed "Capture timed out" after it displayed
+the command prompt; it did not indicate a Linux kernel panic or lost
+USB link. The userspace capture's prompt detector was fragile, and the
+100-event request completed very quickly. A focused input test with
+a larger capture window is planned.
+
+This evidence validates live pen hover and position reporting, not
+full pressure-sensitive drawing. No personal device identifiers were
+recorded.
