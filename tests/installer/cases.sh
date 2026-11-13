@@ -235,8 +235,9 @@ t_stage1_lte_bring_up() {
 	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-linux.img" FAKE-UNILOADER-LINUX-GTACTIVE3 ||
 		fail "BOOT does not hold the LTE bring-up loader"
 	setup prepare --yes --stock-boot "$RUN/fx/stock/boot.img.lz4" --payload "$PAYLOAD_DIR"
-	python3 -I "$REPO/scripts/installer/py/bootimg.py" find "$CASE/st/boot/boot-chain.img" FAKE-UNILOADER-CHAIN-GTACTIVE3 ||
-		fail "prepare packed another variant's chain loader"
+	# LTE first-boot is diagnostic Linux only: there must be no chain image.
+	[ ! -e "$CASE/st/boot/boot-chain.img" ] || fail "LTE prepare unexpectedly produced a chainloader"
+	st_is BOOT_CHAIN ""
 	# the other model's firmware package is refused
 	setup prepare --yes --stock-ap "$AP_TAR" --payload "$PAYLOAD_DIR"
 	rc_is 1
