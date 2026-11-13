@@ -709,3 +709,72 @@ LIMITATIONS:
 
 The S Pen is now a demonstrated functional Linux input device on the
 SM-T575, rather than merely an enumerated driver.
+
+======================================================================
+14. HIMAX HX83102E TOUCHSCREEN: SPI PROBE AND INPUT ENUMERATION
+======================================================================
+
+All following evidence is from the same physical SM-T575 device
+booted into Linux 7.3.0 on 2026-11-13.
+
+SPI-controller test:
+  insmod /lib/modules/spi-s3c64xx.ko
+  -> ok
+
+  ls /sys/bus/spi/devices
+  -> spi0.0
+     spi1.0
+
+Read-only live device-tree identification:
+  cat /sys/bus/spi/devices/spi0.0/of_node/compatible
+  -> himax,hx83102e
+
+  cat /sys/bus/spi/devices/spi1.0/of_node/compatible
+  -> brcm,bcm4775
+
+Driver test:
+  insmod /lib/modules/himax_hx83112b.ko
+  -> ok
+
+The Himax driver is named after the HX83112B family but includes the
+HX83102E-specific SPI support and successful hardware ID detection.
+
+Kernel messages:
+  [3239.182015] himax-hx83102e-ts spi0.0: feedback delay set to default (0)
+  [3239.185788] himax-hx83102e-ts spi0.0: SPI mode 3, 10000000 Hz
+  [3239.267000] himax-hx83102e-ts spi0.0: knock rd 08: ff ff ff ff (0)
+  [3239.272461] himax-hx83102e-ts spi0.0: burst readback 13=31 0d=10 (want 31 10)
+  [3239.275080] himax-hx83102e-ts spi0.0: ahb rd 900000d0: 00 2e 10 83 (0)
+  [3239.277981] himax-hx83102e-ts spi0.0: HX83102E detected, ID 83102e
+  [3239.281138] input: Himax Touchscreen as .../spi0.0/input/input2
+
+Input enumeration (cat /proc/bus/input/devices):
+  I: Bus=0000 Vendor=0000 Product=0000 Version=0000
+  N: Name="Himax Touchscreen"
+  S: Sysfs=/devices/platform/soc@0/13ae00c0.usi/13ae0000.spi/spi_master/spi0/spi0.0/input/input2
+  H: Handlers=event2
+  B: PROP=2
+  B: EV=b
+  B: KEY=400 0 0 0 0 0
+  B: ABS=265800000000003
+
+Other registered input devices remained present:
+  event0 = gpio-keys
+  event1 = Wacom W9019 Digitizer
+  event2 = Himax Touchscreen
+
+CONFIRMED:
+  [X] SPI controller module initializes and enumerates two devices.
+  [X] spi0.0 device-tree compatible is himax,hx83102e.
+  [X] spi1.0 device-tree compatible is brcm,bcm4775 (no hub functional test).
+  [X] HX83102E controller replies with real hardware ID 0x83102e.
+  [X] Driver reports SPI mode 3, 10 MHz.
+  [X] Himax touchscreen registers as Linux input/event2.
+  [X] Wacom pen and GPIO-key input devices remain registered.
+
+NOT YET CONFIRMED:
+  [ ] Finger tap, swipe and multi-touch events from /dev/input/event2.
+  [ ] Coordinate orientation/calibration, edge mapping or palm rejection.
+  [ ] Long-term touch stability, panel resume or interaction with compositor.
+
+No Android partition data was accessed by a write operation for this test.
