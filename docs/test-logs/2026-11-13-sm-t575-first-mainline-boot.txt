@@ -129,11 +129,8 @@ should remain available.
 ======================================================================
 
 Host: macOS, Apple Silicon, USB attached
-Mac's interface: en7
-Mac interface MAC: 02:57:0a:00:00:02
+Mac's interface: USB NCM network adapter (en7 in this test)
 Mac interface: status active; media 100baseTX full-duplex
-Mac assigned IPv6: fe80::c43:18b7:2824:ffdb%en7
-Mac assigned IPv4: 169.254.50.244
 Tablet console IPv6: fe80::57:aff:fe00:1%en7
 TCP console port: 23
 
@@ -579,7 +576,8 @@ captured as text in this transcript, so they are NOT quoted or treated
 as fully diagnosed. Do not equate nonfatal probe messages with validated
 device support.
 
-No private firmware image, personal serial number, IMEI, unlock key
-or partition dump is included in this shareable log.
+No private firmware image, personal serial number, IMEI, unlock key,
+MAC address, host-assigned network address or partition dump is included
+in this shareable log.
 
 End of test log - 2026-11-13.
