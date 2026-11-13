@@ -152,6 +152,16 @@ stock_download() {
 stock_acquire() {
 	local b
 	step "Your stock boot image (for undo and for our BOOT image)"
+	# Validate explicitly supplied firmware even when a cached BOOT image exists.
+	# Otherwise a mismatched AP/ZIP could silently bypass the model guard.
+	if [ -n "${OPT_STOCK_AP:-}" ]; then
+		[ -f "$OPT_STOCK_AP" ] || die "no such file: $OPT_STOCK_AP"
+		check_fw_model "$OPT_STOCK_AP"
+	fi
+	if [ -n "${OPT_STOCK_ZIP:-}" ]; then
+		[ -f "$OPT_STOCK_ZIP" ] || die "no such file: $OPT_STOCK_ZIP"
+		check_fw_model "$OPT_STOCK_ZIP"
+	fi
 	b=$(state_get STOCK_BOOT)
 	if [ -n "$b" ] && [ -f "$b" ] && [ "$(sha256sum "$b" | cut -c1-64)" = "$(state_get STOCK_BOOT_SHA)" ]; then
 		ok "have it: $b"
