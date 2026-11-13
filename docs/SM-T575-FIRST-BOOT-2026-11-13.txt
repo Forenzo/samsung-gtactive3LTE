@@ -665,3 +665,47 @@ a larger capture window is planned.
 This evidence validates live pen hover and position reporting, not
 full pressure-sensitive drawing. No personal device identifiers were
 recorded.
+
+======================================================================
+13. WACOM S PEN CONTACT, PRESSURE, SIDE BUTTON, AND TILT CONFIRMED
+======================================================================
+
+Follow-up test on the running SM-T575 Linux 7.3.0 diagnostic image:
+  evread /dev/input/event1 2000 4
+  (console events summarized on the macOS host)
+
+First capture:
+  Total events:     2000
+  Pen contact:      1 event, value 1 (BTN_TOUCH)
+  Pen pressure:     263 events, values 5 to 2039 (ABS_PRESSURE)
+  Pen side button:  4 events, values 0 to 1 (BTN_STYLUS)
+  Pen tilt X:       12 events, values 9 to 14 (ABS_TILT_X)
+  Pen tilt Y:       5 events, values 9 to 14 (ABS_TILT_Y)
+
+Second capture:
+  Total events:     2000
+  Pen contact:      6 events, values 0 to 1 (BTN_TOUCH)
+  Pen pressure:     340 events, values 0 to 2048 (ABS_PRESSURE)
+  Pen side button:  not observed in this capture
+  Pen tilt X:       26 events, values 0 to 22 (ABS_TILT_X)
+  Pen tilt Y:       18 events, values 0 to 8 (ABS_TILT_Y)
+
+CONFIRMED ON PHYSICAL LTE TABLET:
+  [X] S Pen proximity/hover position and distance, from earlier tests
+  [X] Contact events (BTN_TOUCH 0 and 1 observed in second capture)
+  [X] Pressure-sensitive readings (0..2048 observed; varying continuously)
+  [X] Side-button press/release (0 and 1 in first capture)
+  [X] Tilt axes (ABS_TILT_X and ABS_TILT_Y both reporting values)
+  [X] Functional interactive Wacom W9019 input via /dev/input/event1
+
+LIMITATIONS:
+  - Two captures each reached the requested 2000-event limit; not every
+    transition was necessarily included. The first observed only pen-down.
+  - No compositor, stylus calibration, rotation mapping, palm rejection,
+    end-to-end drawing app test, or suspend/resume test was performed.
+  - Side-button absence in second capture does NOT negate the first
+    capture, which confirmed both states.
+  - The input tests did not write to Android partitions.
+
+The S Pen is now a demonstrated functional Linux input device on the
+SM-T575, rather than merely an enumerated driver.
