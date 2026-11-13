@@ -1,0 +1,97 @@
+# SM-T575 first-boot compilation ONLY. Fork integration branch, no device actions.
+# Never publish, sign, flash, reboot, change EFS, or package a deployable installer.
+name: t575-diagnostic-build
+
+on:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - .github/workflows/t575-diagnostic-build.yml
+      - bootchain/**
+      - initramfs/**
+      - ci/bootchain/**
+      - pmos/aports/device/testing/linux-postmarketos-exynos9810/**
+      - config.toml
+      - scripts/config
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compile-only:
+    name: Build and inspect LTE diagnostic payload (never flash)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out integration branch
+        uses: actions/checkout@v4
+
+      - name: Install AArch64 cross-build requirements
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            make bc bison flex libssl-dev libelf-dev libgnutls28-dev \
+            uuid-dev device-tree-compiler swig python3-dev \
+            python3-setuptools python3-pyelftools cpio kmod patch \
+            curl git tar gzip
+
+      - name: Confirm integration branch and LTE-only safety requirements
+        run: |
+          set -eu
+          test "${GITHUB_REF_NAME}" = integration/upstream-active3-family-firstboot
+          scripts/config check
+          grep -q '^CONFIG_SAMSUNG_GTACTIVE3LTE=y$' bootchain/uniLoader/configs/gtactive3lte_defconfig
+          grep -q '^CONFIG_LINUX_KRNL_HEADER_IMG=y$' bootchain/uniLoader/configs/gtactive3lte_defconfig
+          if grep -q '^CONFIG_CHAINLOAD=y$' bootchain/uniLoader/configs/gtactive3lte_defconfig; then
+            echo "::error::LTE chainloading must remain disabled"
+            exit 1
+          fi
+          bash -n bootchain/build.sh
+
+      - name: Build from GPL sources only (no Samsung stock BOOT)
+        env:
+          NO_F2FS: '1'
+          JOBS: '4'
+        run: |
+          mkdir -p out
+          ci/bootchain/build out "t575-compile-${GITHUB_RUN_NUMBER}"
+
+      - name: Verify LTE diagnostic contents and architecture header
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, tarfile
+          archives=list(Path("out").glob("*bootchain_*.tar.gz"))
+          assert len(archives)==1, f"expected one archive, found {len(archives)}"
+          arc=archives[0]
+          with tarfile.open(arc, "r:gz") as tf:
+              names=set(tf.getnames())
+              needed={"uniLoader-linux-gtactive3", "ramdisk.cpio.gz", "MANIFEST",
+                      "uniLoader-linux", "uniLoader-chain"}
+              assert needed.issubset(names), f"missing: {needed-names}"
+              assert "uniLoader-chain-gtactive3" not in names, "LTE chainloader is prohibited"
+              loader=tf.extractfile("uniLoader-linux-gtactive3").read()
+              ramdisk=tf.extractfile("ramdisk.cpio.gz").read()
+              manifest=tf.extractfile("MANIFEST").read().decode()
+          assert loader[56:60]==b"ARM\x64", "LTE loader lacks ARM64 Image header"
+          assert ramdisk.startswith(b"\x1f\x8b"), "diagnostic ramdisk not gzip"
+          assert "gtactive3" in manifest, "variant missing from manifest"
+          print("OFFLINE LTE PAYLOAD: structure PASS (not validated to boot)")
+          print("LTE uniLoader SHA256:", hashlib.sha256(loader).hexdigest())
+          print("Diagnostic ramdisk SHA256:", hashlib.sha256(ramdisk).hexdigest())
+          print("RESTORE/BOOT/FLASH GATE: BLOCKED")
+          PY
+
+      - name: Archive unsigned source-built diagnostic bundle (not flashable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-compile-only-diagnostic-payload
+          path: out/*bootchain_*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
