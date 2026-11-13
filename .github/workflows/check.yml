@@ -48,7 +48,7 @@ jobs:
           # what preflight (scripts/installer/lib/host.sh) checks for, minus
           # adb/heimdall/lsusb (the tests' mock tablet stands in)
           dnf -y -q install git android-tools dosfstools util-linux mtools zstd lz4 gnupg2 \
-            python3 e2fsprogs which findutils tar gzip openssl iproute curl coreutils
+            python3 e2fsprogs which findutils tar gzip openssl iproute curl coreutils diffutils
       - uses: actions/checkout@v5
       - name: tests/installer
         run: |
