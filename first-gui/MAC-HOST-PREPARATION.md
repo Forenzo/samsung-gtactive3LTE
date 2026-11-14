@@ -39,6 +39,26 @@ Expected output includes:
 - `Plasma Mobile executable and session files: PRESENT`
 - `Inspection only. No extraction, no NFS export and NO tablet changes.`
 
+
+## 2a. Mac host readiness probe (read-only)
+
+After validating the archive, run:
+
+```sh
+python3 first-gui/mac-host-preflight.py \
+  "$(find "$HOME/Downloads" -maxdepth 1 -type f -name '*plasma*zip' -print -quit)"
+```
+
+It checks free space, whether macOS supplies `nfsd`, and whether the
+existing tablet TCP diagnostic console responds over a USB interface.
+The preflight **does not** activate NFS, create exports, mount, extract,
+or modify any partition.
+
+CI run 43616388593 verified that a separate experimental kernel can
+compile with NFSv3, SUNRPC, LOCKD and the same USB NCM support. The
+original diagnostic kernel is still NFS-disabled. Device-side rootfs
+mounting and login remain future integration work.
+
 ## 3. USB network readiness
 
 On the tablet we previously verified:
