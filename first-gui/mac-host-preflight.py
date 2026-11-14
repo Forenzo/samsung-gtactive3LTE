@@ -34,7 +34,15 @@ def probe(interface):
         with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as sock:
             sock.settimeout(2)
             sock.connect((GUEST, 23, 0, socket.if_nametoindex(interface)))
-            return sock.recv(2048)
+            data = bytearray()
+            while len(data) < 16384:
+                part = sock.recv(4096)
+                if not part:
+                    break
+                data.extend(part)
+                if b"\n> " in data:
+                    break
+            return bytes(data)
     except (OSError, TimeoutError):
         return None
 
