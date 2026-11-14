@@ -34,7 +34,10 @@ def clean(value):
 def main():
     if sys.platform != "darwin":
         sys.exit("This staging script is for macOS only.")
-    if os.geteuid() != 0:
+    check_only = len(sys.argv) == 2 and sys.argv[1] == "--check-only"
+    if len(sys.argv) > 2 or (len(sys.argv) == 2 and not check_only):
+        sys.exit("Usage: stage-plasma-macos.py [--check-only]")
+    if not check_only and os.geteuid() != 0:
         sys.exit("Run as root to preserve numeric ownership: sudo python3 ...")
     if not EXPECTED_VOLUME.is_mount():
         sys.exit("T575-Plasma volume is not mounted.")
@@ -82,6 +85,9 @@ def main():
                 raise ValueError(f"hardlink target is not a regular file: {name} => {target}")
         print(f"Archive audited: {len(files)} files, {len(dirs)} directories, "
               f"{len(symlinks)} symlinks, {len(hardlinks)} hardlinks", flush=True)
+        if check_only:
+            print("CHECK ONLY: no files extracted, no NFS export, no tablet writes.")
+            return
         # Avoid writing through any archive-created symlink: links are always last.
         # Temporarily grant directory traversal. Restore directory permissions last.
         for name, m in sorted(dirs, key=lambda v: len(PurePosixPath(v[0]).parts)):
