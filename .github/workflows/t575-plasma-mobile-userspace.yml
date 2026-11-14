@@ -1,0 +1,67 @@
+# Produce a non-bootable ARM64 Plasma Mobile rootfs artifact for inspection.
+name: t575-plasma-mobile-userspace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - 'first-gui/Dockerfile.plasma'
+      - 'first-gui/plasma-preflight.sh'
+      - '.github/workflows/t575-plasma-mobile-userspace.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-plasma-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arm64-plasma-mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve and install Plasma Mobile for aarch64
+        run: |
+          set -euo pipefail
+          docker buildx build --load --platform linux/arm64 \
+            -t t575-plasma-stage:local -f first-gui/Dockerfile.plasma .
+
+      - name: Validate Plasma packages and export unbootable rootfs
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            t575-plasma-stage:local -c '/usr/local/sbin/t575-plasma-preflight' \
+            | tee dist/preflight.txt
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            t575-plasma-stage:local -c 'apk info -vv' \
+            > dist/packages-aarch64.txt
+          CID="$(docker create --platform linux/arm64 t575-plasma-stage:local)"
+          trap 'docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+          docker export "$CID" | gzip -n -1 > dist/t575-plasma-userspace-aarch64.tar.gz
+          tar -tzf dist/t575-plasma-userspace-aarch64.tar.gz > dist/archive-contents.txt
+          grep -E '(^|/)usr/local/sbin/t575-plasma-preflight$' dist/archive-contents.txt
+          (cd dist && sha256sum *.txt *.gz > SHA256SUMS)
+          du -h dist/*.gz
+          echo 'Build only: no BOOT or Android partition changes.'
+
+      - name: Upload Plasma userspace for inspection (NOT BOOTABLE)
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-plasma-mobile-aarch64-build-only
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
