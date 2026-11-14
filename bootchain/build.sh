@@ -145,6 +145,13 @@ gen_list > "$P/build/initramfs.list"
 sed "s|@P@|$P|g" "$R/$CFG_BOOTCHAIN_BRINGUP_CONFIG" > "$W/bringup.config"
 $MK allnoconfig >/dev/null
 (cd "$K" && KCONFIG_CONFIG=$B/.config scripts/kconfig/merge_config.sh -m -O "$B" "$B/.config" "$W/bringup.config" >/dev/null)
+# Optional build-only kernel experiment. The default diagnostic build remains
+# untouched unless the caller explicitly supplies a trusted config fragment.
+if [ -n "${BRINGUP_EXTRA_CONFIG:-}" ]; then
+    [ -f "$BRINGUP_EXTRA_CONFIG" ] || { echo "Missing BRINGUP_EXTRA_CONFIG: $BRINGUP_EXTRA_CONFIG" >&2; exit 1; }
+    echo "Using opt-in experimental kernel fragment: $BRINGUP_EXTRA_CONFIG"
+    (cd "$K" && KCONFIG_CONFIG=$B/.config scripts/kconfig/merge_config.sh -m -O "$B" "$B/.config" "$BRINGUP_EXTRA_CONFIG" >/dev/null)
+fi
 $MK olddefconfig
 
 log "kernel + modules (-j$JOBS)"
