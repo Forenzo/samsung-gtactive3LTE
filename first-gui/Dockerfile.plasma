@@ -1,0 +1,19 @@
+# First Plasma Mobile aarch64 package/build validation only.
+# This image is NOT a bootable SM-T575 system and must never be flashed.
+FROM --platform=linux/arm64 alpine:3.22
+
+RUN apk add --no-cache \
+    busybox bash coreutils util-linux \
+    eudev seatd dbus \
+    libinput libdrm \
+    mesa-dri-gallium mesa-egl mesa-gles mesa-gbm \
+    plasma-mobile-meta \
+    font-dejavu \
+    && mkdir -p /run /tmp /var/log \
+    && apk info -vv > /usr/share/t575-plasma-packages.txt
+
+COPY first-gui/plasma-preflight.sh /usr/local/sbin/t575-plasma-preflight
+RUN chmod 0755 /usr/local/sbin/t575-plasma-preflight \
+    && /bin/sh -n /usr/local/sbin/t575-plasma-preflight
+
+# Intentionally no automatic session start, password, or device write path.
