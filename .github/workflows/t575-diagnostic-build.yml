@@ -13,6 +13,9 @@ on:
       - ci/bootchain/**
       - pmos/aports/device/testing/linux-postmarketos-exynos9810/**
       - config.toml
+      - configs/t575-plasma-netroot.config
+      - first-gui/audit-netroot-config.py
+      - first-gui/host-audit-plasma.py
       - scripts/config
 
 permissions:
@@ -61,6 +64,13 @@ jobs:
         run: |
           mkdir -p out
           ci/bootchain/build out "t575-compile-${GITHUB_RUN_NUMBER}"
+
+      - name: Audit actual generated kernel network-root support (no flashing)
+        run: |
+          set -euo pipefail
+          python3 first-gui/audit-netroot-config.py build/bootchain/bringup/.config \
+            | tee out/t575-generated-kernel-netroot-audit.txt
+          python3 -m py_compile first-gui/audit-netroot-config.py first-gui/host-audit-plasma.py
 
       - name: Verify LTE diagnostic contents and architecture header
         run: |
