@@ -1,5 +1,12 @@
 # SM-T575 LTE: first graphical Linux userspace (RAM-only first)
 
+## Target desktop: Plasma Mobile
+
+The owner has confirmed **Plasma Mobile** as the desired desktop. Weston is
+only a short-lived compositor/input proving ground. Do **not** introduce Phosh
+as the final environment. KDE KWin/Plasma Mobile with Qt, on-screen keyboard,
+DBus and session support is the target once the lower graphics layer passes.
+
 ## State of the physical tablet (2026-11-13 verified)
 
 - Mainline Linux 7.3.0 diagnostic initramfs boots on the LTE SM-T575.
@@ -41,9 +48,9 @@ Pass criteria:
 - No unexpected writes to Android partitions.
 - Boot recovery to the previous diagnostic image or Android remains available.
 
-### Gate C: Phosh trial
+### Gate C: Plasma Mobile trial
 
-Only after Gate B passes, package and launch Phosh with its actual dependencies (including compositor Phoc, session management, dbus, keyboard and login/service stack). Validate portrait orientation, on-screen keyboard, status panel, app launcher and input. Test software rendering first if Panfrost acceleration is unproven. Investigate Panfrost separately and log real evidence.
+Only after Gate B passes, package and launch Plasma Mobile with KDE/Qt, KWin Wayland, session management, DBus, keyboard and login/service stack. Validate portrait orientation, on-screen keyboard, status panel, app launcher and input. Test software rendering first if Panfrost acceleration is unproven. Investigate Panfrost separately and log real evidence.
 
 ### Gate D: full postmarketOS Duranium install
 
@@ -51,4 +58,4 @@ Optional later milestone. Requires validated LTE-specific rootfs/image, bootchai
 
 ## Present next action
 
-Develop the reproducible temporary aarch64 graphical rootfs and GitHub Actions build artifact on `integration/upstream-active3-family-firstboot`. Review initramfs handoff, module load order, packaging and framebuffer/DRM setup. Do not flash or run installer commands on the owner's device as part of the build.
+The first build-only Alpine ARM64 Weston test rootfs is now defined in `first-gui/` with the `t575-first-gui-userspace` workflow. Review workflow output, package manifest and tarball; then review initramfs handoff, module load order, packaging and framebuffer/DRM setup. Do not flash or run installer commands on the owner's device as part of the build.
