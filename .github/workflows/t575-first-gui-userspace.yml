@@ -1,0 +1,70 @@
+# Host-only first graphical userspace: build and inspect, NEVER flash.
+name: t575-first-gui-userspace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - 'first-gui/**'
+      - '.github/workflows/t575-first-gui-userspace.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-first-gui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arm64-wayland-userspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Alpine ARM64 Wayland diagnostic rootfs
+        run: |
+          set -euo pipefail
+          docker buildx build --load --platform linux/arm64 \
+            --tag t575-weston-stage:local --file first-gui/Dockerfile .
+
+      - name: Verify tools and export userspace
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            t575-weston-stage:local -c \
+            'test "$(uname -m)" = aarch64; /usr/local/sbin/t575-gui-preflight; test -e /usr/lib/libdrm.so.2'
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            t575-weston-stage:local -c 'apk info -vv' \
+            > dist/packages-aarch64.txt
+          CID="$(docker create --platform linux/arm64 t575-weston-stage:local)"
+          trap 'docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+          docker export "$CID" | gzip -n -1 > dist/t575-weston-userspace-aarch64.tar.gz
+          tar -tzf dist/t575-weston-userspace-aarch64.tar.gz > dist/archive-contents.txt
+          grep -E '(^|/)usr/bin/weston$' dist/archive-contents.txt
+          grep -E '(^|/)usr/bin/seatd$' dist/archive-contents.txt
+          grep -E '(^|/)usr/local/sbin/t575-gui-preflight$' dist/archive-contents.txt
+          grep -E '(^|/)usr/lib/.*/.*(panfrost|kms_swrast).*_dri\.so$' dist/archive-contents.txt \
+            || echo 'Note: Mesa driver files vary by packaging; inspect archive.'
+          (cd dist && sha256sum t575-weston-userspace-aarch64.tar.gz packages-aarch64.txt archive-contents.txt > SHA256SUMS)
+          du -h dist/t575-weston-userspace-aarch64.tar.gz
+          echo 'Build-only artifact: no BOOT image, no flashing and no tablet changes.'
+
+      - name: Archive unsigned ARM64 userspace (NOT BOOTABLE)
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-wayland-rootfs-aarch64-build-only
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
