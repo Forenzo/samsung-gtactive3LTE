@@ -45,7 +45,7 @@ def main():
         if "bring-up console" not in prompt(sock):
             raise RuntimeError("Unexpected diagnostic console service")
         release = ask(sock, "cat /proc/sys/kernel/osrelease")
-        if not release.startswith("7.3.0\\n"):
+        if not release.startswith("7.3.0"):
             raise RuntimeError(f"Unexpected kernel release: {release!r}")
         disabled = ask(sock, "cat /proc/sys/kernel/modules_disabled")
         taint = ask(sock, "cat /proc/sys/kernel/tainted")
