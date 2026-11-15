@@ -1,0 +1,39 @@
+name: t575-nfs-rpc-probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - 'first-gui/t575-nfs-rpc-probe.c'
+      - '.github/workflows/t575-nfs-rpc-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: ARM64 cross compiler and headers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross file
+      - name: Compile ARM64 RPC probe without executing on any device
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          aarch64-linux-gnu-gcc -O2 -Wall -Wextra -Werror -static -s \
+            -o dist/t575-nfs-rpc-probe-aarch64 first-gui/t575-nfs-rpc-probe.c
+          file dist/t575-nfs-rpc-probe-aarch64 | grep -E 'ARM aarch64|ARM64'
+          file dist/t575-nfs-rpc-probe-aarch64 | grep 'statically linked'
+          (cd dist && sha256sum t575-nfs-rpc-probe-aarch64 > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-nfs-rpc-probe-aarch64-build-only
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
