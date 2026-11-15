@@ -14,6 +14,10 @@ FILES = (
     "/proc/sys/kernel/osrelease",
     "/proc/version",
     "/proc/filesystems",
+    "/proc/modules",
+    "/proc/cmdline",
+    "/proc/sys/kernel/modules_disabled",
+    "/proc/sys/kernel/tainted",
 )
 
 
