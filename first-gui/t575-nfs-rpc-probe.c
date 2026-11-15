@@ -70,6 +70,15 @@ static int rpc(int port, int program, int version, int procedure,
     memset(&addr, 0, sizeof(addr)); addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16_t)port);
     inet_pton(AF_INET, "10.77.57.1", &addr.sin_addr);
+    /* macOS NFSv3 typically requires privileged client source ports. */
+    memset(&local, 0, sizeof(local));
+    local.sin_family = AF_INET;
+    local.sin_port = htons((uint16_t)(port == 1023 ? 892 : 893));
+    inet_pton(AF_INET, "10.77.57.2", &local.sin_addr);
+    if (bind(fd, (struct sockaddr *)&local, sizeof(local)) < 0) {
+        perror("bind reserved client port");
+        goto done;
+    }
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) goto done;
     pos = 0;
     word(xid); word(0); word(2); /* CALL, RPCv2 */
