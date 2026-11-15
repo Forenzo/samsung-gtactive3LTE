@@ -1,0 +1,82 @@
+# Experimental, non-installable NFS kernel modules to explore no-flash NFS mount.
+name: t575-nfs-modules-experimental
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - 'configs/t575-nfs-module-test.config'
+      - '.github/workflows/t575-nfs-modules-experimental.yml'
+      - 'bootchain/build.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-nfs-modules-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install AArch64 cross-build prerequisites
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            make bc bison flex libssl-dev libelf-dev libgnutls28-dev \
+            uuid-dev device-tree-compiler swig python3-dev \
+            python3-setuptools python3-pyelftools cpio kmod patch curl git tar gzip
+
+      - name: Build from source with opt-in NFS modules
+        env:
+          NO_F2FS: '1'
+          JOBS: '4'
+          BRINGUP_EXTRA_CONFIG: ${{ github.workspace }}/configs/t575-nfs-module-test.config
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          ci/bootchain/build out "t575-nfs-modules-compile-${GITHUB_RUN_NUMBER}"
+
+      - name: Inventory kernel ABI and NFS module dependencies
+        run: |
+          set -euo pipefail
+          P=build/bootchain/p/build/initramfs/modules
+          K=build/bootchain/bringup
+          grep '^CONFIG_NFS_FS=m$' "$K/.config"
+          grep '^CONFIG_NFS_V3=y$' "$K/.config"
+          test -f "$P/nfs.ko"
+          mkdir -p dist/modules
+          cp "$P"/*.ko dist/modules/
+          {
+            echo 'This is NOT a ready-to-load collection: verify physical device kernel release and module ABI first.'
+            echo 'Do not flash, reboot or load these modules without recovery planning.'
+            echo 'kernelrelease:'
+            make -s -C build/bootchain/linux ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O="$PWD/$K" kernelrelease
+            echo 'Generated kernel options:'
+            grep -E '^CONFIG_(NFS_FS|NFS_V3|SUNRPC|LOCKD|MODVERSIONS|MODULE_UNLOAD)=' "$K/.config" || true
+            echo 'NFS modules:'
+            for f in "$P"/*.ko; do
+              case "$(basename "$f")" in
+                nfs.ko|sunrpc.ko|lockd.ko|grace.ko|netfs.ko|fscache.ko|auth_rpcgss.ko)
+                  printf '%s: ' "$(basename "$f")"
+                  aarch64-linux-gnu-readelf -h "$f" | grep Machine | head -1
+                  ;;
+              esac
+            done
+          } > dist/ABI-REVIEW-REQUIRED.txt
+          (cd dist && sha256sum modules/*.ko > SHA256SUMS)
+          cat dist/ABI-REVIEW-REQUIRED.txt
+
+      - name: Upload unsigned modules for compatibility review ONLY
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-nfs-modules-aarch64-UNTESTED-DO-NOT-LOAD
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
