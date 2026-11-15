@@ -58,7 +58,7 @@ static int rpc(int port, int program, int version, int procedure,
                const unsigned char *payload, size_t plen,
                size_t *body, size_t *rlen) {
     int fd = -1, result = -1;
-    struct sockaddr_in addr;
+    struct sockaddr_in addr, local;
     struct timeval timeout = {3, 0};
     uint32_t mark;
     size_t off = 0;
@@ -75,7 +75,7 @@ static int rpc(int port, int program, int version, int procedure,
     word(xid); word(0); word(2); /* CALL, RPCv2 */
     word((uint32_t)program); word((uint32_t)version); word((uint32_t)procedure);
     /* AUTH_SYS, uid=0 gid=0, hostname t575, no supplementary groups */
-    word(1); word(28);
+    word(1); word(24);
     word(0); word(4); bytes("t575", 4);
     word(0); word(0); word(0);
     /* Verifier AUTH_NULL */
