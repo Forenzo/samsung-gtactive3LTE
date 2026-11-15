@@ -55,8 +55,8 @@ changing hardware:
 - [x] CI builds ARM64 Plasma Mobile packages.
 - [x] Package preflight locates kwin_wayland and startplasma-wayland.
 - [ ] Rootfs startup prerequisites audited (system services, udev, permissions).
-- [ ] Actual kernel NFS client / network filesystem support verified.
-- [ ] Host-side read-only rootfs export and link connectivity tested.
+- [x] Experimental *compiled* kernel NFSv3 client enabled in CI run 43616388593; current tablet boot still lacks NFS.\n- [ ] Experimental NFS kernel boot and module/runtime support verified on physical tablet.
+- [x] Mac-side export advertised via showmount and USB IPv4 ping tested: 10.77.57.1 <-> 10.77.57.2, 3/3 packets, no loss (2026-11-15).\n- [ ] Tablet-side NFS mount and file reads tested (NOT YET: running diagnostic kernel lacks NFS).
 - [ ] Safe handoff and recovery code compiled and inspected.
 - [ ] GPU / DRM initialization and KWin startup logs captured.
 - [ ] Owner approves any new BOOT-only image; no other partition writes.
@@ -65,3 +65,23 @@ changing hardware:
 
 The source may be developed and tested in CI now without tablet changes.
 The owner-selected final environment remains **Plasma Mobile**, not Phosh.
+
+## Host network checkpoint (2026-11-15)
+
+Owner reported macOS USB interface en7 with alias 10.77.57.1/30 and tablet usb0
+10.77.57.2/30. Ping reached tablet (3/3, average ~1.14 ms). macOS nfsd
+reported running (eight threads). The owner's `/etc/exports` reads:
+
+```
+/Volumes/T575-Plasma/rootfs -ro -maproot=root 10.77.57.2
+```
+
+`showmount -e localhost` advertised the expected rootfs to client
+10.77.57.2. These are **host-side successes only**. No actual NFS mount,
+NFS RPC reachability from the tablet, or display/session launch has been
+verified. NFSv3 is not encrypted and the client restriction alone does not
+restrict the service listening interfaces. Stop nfsd when not testing.
+
+Do not execute `kexec`, flash BOOT, or attempt `mount` using the current
+NFS-disabled diagnostic kernel. A recoverable experimental test environment
+must be assembled and reviewed first.
