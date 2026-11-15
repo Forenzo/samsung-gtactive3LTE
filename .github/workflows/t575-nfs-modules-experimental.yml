@@ -48,26 +48,40 @@ jobs:
           set -euo pipefail
           P=build/bootchain/p/build/initramfs/modules
           K=build/bootchain/bringup
-          grep '^CONFIG_NFS_FS=m$' "$K/.config"
-          grep '^CONFIG_NFS_V3=y$' "$K/.config"
-          test -f "$P/nfs.ko"
+          test -f "$K/.config"
+          echo 'Resolved NFS kernel config:'
+          grep -E '^CONFIG_(NFS_FS|NFS_V3|SUNRPC|LOCKD|GRACE_PERIOD|MODVERSIONS|MODULE_UNLOAD)=' "$K/.config" || true
+          grep -q '^CONFIG_NFS_FS=m$' "$K/.config" || {
+            echo 'ERROR: kernel did not enable modular NFS filesystem support'
+            exit 1
+          }
+          grep -Eq '^CONFIG_NFS_V3=(y|m)$' "$K/.config" || {
+            echo 'ERROR: NFSv3 support missing; dump relevant config above'
+            exit 1
+          }
+          test -d "$P" || {
+            echo "ERROR: initramfs module collection missing: $P"
+            exit 1
+          }
+          find "$P" -maxdepth 1 -type f -name '*.ko' -print | sort
+          test -f "$P/nfs.ko" || {
+            echo "ERROR: expected nfs.ko absent from $P"
+            exit 1
+          }
           mkdir -p dist/modules
           cp "$P"/*.ko dist/modules/
           {
-            echo 'This is NOT a ready-to-load collection: verify physical device kernel release and module ABI first.'
-            echo 'Do not flash, reboot or load these modules without recovery planning.'
-            echo 'kernelrelease:'
+            echo 'NOT READY TO LOAD: check physical device kernel version and module ABI first.'
+            echo 'Never flash, reboot, mount or insmod merely because this build succeeded.'
+            echo 'Physical kernel: Linux 7.3.0 #2 SMP PREEMPT (2026-11-13) per owner report.'
+            echo 'Experimental build kernel release:'
             make -s -C build/bootchain/linux ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O="$PWD/$K" kernelrelease
-            echo 'Generated kernel options:'
-            grep -E '^CONFIG_(NFS_FS|NFS_V3|SUNRPC|LOCKD|MODVERSIONS|MODULE_UNLOAD)=' "$K/.config" || true
-            echo 'NFS modules:'
-            for f in "$P"/*.ko; do
-              case "$(basename "$f")" in
-                nfs.ko|sunrpc.ko|lockd.ko|grace.ko|netfs.ko|fscache.ko|auth_rpcgss.ko)
-                  printf '%s: ' "$(basename "$f")"
-                  aarch64-linux-gnu-readelf -h "$f" | grep Machine | head -1
-                  ;;
-              esac
+            echo 'Experimental kernel version and options:'
+            grep -E '^CONFIG_(NFS_FS|NFS_V3|SUNRPC|LOCKD|GRACE_PERIOD|MODVERSIONS|MODULE_UNLOAD)=' "$K/.config" || true
+            echo 'Experimental module vermagic:'
+            for f in dist/modules/*.ko; do
+              echo "$(basename "$f"):"
+              modinfo -F vermagic "$f" || true
             done
           } > dist/ABI-REVIEW-REQUIRED.txt
           (cd dist && sha256sum modules/*.ko > SHA256SUMS)
