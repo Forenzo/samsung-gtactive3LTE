@@ -1,0 +1,42 @@
+name: t575-usb-ipv4-tool
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - 'first-gui/t575-ipv4.c'
+      - '.github/workflows/t575-usb-ipv4-tool.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compile-static-aarch64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install ARM64 cross-compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu file
+      - name: Compile and inspect static diagnostic tool (do not execute)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          aarch64-linux-gnu-gcc -O2 -Wall -Wextra -Werror -static -s \
+            -o dist/t575-usb-ipv4-aarch64 first-gui/t575-ipv4.c
+          file dist/t575-usb-ipv4-aarch64
+          file dist/t575-usb-ipv4-aarch64 | grep -E 'ARM aarch64|ARM64'
+          file dist/t575-usb-ipv4-aarch64 | grep 'statically linked'
+          sha256sum dist/t575-usb-ipv4-aarch64 > dist/SHA256SUMS
+          echo 'BUILD ONLY: tool not executed on tablet, no BOOT writes'
+      - name: Upload unexecuted ARM64 utility
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-usb-ipv4-aarch64-build-only
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
