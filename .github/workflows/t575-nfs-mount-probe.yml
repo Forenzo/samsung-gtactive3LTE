@@ -1,0 +1,41 @@
+name: t575-nfs-mount-probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/upstream-active3-family-firstboot
+    paths:
+      - 'first-gui/t575-nfs-mount-probe.c'
+      - '.github/workflows/t575-nfs-mount-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compile-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install ARM64 build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross file
+      - name: Compile mount helper only (NEVER RUN)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          aarch64-linux-gnu-gcc -O2 -Wall -Wextra -Werror -static -s \
+            -o dist/t575-nfs-mount-probe-aarch64 first-gui/t575-nfs-mount-probe.c
+          file dist/t575-nfs-mount-probe-aarch64 | grep -E 'ARM aarch64|ARM64'
+          file dist/t575-nfs-mount-probe-aarch64 | grep 'statically linked'
+          (cd dist && sha256sum t575-nfs-mount-probe-aarch64 > SHA256SUMS)
+          echo 'Compile-only. No mounted filesystems or device writes in CI.'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-nfs-mount-probe-aarch64-build-only
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
