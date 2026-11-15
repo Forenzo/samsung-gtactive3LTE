@@ -21,7 +21,7 @@ jobs:
       - name: Install ARM64 cross-compiler
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu file
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross file
       - name: Compile and inspect static diagnostic tool (do not execute)
         run: |
           set -euo pipefail
