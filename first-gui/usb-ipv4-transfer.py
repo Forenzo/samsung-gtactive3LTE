@@ -51,8 +51,11 @@ def extract_verified(path):
             raise ValueError("Expected executable and SHA256SUMS in GitHub artifact ZIP")
         content = z.read(FILE)
         manifest = z.read("SHA256SUMS").decode()
-    matches = [x.split() for x in manifest.splitlines()
-               if x.split() and x.split()[-1] == FILE]
+    # sha256sum was run as 'sha256sum dist/BINARY', so the manifest
+    # contains 'dist/t575-usb-ipv4-aarch64' although the artifact ZIP
+    # stores the binary at its basename.
+    matches = [parts for x in manifest.splitlines()
+               if (parts := x.split()) and pathlib.PurePosixPath(parts[-1]).name == FILE]
     if len(matches) != 1:
         raise ValueError("Manifest must contain exactly one binary checksum")
     digest = hashlib.sha256(content).hexdigest()
@@ -72,6 +75,8 @@ def main():
     parser.add_argument("--interface", default="en7", help="Mac interface for existing NCM diagnostic link")
     args = parser.parse_args()
 
+    if args.upload is not None and not args.upload.expanduser().is_file():
+        raise ValueError(f"Artifact ZIP file not found: {args.upload}")
     payload = extract_verified(args.upload.expanduser()) if args.upload else None
     scope = socket.if_nametoindex(args.interface)
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as sock:
