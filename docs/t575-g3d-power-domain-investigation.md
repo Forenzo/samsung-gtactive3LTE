@@ -60,3 +60,63 @@ after the live DT compatible was inspected. No device changes were made.
 
 No changes to device runtime, BOOT, DTBO, Android internal storage,
 NFS server or network are requested by this investigation.
+
+## 2026-11-17 — exact in-repository driver and Wi-Fi precedent found
+
+The owner's **local `git grep`** found all of the following in the tracked source:
+
+- `patches/linux/0081-pmdomain-samsung-Add-Exynos9810-support.patch`
+  extends `drivers/pmdomain/samsung/exynos-pm-domains.c` with an OF
+  match for the exact `samsung,exynos9810-g3d-pd` compatible, plus
+  Exynos9810-specific D-TZPC SMC and embedded-G3D clock ordering.
+- `0086` and `0087` supply later power-domain error recovery and
+  adjusted GPU-clock ordering based on the SM-T570 GPL kernel.
+- `0083` defines `power-domain@14064040` and GPU at `17500000`;
+  `0084` enables the Mali GPU on SM-T570 assuming S-Boot left G3D on.
+- **`0115-arm64-dts-exynos-gtactive3wifi-Drop-the-GPU-power-do.patch`**
+  documents the *identical* deferred-probe error when
+  `CONFIG_PM=n`, and drops the GPU's `power-domains` link on the
+  Wi-Fi SM-T570 because S-Boot left G3D powered. This workaround was
+  developed on a different board variant; it is NOT yet shown safe on
+  this owner's LTE bootloader.
+- `0153-arm64-dts-exynos9810-gtactive3-split-into-common-and.patch`
+  creates the LTE DTB and moves shared GPU and power-domain definitions
+  into `exynos9810-gtactive3-common.dtsi`, where the GPU retains an
+  enabled `pd_g3d` supplier. The physical LTE DT shows that link is
+  present and the provider deferred.
+
+**Correction to the earlier investigation**: it was wrong to say a
+matching driver does not exist in the repo. It DOES exist in patch
+0081, even though the unmodified upstream Linux driver does not.
+The likely reason it is unavailable to the NFS *diagnostic kernel* is
+that this kernel is built from an `allnoconfig` baseline and the
+bring-up fragment does not explicitly enable `CONFIG_PM` or
+`CONFIG_EXYNOS_PM_DOMAINS`. This is a **hypothesis** until the built
+`.config` is inspected.
+
+Two candidate design paths (neither is approved for hardware changes):
+
+1. **Wi-Fi-style staged bypass (preferred for evaluation only)**:
+   add an LTE-only `&gpu { /delete-property/ power-domains; };`
+   override in the final LTE DTS, *but only if a read-only G3D status
+   measurement confirms the LTE bootloader left the domain enabled*,
+   and S-Boot's clock and regulator state is documented. This avoids
+   triggering untested power on/off cycles but also omits runtime
+   power-domain management, with potential idle/power drawbacks.
+2. Build in `CONFIG_PM=y`, `CONFIG_PM_GENERIC_DOMAINS=y` and
+   `CONFIG_EXYNOS_PM_DOMAINS=y` so patched Exynos9810-specific driver
+   can match the DT provider. **This permits power-domain transitions**
+   and requires a separate safety audit of `samsung,bringup-keep-on`,
+   clocks, regulator, and D-TZPC SMC behavior before any physical test.
+
+Suggested read-only tablet probe:
+`peek 0x14064044` (PMU `EMBEDDED_G3D_STATUS`; the SM-T570
+reference measured `0x0010000f` when enabled). This is read-only MMIO
+via the existing diagnostic console; a single status observation does
+not prove complete power and voltage correctness.
+
+Do not modify the currently running device, unload/rebind the GPU,
+execute `poke`, launch a compositor, or flash a speculative image.
+A safe next milestone is to record that single G3D status value and
+reconcile the exact built kernel configuration and DT overlays,
+then prepare an **offline-only** LTE-specific patch for review.
