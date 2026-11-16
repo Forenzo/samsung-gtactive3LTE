@@ -1,0 +1,45 @@
+# CI-only: compile supervisor; never execute it or access tablet hardware.
+name: t575-supervised-netroot-probe-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM64 cross compiler
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu file
+      - name: Compile review-only ARM64 supervisor
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          aarch64-linux-gnu-gcc -std=gnu11 -O2 -static -Wall -Wextra -Werror \
+            -o out/t575-supervised-netroot-probe-aarch64 \
+            first-gui/t575-supervised-netroot-probe.c
+          aarch64-linux-gnu-readelf -h out/t575-supervised-netroot-probe-aarch64 > out/ELF-HEADER.txt
+          grep -q 'Machine:.*AArch64' out/ELF-HEADER.txt
+          (cd out && sha256sum t575-supervised-netroot-probe-aarch64 > SHA256SUMS)
+          cat > out/REVIEW-ONLY.txt <<'EOF'
+          NO TABLET EXECUTION AUTHORIZED BY THIS BUILD.
+          Experimental NFSv3-only read-only filesystem inspection.
+          Requires a separately approved NFS-enabled kernel; the current
+          running diagnostic kernel has NFS disabled.
+          Does not replace PID 1, flash, kexec, mount Android or launch Plasma.
+          The NFS mount syscall can still block inside the kernel; watchdog
+          timeout is best effort, not a guarantee of recoverability.
+          File checks, SHA256 and compilation do NOT validate restoration.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-supervised-netroot-probe-aarch64-UNTESTED
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
