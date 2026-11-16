@@ -107,3 +107,28 @@ metadata retrieval, not a mounted filesystem, not successful reads of all
 Plasma files, and not graphical operation. The old diagnostic kernel still
 reports `CONFIG_NFS_FS=n`. Only the separate experimental CI kernel includes
 NFS client support. No BOOT write, flash, kexec or partition change occurred.
+
+## No-flash NFS module attempt: blocked by missing built-in handshake API (2026-11-16)
+
+The owner staged five verified modules in initramfs RAM. The first actual
+`insmod /t575-test-sunrpc.ko` returned errno 2; the tablet's screen showed
+`sunrpc: Unknown symbol` for `tls_alert_recv`,
+`tls_handshake_close`, `tls_server_hello_x509`,
+`tls_handshake_cancel`, `tls_get_record_type`,
+`tls_client_hello_x509`, and `tls_client_hello_anon`.
+The file was present at the time of this second attempt. The earlier errno 2
+was a separate missing-file case. The diagnostic system continued running.
+
+Linux 7.3's `NET_HANDSHAKE` option is `bool`, default `y` when SUNRPC is
+enabled; `net/handshake/tlshd.c` exports the missing symbols. The running
+kernel had no NFS/SUNRPC and evidently does not export the necessary
+handshake symbols, whereas the experimental NFS modules were compiled
+against a kernel configuration that includes that built-in API. Matching
+`vermagic` is NOT sufficient to bridge that configuration difference.
+
+**Do not retry the existing NFS .ko files, force-load them, or assume TLS can
+be fixed by adding an ordinary module.** Pivot to the opt-in experimental
+NFS-enabled kernel, first ensuring a temporary or recoverable boot procedure,
+complete working USB diagnostics, preserved Android BOOT image, and owner
+approval before any kexec/reboot or flash operation. No kernel switch has
+been performed in this checkpoint.
