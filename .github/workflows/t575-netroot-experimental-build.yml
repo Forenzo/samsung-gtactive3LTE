@@ -1,4 +1,4 @@
-# Opt-in experimental kernel configuration. Never flash or overwrite tablet partitions.
+# Build-only experimental NFSv3 kernel. Never flashes, boots or runs on hardware.
 name: t575-netroot-experimental-build
 
 on:
@@ -33,7 +33,7 @@ jobs:
             make bc bison flex libssl-dev libelf-dev libgnutls28-dev \
             uuid-dev device-tree-compiler swig python3-dev \
             python3-setuptools python3-pyelftools cpio kmod patch \
-            curl git tar gzip
+            curl git tar gzip file
 
       - name: Check opt-in-only configuration
         run: |
@@ -48,7 +48,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build unsigned diagnostic kernel with NFSv3 client (not flashable)
+      - name: Compile unsigned experimental kernel (NO DEVICE ACCESS)
         env:
           NO_F2FS: '1'
           JOBS: '4'
@@ -58,112 +58,61 @@ jobs:
           mkdir -p out
           ci/bootchain/build out "t575-netroot-experimental-${GITHUB_RUN_NUMBER}"
 
-      - name: Verify generated NFS configuration and diagnostic bundle
+      - name: Audit kernel configuration and bootchain archive
         run: |
           set -euo pipefail
-          mkdir -p out
           python3 first-gui/audit-netroot-config.py build/bootchain/bringup/.config \
             | tee out/t575-netroot-config-audit.txt
           grep -q '^CONFIG_NFS_FS=y$' out/t575-netroot-config-audit.txt
           grep -q '^CONFIG_NFS_V3=y$' out/t575-netroot-config-audit.txt
           grep -q '^CONFIG_SUNRPC=y$' out/t575-netroot-config-audit.txt
-          grep -q '^CONFIG_LOCKD=y
+          grep -q '^CONFIG_LOCKD=y$' out/t575-netroot-config-audit.txt
+          grep -q '^CONFIG_NET_HANDSHAKE=y$' build/bootchain/bringup/.config
+          echo 'NET_HANDSHAKE built-in: verified'
+          echo 'kexec build features (not runtime tested):'
+          grep -E '^CONFIG_(KEXEC|KEXEC_FILE|KEXEC_CORE|NET_HANDSHAKE)=' build/bootchain/bringup/.config || true
           python3 - <<'PY'
           from pathlib import Path
           import tarfile
           archives = list(Path("out").glob("*bootchain_*.tar.gz"))
-          assert len(archives) == 1, f"expected one bootchain archive: {archives}"
+          assert len(archives) == 1, f"Expected one bootchain archive: {archives}"
           with tarfile.open(archives[0], "r:gz") as tf:
               names = set(tf.getnames())
-              assert "uniLoader-linux-gtactive3" in names
-              assert "ramdisk.cpio.gz" in names
-              assert "uniLoader-chain-gtactive3" not in names
-          print("EXPERIMENTAL NETROOT BUILD STRUCTURE: PASS (UNTESTED ON DEVICE)")
-          print("BOOT/FLASH/USERDATA WRITES: NOT PERFORMED")
+          assert "uniLoader-linux-gtactive3" in names, "Missing LTE diagnostic loader"
+          assert "ramdisk.cpio.gz" in names, "Missing diagnostic initramfs archive"
+          assert "uniLoader-chain-gtactive3" not in names, "Unexpected chainloader"
+          print("EXPERIMENTAL NETROOT BUILD STRUCTURE: PASS")
+          print("NO BOOT/FLASH/USERDATA DEVICE WRITES")
           PY
 
-      - name: Export unsigned ARM64 kernel Image for static review (NOT BOOTABLE BY ITSELF)
+      - name: Export standalone unsigned ARM64 Image for REVIEW ONLY
         run: |
           set -euo pipefail
           mkdir -p out/standalone-review
           cp build/bootchain/bringup/arch/arm64/boot/Image out/standalone-review/Image
-          file out/standalone-review/Image
           python3 - <<'PY'
           from pathlib import Path
-          import struct
-          b = Path('out/standalone-review/Image').read_bytes()
-          assert len(b) > 4 * 1024 * 1024, "unexpectedly small ARM64 Image"
-          assert b[56:60] == b'ARM\\x64', "missing ARM64 Image header"
-          print('ARM64 kernel Image header: PASS')
-          print('Image bytes:', len(b))
+          data = Path("out/standalone-review/Image").read_bytes()
+          assert len(data) > 4 * 1024 * 1024, "Suspiciously small ARM64 Image"
+          assert data[56:60] == bytes.fromhex("41524d64"), "ARM64 Image magic missing"
+          print("ARM64 Image header: PASS")
+          print("Uncompressed Image bytes:", len(data))
           PY
-          sha256sum out/standalone-review/Image > out/standalone-review/SHA256SUMS
+          file out/standalone-review/Image
+          (cd out/standalone-review && sha256sum Image > SHA256SUMS)
           {
-            echo 'WARNING: UNTESTED. DO NOT KEXEC, FLASH, BOOT OR WRITE ANY PARTITION.'
-            echo 'This is a kernel Image, NOT an Android boot.img.'
-            echo 'A verified arm64 kexec_file_load/recovery plan is still required.'
+            echo 'REVIEW ONLY. NEVER KEXEC/FLASH/BOOT WITHOUT RECOVERY VALIDATION.'
+            echo 'Standalone Image is not an Android boot.img and not a ready boot recipe.'
             grep -E '^CONFIG_(NFS_FS|NFS_V3|SUNRPC|LOCKD|NET_HANDSHAKE|KEXEC|KEXEC_FILE|KEXEC_CORE)=' build/bootchain/bringup/.config || true
           } > out/standalone-review/REVIEW-ONLY.txt
 
-      - name: Archive diagnostic build for review only
+      - name: Upload compile-only review artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: t575-netroot-experimental-compile-only
+          name: t575-netroot-experimental-UNTESTED-review
           path: |
             out/*bootchain_*.tar.gz
             out/t575-netroot-config-audit.txt
             out/standalone-review/*
-          if-no-files-found: error
-          retention-days: 14
- out/t575-netroot-config-audit.txt
-          grep -q '^CONFIG_NET_HANDSHAKE=y
-          python3 - <<'PY'
-          from pathlib import Path
-          import tarfile
-          archives = list(Path("out").glob("*bootchain_*.tar.gz"))
-          assert len(archives) == 1, f"expected one bootchain archive: {archives}"
-          with tarfile.open(archives[0], "r:gz") as tf:
-              names = set(tf.getnames())
-              assert "uniLoader-linux-gtactive3" in names
-              assert "ramdisk.cpio.gz" in names
-              assert "uniLoader-chain-gtactive3" not in names
-          print("EXPERIMENTAL NETROOT BUILD STRUCTURE: PASS (UNTESTED ON DEVICE)")
-          print("BOOT/FLASH/USERDATA WRITES: NOT PERFORMED")
-          PY
-
-      - name: Archive diagnostic build for review only
-        uses: actions/upload-artifact@v4
-        with:
-          name: t575-netroot-experimental-compile-only
-          path: |
-            out/*bootchain_*.tar.gz
-            out/t575-netroot-config-audit.txt
-          if-no-files-found: error
-          retention-days: 14
- build/bootchain/bringup/.config
-          echo 'NET_HANDSHAKE built into experimental kernel: PASS'
-          echo 'Relevant kernel recovery/kexec options:'
-          grep -E '^CONFIG_(KEXEC|KEXEC_FILE|KEXEC_CORE|CRASH_DUMP|NET_HANDSHAKE)=' build/bootchain/bringup/.config || true
-          python3 - <<'PY'
-          from pathlib import Path
-          import tarfile
-          archives = list(Path("out").glob("*bootchain_*.tar.gz"))
-          assert len(archives) == 1, f"expected one bootchain archive: {archives}"
-          with tarfile.open(archives[0], "r:gz") as tf:
-              names = set(tf.getnames())
-              assert "uniLoader-linux-gtactive3" in names
-              assert "ramdisk.cpio.gz" in names
-              assert "uniLoader-chain-gtactive3" not in names
-          print("EXPERIMENTAL NETROOT BUILD STRUCTURE: PASS (UNTESTED ON DEVICE)")
-          print("BOOT/FLASH/USERDATA WRITES: NOT PERFORMED")
-          PY
-
-      - name: Archive diagnostic build for review only
-        uses: actions/upload-artifact@v4
-        with:
-          name: t575-netroot-experimental-compile-only
-          path: |
-            out/*bootchain_*.tar.gz
-            out/t575-netroot-config-audit.txt
           if-no-files-found: error
           retention-days: 14
