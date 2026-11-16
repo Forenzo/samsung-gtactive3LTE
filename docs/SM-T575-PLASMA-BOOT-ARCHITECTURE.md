@@ -151,3 +151,23 @@ proof that a forced restart reaches the current working diagnostic console
 before deliberate loss of runtime state, plus an owner-approved recovery
 sequence. Until these conditions are satisfied all artifact output is
 build/review only. No partition modification is part of this gate.
+
+## Kexec no-go checkpoint (2026-11-16)
+
+Owner ran `first-gui/kexec-readonly-preflight.py`: running kernel
+`7.3.0`, taint `0`; `/proc/sys/kernel/kexec_load_disabled` and
+`/sys/kernel/kexec_loaded` were both inaccessible/not exposed. These
+status paths alone are not an authoritative kexec capability test.
+
+More decisive: `bootchain/build.sh` starts the kernel configuration with
+`make allnoconfig`; neither `configs/gtactive3-bringup.config` nor
+`configs/t575-plasma-netroot.config` requests any CONFIG_KEXEC feature.
+Therefore current and experimental diagnostic configurations do not establish
+support for kexec or kexec_file_load. The TCP console's kexec command is
+**not a tested, available, or approved boot mechanism**; do not invoke it.
+
+Next boot path, if the owner explicitly chooses it: prepare an independent,
+fully recoverable, BOOT-only experiment with verified stock BOOT backup,
+working Download Mode/Odin fallback, exact device model and build checks,
+and hard prohibition on userdata/super/metadata writes. Keep every build
+artifact non-flashable/unexecuted until that recovery plan is approved.
