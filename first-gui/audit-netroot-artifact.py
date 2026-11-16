@@ -18,7 +18,16 @@ IMAGE_SUMS = "standalone-review/SHA256SUMS"
 CONFIG = "t575-netroot-config-audit.txt"
 REVIEW = "standalone-review/REVIEW-ONLY.txt"
 ARCHIVE_RE = re.compile(r"gtactive3-bootchain_t575-netroot-experimental-[0-9]+[.]tar[.]gz")
-EXPECTED_TAR = {"uniLoader-linux-gtactive3", "ramdisk.cpio.gz", "MANIFEST"}
+# Bootchain builds both device variants from one Linux Image:
+# the default Wi-Fi board has unsuffixed chain/linux loaders, while LTE
+# has ONLY its separate linux-gtactive3 loader (never chain-gtactive3).
+EXPECTED_TAR = {
+    "uniLoader-chain",
+    "uniLoader-linux",
+    "uniLoader-linux-gtactive3",
+    "ramdisk.cpio.gz",
+    "MANIFEST",
+}
 REQUIRED = ("CONFIG_NFS_FS=y", "CONFIG_NFS_V3=y", "CONFIG_SUNRPC=y",
             "CONFIG_LOCKD=y", "CONFIG_USB_CONFIGFS_NCM=y")
 
@@ -99,13 +108,16 @@ def main():
                     found.add(member.name)
             if found != EXPECTED_TAR or manifest is None:
                 raise ValueError(f"Bootchain members incomplete: {found}")
-            for name in ("uniLoader-linux-gtactive3", "ramdisk.cpio.gz"):
+            for name in sorted(EXPECTED_TAR - {"MANIFEST"}):
                 matches = re.findall(r"(?m)^([0-9a-fA-F]{64})  " + re.escape(name) + r"$", manifest)
                 if len(matches) != 1 or matches[0].lower() != checksums[name]:
                     raise ValueError(f"Bootchain manifest SHA256 mismatch: {name}")
+            if not re.search(r"(?m)^variants:.*gtactive3=", manifest):
+                raise ValueError("LTE variant not recorded in bootchain manifest")
             if "contains no Samsung files:" not in manifest:
                 raise ValueError("Expected provenance statement missing from manifest")
-            print("PASS: LTE-only bootchain, diagnostic initramfs and manifest hashes")
+            print("PASS: Wi-Fi chain/Linux + separate LTE Linux loader; all payload hashes verified")
+            print("PASS: no LTE chainloader in bootchain package")
         print("\nOFFLINE ARTIFACT AUDIT: PASS")
         print("NOT a boot or recovery test. No files extracted and no tablet changes.")
         print("DO NOT FLASH OR KEXEC this artifact.")
