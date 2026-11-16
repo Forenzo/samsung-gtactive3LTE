@@ -120,3 +120,41 @@ execute `poke`, launch a compositor, or flash a speculative image.
 A safe next milestone is to record that single G3D status value and
 reconcile the exact built kernel configuration and DT overlays,
 then prepare an **offline-only** LTE-specific patch for review.
+
+## 2026-11-17 — LTE status confirmed and opt-in offline DT workaround staged
+
+Owner ran read-only diagnostic command `peek 0x14064044` on the SM-T575's
+NFS-enabled diagnostic Linux and obtained:
+
+```
+G3D POWER-DOMAIN STATUS: 0x0010000f
+```
+
+This matches the SM-T570 Wi-Fi bootloader's documented powered-on G3D
+value. It is useful supporting evidence for the known Wi-Fi stage-one
+workaround, but **not** proof of correct clocks, voltages, safe runtime
+power management, Panfrost binding, render node existence, or GUI success.
+
+The review branch now stages this *experiment only*:
+- `patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch`
+  adds a trailing `&gpu { /delete-property/ power-domains; };` override
+  to the **LTE-only** `exynos9810-gtactive3.dts`. The shared DTS,
+  Wi-Fi variant and vendor power-domain code remain unmodified.
+- `bootchain/build.sh` has a new, explicitly opted-in
+  `BRINGUP_EXTRA_DTS_PATCH` hook **after** applying the existing
+  kernel patch stack, restricted to the single LTE DTS path and zero
+  patch fuzz. The default kernel build without this variable is unchanged.
+- `.github/workflows/t575-netroot-experimental-build.yml` supplies
+  that variable to the experimental unsigned build and requires a compiled
+  LTE DTB with enabled GPU and **no `power-domains` supplier property**.
+
+A synthetic source-derived patch dry-run with `--fuzz=0` succeeded,
+but the **full patched Linux source build and compiled DTB audit have
+not yet been run**. This branch produces no flashable Android BOOT image.
+It must not be merged into a release kernel on current evidence.
+
+Further requirements: successful offline GitHub Actions build and
+`fdtget` checks; inspect vendor GPU clock/voltage assumptions and
+whether any new G3D errors appear at first probe; preserve verified
+non-wiping Android BOOT restoration. An actual BOOT-only hardware
+experiment is **not authorized** by this document or PR.
