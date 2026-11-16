@@ -78,10 +78,10 @@ static int child_probe(void)
     }
     buf[n] = '\0';
     if (!strstr(buf, "[Desktop Entry]")) {
-        fputs("Session descriptor did not contain [Desktop Entry]\\n", stderr);
+        fputs("Session descriptor did not contain [Desktop Entry]\n", stderr);
         goto out;
     }
-    printf("PASS: read %zd bytes over read-only NFSv3; diagnostic PID 1 preserved\\n", n);
+    printf("PASS: read %zd bytes over read-only NFSv3; diagnostic PID 1 preserved\n", n);
     status = 0;
 out:
     if (fd >= 0) close(fd);
@@ -103,16 +103,16 @@ int main(int argc, char **argv)
     struct timespec delay = {.tv_sec = 0, .tv_nsec = 100000000L};
 
     if (argc != 2 || strcmp(argv[1], "--probe-readonly") != 0) {
-        fprintf(stderr, "Usage: %s --probe-readonly\\n", argv[0]);
-        fputs("UNTESTED; requires explicitly approved NFS-enabled kernel. No Plasma launch.\\n", stderr);
+        fprintf(stderr, "Usage: %s --probe-readonly\n", argv[0]);
+        fputs("UNTESTED; requires explicitly approved NFS-enabled kernel. No Plasma launch.\n", stderr);
         return 2;
     }
     if (getpid() == 1) {
-        fputs("Refusing to replace diagnostic PID 1\\n", stderr);
+        fputs("Refusing to replace diagnostic PID 1\n", stderr);
         return 2;
     }
     if (!has_nfs()) {
-        fputs("NFS not registered in /proc/filesystems; refusing.\\n", stderr);
+        fputs("NFS not registered in /proc/filesystems; refusing.\n", stderr);
         return 3;
     }
 
@@ -129,13 +129,13 @@ int main(int argc, char **argv)
         pid_t w = waitpid(pid, &status, WNOHANG);
         if (w == pid) {
             if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return 0;
-            fprintf(stderr, "Probe child exited unsuccessfully (wait status %d)\\n", status);
+            fprintf(stderr, "Probe child exited unsuccessfully (wait status %d)\n", status);
             return 1;
         }
         if (w < 0) { perror("waitpid"); return 1; }
         nanosleep(&delay, NULL);
     }
-    fputs("TIMEOUT: terminating probe child; diagnostic PID 1 remains active.\\n", stderr);
+    fputs("TIMEOUT: terminating probe child; diagnostic PID 1 remains active.\n", stderr);
     kill(pid, SIGKILL);
     /* In uninterruptible NFS I/O, SIGKILL may not complete immediately.
        Never block the parent indefinitely waiting for the child. */
