@@ -1,4 +1,4 @@
-# Compile checks for branches and pull requests: nothing is published.
+# Compile checks for branches and pull requests: no release images are published.
 #
 #  - offline: config.toml (scripts/config check + tests/config), the
 #    firmware tools' tests, shellcheck of the plumbing
@@ -22,6 +22,36 @@ permissions:
   contents: read
 
 jobs:
+
+  # Only the SM-T575 experimental PR builds this review-only userspace probe.
+  # No device access, NFS mount, kexec, or BOOT image.
+  t575-netroot-probe:
+    if: github.head_ref == 'work/t575-supervised-netroot-stage1' || github.ref_name == 'work/t575-supervised-netroot-stage1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: ARM64 compiler
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+      - name: Build and inspect static AArch64 ELF
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          aarch64-linux-gnu-gcc -std=gnu11 -O2 -static -Wall -Wextra -Werror \
+            -o out/t575-supervised-netroot-probe-aarch64 first-gui/t575-supervised-netroot-probe.c
+          aarch64-linux-gnu-readelf -h out/t575-supervised-netroot-probe-aarch64 > out/ELF-HEADER.txt
+          grep -q 'Machine:.*AArch64' out/ELF-HEADER.txt
+          (cd out && sha256sum t575-supervised-netroot-probe-aarch64 > SHA256SUMS)
+          printf '%s\n' 'REVIEW ONLY: not device-tested; NFS-enabled diagnostic boot and rollback remain unverified.' > out/REVIEW-ONLY.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-supervised-netroot-probe-aarch64-UNTESTED
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
   offline:
     runs-on: ubuntu-24.04
     steps:
