@@ -81,6 +81,20 @@ else
 fi
 patch -d "$K" -p1 -s --no-backup-if-mismatch < "$KPATCH"
 
+# Optional, build-only LTE GPU DT staging patch. Never applied by the default
+# bring-up workflow. Restrict this opt-in hook to the per-variant LTE DTS:
+# Wi-Fi DTS, shared DT, kernel drivers, BOOT, and Android are not modified.
+if [ -n "${BRINGUP_EXTRA_DTS_PATCH:-}" ]; then
+	[ -f "$BRINGUP_EXTRA_DTS_PATCH" ] ||
+		{ echo "Missing BRINGUP_EXTRA_DTS_PATCH: $BRINGUP_EXTRA_DTS_PATCH" >&2; exit 1; }
+	target='diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts'
+	[ "$(grep -c '^diff --git ' "$BRINGUP_EXTRA_DTS_PATCH")" = 1 ] &&
+	grep -Fxq "$target" "$BRINGUP_EXTRA_DTS_PATCH" ||
+		{ echo "Refusing non-LTE or multi-file experimental DT patch" >&2; exit 1; }
+	log "opt-in LTE-only GPU DT patch (EXPERIMENTAL; offline build)"
+	patch -d "$K" -p1 --batch --forward --fuzz=0 < "$BRINGUP_EXTRA_DTS_PATCH"
+fi
+
 # out-of-tree U-Boot build; uniLoader builds in place, so in a copy: the
 # vendored trees stay clean
 UB=$R/bootchain/u-boot
