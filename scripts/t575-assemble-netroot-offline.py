@@ -12,7 +12,7 @@ import argparse
 import gzip
 import hashlib
 import importlib.util
-import os
+import io
 from pathlib import Path
 import re
 import shutil
@@ -82,8 +82,9 @@ def verified_components(artifact):
     if len(ramdisk) >= 64 * 1024 * 1024 or ramdisk[:2] != b"\x1f\x8b":
         raise ValueError("Expected compressed diagnostic ramdisk")
     # A small bounded sanity check: a real initramfs should decompress as cpio.
-    if not gzip.decompress(ramdisk).startswith(b"070701"):
-        raise ValueError("Diagnostic ramdisk has no newc cpio header")
+    with gzip.GzipFile(fileobj=io.BytesIO(ramdisk)) as unpacked:
+        if unpacked.read(6) != b"070701":
+            raise ValueError("Diagnostic ramdisk has no newc cpio header")
     print("NFS image SHA pinned to verified artifact:", REVIEW_IMAGE_SHA)
     print("LTE loader SHA256:", sha(loader))
     print("Diagnostic initramfs SHA256:", sha(ramdisk))
@@ -171,7 +172,7 @@ def build(args):
             shutil.copyfileobj(source, dest)
 
     print("OFFLINE-ONLY candidate:", output)
-    print("Candidate SHA256:", original.checksum(output) if hasattr(original, "checksum") else file_sha(output))
+    print("Candidate SHA256:", file_sha(output))
     print("No tablet access, BOOT writes, kexec, or flash requested.")
     print("Non-wiping restore unproven. RESTORE/BOOT/FLASH GATE: BLOCKED.")
 
