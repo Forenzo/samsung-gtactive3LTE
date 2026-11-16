@@ -29,8 +29,10 @@ static int has_nfs(void)
     int found = 0;
     if (!f) return 0;
     while (fgets(line, sizeof(line), f)) {
-        char name[32];
-        if (sscanf(line, " %31s", name) == 1 && strcmp(name, "nfs") == 0) {
+        char first[32] = "", second[32] = "";
+        int fields = sscanf(line, " %31s %31s", first, second);
+        const char *type = fields == 2 ? second : first;
+        if (fields >= 1 && strcmp(type, "nfs") == 0) {
             found = 1;
             break;
         }
@@ -117,7 +119,11 @@ int main(int argc, char **argv)
     fflush(NULL);
     pid = fork();
     if (pid < 0) { perror("fork"); return 1; }
-    if (pid == 0) _exit(child_probe());
+    if (pid == 0) {
+        int rc = child_probe();
+        fflush(NULL);
+        _exit(rc);
+    }
 
     for (i = 0; i < TIMEOUT_SECONDS * 10; i++) {
         pid_t w = waitpid(pid, &status, WNOHANG);
