@@ -67,7 +67,83 @@ jobs:
           grep -q '^CONFIG_NFS_FS=y$' out/t575-netroot-config-audit.txt
           grep -q '^CONFIG_NFS_V3=y$' out/t575-netroot-config-audit.txt
           grep -q '^CONFIG_SUNRPC=y$' out/t575-netroot-config-audit.txt
-          grep -q '^CONFIG_LOCKD=y$' out/t575-netroot-config-audit.txt
+          grep -q '^CONFIG_LOCKD=y
+          python3 - <<'PY'
+          from pathlib import Path
+          import tarfile
+          archives = list(Path("out").glob("*bootchain_*.tar.gz"))
+          assert len(archives) == 1, f"expected one bootchain archive: {archives}"
+          with tarfile.open(archives[0], "r:gz") as tf:
+              names = set(tf.getnames())
+              assert "uniLoader-linux-gtactive3" in names
+              assert "ramdisk.cpio.gz" in names
+              assert "uniLoader-chain-gtactive3" not in names
+          print("EXPERIMENTAL NETROOT BUILD STRUCTURE: PASS (UNTESTED ON DEVICE)")
+          print("BOOT/FLASH/USERDATA WRITES: NOT PERFORMED")
+          PY
+
+      - name: Export unsigned ARM64 kernel Image for static review (NOT BOOTABLE BY ITSELF)
+        run: |
+          set -euo pipefail
+          mkdir -p out/standalone-review
+          cp build/bootchain/bringup/arch/arm64/boot/Image out/standalone-review/Image
+          file out/standalone-review/Image
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          b = Path('out/standalone-review/Image').read_bytes()
+          assert len(b) > 4 * 1024 * 1024, "unexpectedly small ARM64 Image"
+          assert b[56:60] == b'ARM\\x64', "missing ARM64 Image header"
+          print('ARM64 kernel Image header: PASS')
+          print('Image bytes:', len(b))
+          PY
+          sha256sum out/standalone-review/Image > out/standalone-review/SHA256SUMS
+          {
+            echo 'WARNING: UNTESTED. DO NOT KEXEC, FLASH, BOOT OR WRITE ANY PARTITION.'
+            echo 'This is a kernel Image, NOT an Android boot.img.'
+            echo 'A verified arm64 kexec_file_load/recovery plan is still required.'
+            grep -E '^CONFIG_(NFS_FS|NFS_V3|SUNRPC|LOCKD|NET_HANDSHAKE|KEXEC|KEXEC_FILE|KEXEC_CORE)=' build/bootchain/bringup/.config || true
+          } > out/standalone-review/REVIEW-ONLY.txt
+
+      - name: Archive diagnostic build for review only
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-netroot-experimental-compile-only
+          path: |
+            out/*bootchain_*.tar.gz
+            out/t575-netroot-config-audit.txt
+            out/standalone-review/*
+          if-no-files-found: error
+          retention-days: 14
+ out/t575-netroot-config-audit.txt
+          grep -q '^CONFIG_NET_HANDSHAKE=y
+          python3 - <<'PY'
+          from pathlib import Path
+          import tarfile
+          archives = list(Path("out").glob("*bootchain_*.tar.gz"))
+          assert len(archives) == 1, f"expected one bootchain archive: {archives}"
+          with tarfile.open(archives[0], "r:gz") as tf:
+              names = set(tf.getnames())
+              assert "uniLoader-linux-gtactive3" in names
+              assert "ramdisk.cpio.gz" in names
+              assert "uniLoader-chain-gtactive3" not in names
+          print("EXPERIMENTAL NETROOT BUILD STRUCTURE: PASS (UNTESTED ON DEVICE)")
+          print("BOOT/FLASH/USERDATA WRITES: NOT PERFORMED")
+          PY
+
+      - name: Archive diagnostic build for review only
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-netroot-experimental-compile-only
+          path: |
+            out/*bootchain_*.tar.gz
+            out/t575-netroot-config-audit.txt
+          if-no-files-found: error
+          retention-days: 14
+ build/bootchain/bringup/.config
+          echo 'NET_HANDSHAKE built into experimental kernel: PASS'
+          echo 'Relevant kernel recovery/kexec options:'
+          grep -E '^CONFIG_(KEXEC|KEXEC_FILE|KEXEC_CORE|CRASH_DUMP|NET_HANDSHAKE)=' build/bootchain/bringup/.config || true
           python3 - <<'PY'
           from pathlib import Path
           import tarfile
