@@ -132,3 +132,22 @@ NFS-enabled kernel, first ensuring a temporary or recoverable boot procedure,
 complete working USB diagnostics, preserved Android BOOT image, and owner
 approval before any kexec/reboot or flash operation. No kernel switch has
 been performed in this checkpoint.
+
+## Experimental kernel pre-boot gate (2026-11-16)
+
+The fallback plan is the opt-in NFSv3-enabled kernel, NOT attempting to
+force-load the previously failed `sunrpc.ko` into the old kernel.
+Workflow `.github/workflows/t575-netroot-experimental-build.yml` now
+asserts compiled-in `CONFIG_NET_HANDSHAKE=y` and NFSv3 and exports the
+ARM64 kernel `Image` separately for offline inspection, not installation.
+Read-only physical capabilities: `python3 first-gui/kexec-readonly-preflight.py`.
+
+**DO NOT RUN `kexec` YET.** Presence of a console command is not evidence
+that the kernel implements arm64 `kexec_file_load`, nor that handoff of the
+runtime device tree, reserved-memory, boot firmware state, initramfs,
+console, watchdog, or USB recovery is safe. The existing command is a
+low-level syscall invocation and has not been tested. Require documented
+proof that a forced restart reaches the current working diagnostic console
+before deliberate loss of runtime state, plus an owner-approved recovery
+sequence. Until these conditions are satisfied all artifact output is
+build/review only. No partition modification is part of this gate.
