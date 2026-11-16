@@ -1,0 +1,47 @@
+# Build-only SM-T575 NFSv3 filesystem probe. NO tablet access or boot modifications.
+name: t575-netroot-mount-probe-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM64 cross-compiler
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu file
+      - name: Compile standalone ARM64 NFS mount probe (NOT RUN)
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          aarch64-linux-gnu-gcc -std=gnu11 -O2 -static -Wall -Wextra -Werror \
+            -o out/t575-nfs-mount-probe-aarch64 \
+            first-gui/t575-nfs-mount-probe.c
+          aarch64-linux-gnu-readelf -h out/t575-nfs-mount-probe-aarch64 | tee out/ELF-HEADER.txt
+          grep -q 'Machine:.*AArch64' out/ELF-HEADER.txt
+          file out/t575-nfs-mount-probe-aarch64 | tee out/FILE.txt
+          (cd out && sha256sum t575-nfs-mount-probe-aarch64 > SHA256SUMS)
+          cat > out/REVIEW-ONLY.txt <<'EOF'
+          UNTESTED ARM64 NFSv3 filesystem mount/read/unmount probe.
+          Standalone userspace executable, NOT a BOOT image, NOT a Plasma handoff.
+          DO NOT run on current diagnostic Linux: its kernel lacks NFS_FS.
+          Only consider device execution after NFS-enabled kernel boot and
+          independent BOOT recovery/rollback validation and owner approval.
+          Uses fixed read-only Mac export 10.77.57.1:/Volumes/T575-Plasma/rootfs.
+          Mountpoint /mnt/t575-nfs-probe must not already exist.
+          Does not target Android partitions. Does not validate safe restore.
+          EOF
+      - name: Publish review-only binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-nfs-mount-probe-aarch64-UNTESTED
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
