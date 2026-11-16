@@ -34,7 +34,7 @@ jobs:
       - name: ARM64 compiler
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross binutils-aarch64-linux-gnu
       - name: Build and inspect static AArch64 ELF
         run: |
           set -euo pipefail
@@ -152,7 +152,7 @@ jobs:
       - name: Toolchain
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross binutils-aarch64-linux-gnu \
             make bc bison flex libssl-dev libelf-dev libgnutls28-dev uuid-dev device-tree-compiler \
             swig python3-dev python3-setuptools python3-pyelftools
       - name: U-Boot for every variant
