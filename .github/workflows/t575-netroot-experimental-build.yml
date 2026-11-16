@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - integration/upstream-active3-family-firstboot
+      - work/t575-gpu-genpd-config-review # temporary opt-in GPU review branch
     paths:
       - '.github/workflows/t575-netroot-experimental-build.yml'
       - 'configs/t575-plasma-netroot.config'
