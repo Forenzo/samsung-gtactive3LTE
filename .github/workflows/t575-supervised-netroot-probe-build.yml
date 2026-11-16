@@ -3,6 +3,12 @@ name: t575-supervised-netroot-probe-build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - work/t575-supervised-netroot-stage1
+    paths:
+      - '.github/workflows/t575-supervised-netroot-probe-build.yml'
+      - 'first-gui/t575-supervised-netroot-probe.c'
 
 permissions:
   contents: read
