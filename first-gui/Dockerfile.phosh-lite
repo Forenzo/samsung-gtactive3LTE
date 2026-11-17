@@ -1,0 +1,21 @@
+# SM-T575 minimal, build-only Phosh userspace for a non-wiping USB/NFS boot.
+# No BOOT image, no Android partitions, no automatic rootfs launch.
+# Separately staged on Mac SSD, NOT installed atop existing Plasma tree.
+FROM --platform=linux/arm64 alpine:3.22
+
+RUN apk add --no-cache \
+    busybox bash coreutils util-linux \
+    dbus eudev seatd libinput libdrm \
+    mesa-dri-gallium mesa-egl mesa-gles mesa-gbm \
+    phosh phoc squeekboard \
+    labwc yambar fuzzel foot \
+    adwaita-icon-theme font-dejavu \
+    && mkdir -p /proc /sys /dev /run /tmp /var /home /mnt \
+    && apk info -vv > /usr/share/t575-phosh-packages.txt
+
+COPY first-gui/phosh-preflight.sh /usr/local/sbin/t575-phosh-preflight
+RUN chmod 0755 /usr/local/sbin/t575-phosh-preflight \
+    && /bin/sh -n /usr/local/sbin/t575-phosh-preflight \
+    && /usr/local/sbin/t575-phosh-preflight
+
+# Build-only; no init, no flashing, no direct execution on tablet.
