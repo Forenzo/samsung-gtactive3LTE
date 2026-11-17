@@ -338,10 +338,14 @@ static void launch(long mountport) {
         msg("FAIL: Cage compositor not installed in NFS rootfs; install desktop overlay first\n");
         _exit(4);
     }
-    msg("Starting Cage (seatd / DRM) with Plasma Mobile nested fullscreen\n");
-    static const char *const desktop[] = {
+    const char *mobile_start = access("/usr/bin/startplasmamobile", X_OK) == 0
+        ? "/usr/bin/startplasmamobile"
+        : "/usr/bin/startplasma-wayland";
+    setenv("PLASMA_PLATFORM", "phone:handset", 1);
+    msg("Starting Cage (seatd / DRM) with nested fullscreen Plasma Mobile: %s\n", mobile_start);
+    const char *const desktop[] = {
         "/usr/bin/dbus-run-session","--",
-        "/usr/bin/cage","-d","--","/usr/bin/startplasma-wayland",NULL
+        "/usr/bin/cage","-d","--",mobile_start,NULL
     };
     execv(desktop[0], (char *const *)desktop);
     msg("FAIL: dbus-run-session: %s\n", strerror(errno)); _exit(4);
