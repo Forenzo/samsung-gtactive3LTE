@@ -94,7 +94,29 @@ def cmd(s, text):
     s.sendall(text.encode() + b"\n")
     return response(s)
 
-def start_desktop(s, binary):
+def host_mountd_port():
+    """Discover current TCP NFSv3 mountd port; macOS may change it on restart."""
+    lines = run("rpcinfo", "-p", "localhost").splitlines()
+    ports = []
+    has_nfs_tcp3 = False
+    for line in lines:
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        program, version, proto, port = fields[:4]
+        if (program, version, proto) == ("100005", "3", "tcp"):
+            if not port.isdigit() or not 1 <= int(port) <= 65535:
+                raise RuntimeError("Invalid NFSv3 mountd TCP port in rpcinfo")
+            ports.append(int(port))
+        if (program, version, proto, port) == ("100003", "3", "tcp", "2049"):
+            has_nfs_tcp3 = True
+    if len(set(ports)) != 1 or not has_nfs_tcp3:
+        raise RuntimeError("Mac must advertise NFSv3 TCP/2049 and exactly one NFSv3 mountd TCP port")
+    selected = ports[0]
+    print(f"Mac NFSv3 mountd TCP port (discovered via rpcinfo): {selected}")
+    return selected
+
+def start_desktop(s, binary, mountport):
     raw = binary.read_bytes()
     if binary.is_symlink() or raw[:4] != b"\x7fELF" or len(raw) > 5_000_000:
         raise RuntimeError("Invalid launcher executable")
@@ -117,7 +139,7 @@ def start_desktop(s, binary):
         if not result.startswith(("ok","already loaded")):
             raise RuntimeError("Could not initialize " + driver + ": " + result)
         print("Input driver ready:", driver)
-    print(cmd(s,"run /t575-plasma-launch --start"))
+    print(cmd(s,f"run /t575-plasma-launch --start {mountport}"))
     print("Attempting full graphical desktop; collecting startup output...", flush=True)
     time.sleep(18)
     print("\n=== PLASMA STARTUP LOG (after desktop initialization) ===")
@@ -145,6 +167,7 @@ def main():
     run("nfsd","start")
     if str(ROOT) not in run("showmount","-e","localhost"):
         raise RuntimeError("NFS export not advertised: check the existing read-only /etc/exports, then sudo nfsd update")
+    mountport = host_mountd_port()
     print("Mac USB/NFS host ready")
     with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
         s.settimeout(30)
@@ -152,7 +175,7 @@ def main():
         greeting = response(s)
         if "bring-up console" not in greeting:
             raise RuntimeError("Unexpected USB service. Refusing to upload.")
-        start_desktop(s, executable)
+        start_desktop(s, executable, mountport)
     print("No bootloader, Android BOOT, DTBO or userdata writes were issued.")
 
 if __name__ == "__main__":
