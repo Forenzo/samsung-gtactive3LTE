@@ -1,0 +1,134 @@
+# One-shot SM-T575 full graphical Duranium/Phosh preview.
+# Uses the upstream working Wi-Fi kernel source and userspace, but the LTE
+# DTB, LTE board identity and the bootloader-on G3D power workaround.
+# Builds an image only. DOES NOT install, flash, sign or publish updates.
+name: t575-lte-phosh-first-desktop
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-gpu-genpd-config-review
+    paths:
+      - '.github/workflows/t575-lte-phosh-first-desktop.yml'
+      - 'pmos/aports/device/testing/linux-postmarketos-exynos9810/APKBUILD'
+      - 'pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-lte-phosh-first-desktop
+  cancel-in-progress: false
+
+jobs:
+  full-phosh-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recheck LTE-only build isolation and imported upstream fixes
+        run: |
+          set -euo pipefail
+          scripts/config check
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path("config.toml").read_text()
+          assert 'codename = "gtactive3"' in s
+          assert 'images = false' in s, "Keep the LTE release channel disabled"
+          apk = Path("pmos/aports/device/testing/linux-postmarketos-exynos9810/APKBUILD").read_text()
+          assert "t575-gpu-first-desktop.patch" in apk
+          patch = Path("pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch").read_text()
+          diffs = [line for line in patch.splitlines() if line.startswith("diff --git ")]
+          assert diffs == ["diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts"], diffs
+          assert "+\t/delete-property/ power-domains;" in patch
+          print("PASS: LTE-only GPU workaround; no Wi-Fi/common DTS changes")
+          print("PASS: LTE image publishing still disabled")
+          PY
+
+      - name: Free space and enable ARM64 image assembly
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
+          sudo docker system prune -af || true
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends qemu-user-static binfmt-support erofs-utils zstd
+          ls /proc/sys/fs/binfmt_misc/ | grep -i aarch64
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          df -h /
+
+      - name: Prepare original postmarketOS Duranium build trees
+        run: ci/prepare
+
+      - name: Obtain upstream Linux source (no Samsung binaries)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p distfiles
+          BASE=$(sed -n 's/^_base="\(.*\)"/\1/p' pmos/aports/device/testing/linux-postmarketos-exynos9810/APKBUILD)
+          test -n "$BASE"
+          F="distfiles/linux-${BASE}.tar.gz"
+          for i in 1 2 3 4 5; do
+            if curl -fL --retry 3 --retry-delay 15 -H "Authorization: Bearer $GH_TOKEN" -o "$F.part" "https://github.com/torvalds/linux/archive/${BASE}.tar.gz"; then
+              mv "$F.part" "$F"
+              test -s "$F"
+              echo "Kernel source retrieved."
+              exit 0
+            fi
+            sleep $((i * 15))
+          done
+          echo "Kernel source archive unavailable; do not substitute unpinned source." >&2
+          exit 1
+
+      - name: Build original family packages and LTE variant
+        run: |
+          set -euo pipefail
+          mkdir -p ci-root/build pkgs ccache
+          GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
+            DISTFILES="$PWD/distfiles" CCACHE="$PWD/ccache" JOBS=4 \
+            sh work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
+          test -n "$(find pkgs -maxdepth 1 -name 'linux-postmarketos-exynos9810-gtactive3-*.apk' -print -quit)"
+          test -n "$(find pkgs -maxdepth 1 -name 'device-samsung-gtactive3-*.apk' -print -quit)"
+          echo 'PASS: built LTE kernel DTB and device packages'
+
+      - name: Assemble a complete, unpublished Phosh desktop system for SM-T575
+        env:
+          DEVICE: samsung-gtactive3
+          UI: phosh
+          CHANNEL: dev
+        run: |
+          set -euo pipefail
+          ln -sfn "$PWD/work/pmaports" work/duranium-build/pmaports
+          echo '26111790' > work/duranium-build/mkosi.version
+          GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
+            SKIP_APKS=1 FRESH=1 \
+            GTA3_UPDATE_BASE="$(GITHUB_REPOSITORY="$GITHUB_REPOSITORY" scripts/config get update.base)" \
+            GTA3_CHANNEL_FILE="$(scripts/config get variants.gtactive3.channel_file)" \
+            GTA3_IMAGE_ID=samsung-gtactive3-lte GTA3_LEGACY_IMAGE_IDS='' \
+            sh work/duranium-build/contrib/samsung-gtactive3/build-image.sh --profile=compressed
+          ls -lh work/duranium-build/mkosi.output/*/
+
+      - name: Check complete image, identity and Phosh session
+        run: |
+          set -euo pipefail
+          OUT=work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge
+          TAG=samsung-gtactive3-lte_phosh_edge-dev
+          ci/check-image "$OUT" 26111790 dev "$TAG" gtactive3
+          test -n "$(find "$OUT" -maxdepth 1 -name '*.raw.zst' -print -quit)"
+          echo 'PASS: SM-T575 Phosh compressed full OS image'
+          echo 'UNTESTED: boot chain, first boot, desktop render on physical LTE'
+          echo 'NO FLASHING / NO WRITES TO TABLET'
+          echo 'INSTALLATION WOULD ERASE ANDROID USERDATA; BOOT BACKUP IS NOT A FULL DATA BACKUP'
+
+      - name: Upload complete LTE Phosh image for owner review
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-lte-phosh-full-desktop-UNTESTED
+          path: |
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.raw.zst
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.efi
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.sha256
+          if-no-files-found: error
+          retention-days: 14
