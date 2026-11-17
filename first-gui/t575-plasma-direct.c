@@ -323,8 +323,23 @@ static void launch(long mountport) {
     setenv("KWIN_DRM_DEVICES","/dev/dri/card0",1);
     setenv("PAN_MESA_DEBUG","noafbc",1);
     msg("Starting full graphical Plasma Mobile session as uid 1000\n");
+    /*
+     * KWin's DRM session falls back to NoopSession when logind/ConsoleKit
+     * are missing. NoopSession::openRestricted() unconditionally returns -1.
+     * Cage (wlroots/libseat) owns the actual DRM seat; Plasma/KWin runs as a
+     * nested Wayland client, with Cage's WAYLAND_DISPLAY selecting the
+     * nested backend instead of KWin's unavailable DRM session.
+     */
+    setenv("LIBSEAT_BACKEND", "seatd", 1);
+    setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
+    if (access("/usr/bin/cage", X_OK) < 0) {
+        msg("FAIL: Cage compositor not installed in NFS rootfs; install desktop overlay first\n");
+        _exit(4);
+    }
+    msg("Starting Cage (seatd / DRM) with Plasma Mobile nested fullscreen\n");
     static const char *const desktop[] = {
-        "/usr/bin/dbus-run-session","--","/usr/bin/startplasma-wayland",NULL
+        "/usr/bin/dbus-run-session","--",
+        "/usr/bin/cage","-d","--","/usr/bin/startplasma-wayland",NULL
     };
     execv(desktop[0], (char *const *)desktop);
     msg("FAIL: dbus-run-session: %s\n", strerror(errno)); _exit(4);
