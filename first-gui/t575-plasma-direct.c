@@ -201,6 +201,35 @@ static void probe_unprivileged_drm(void) {
 /* Both /run and /tmp live in RAM, but wlroots also needs POSIX shared
  * memory at /dev/shm. It does not necessarily exist in our tiny initramfs.
  */
+/* This diagnostic-only account has no usable login/unlock secret. If KDE
+ * locks the screen during first boot, the user can see a black/lock surface
+ * but cannot enter a password. Disable that in the RAM-backed test HOME.
+ * KDE kscreenlocker settings/kscreenlockersettings.kcfg, group [Daemon].
+ */
+static void prepare_test_screenlocker(void) {
+    const char *cfg = "/home/t575/.config";
+    const char *path = "/home/t575/.config/kscreenlockerrc";
+    const char data[] =
+        "[Daemon]\n"
+        "Autolock=false\n"
+        "Lock=false\n"
+        "LockOnResume=false\n"
+        "LockOnStart=false\n"
+        "RequirePassword=false\n"
+        "Timeout=0\n";
+    mkdir_ok(cfg, 0700);
+    must(chown(cfg, DESKTOP_UID, DESKTOP_GID), "test config directory ownership");
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
+    must(fd, "RAM-only screen locker config");
+    ssize_t n = write(fd, data, sizeof(data)-1);
+    if (n != (ssize_t)sizeof(data)-1) {
+        msg("FAIL: writing RAM-only screen locker config: %s\n", strerror(errno));
+        close(fd); _exit(2);
+    }
+    must(fchown(fd, DESKTOP_UID, DESKTOP_GID), "screen locker file ownership");
+    close(fd);
+    msg("PASS: KDE startup/idle/resume lock disabled in RAM-only test home\n");
+}
 static int mounted_here(const char *path) {
     FILE *m = setmntent("/proc/mounts", "r");
     if (!m) return 0;
@@ -368,6 +397,7 @@ static void launch(long mountport) {
     must(chmod("/tmp/.ICE-unix", 01777), "ICE socket directory permissions");
     msg("PASS: temporary Xwayland and ICE socket directories ready\n");
     must(chown("/home/t575", DESKTOP_UID, DESKTOP_GID), "home chown");
+    prepare_test_screenlocker();
     if (access("/dev/dri/card0", F_OK) < 0) {
         msg("FAIL: Exynos DRM /dev/dri/card0 is absent\n"); _exit(3);
     }
