@@ -118,10 +118,17 @@ def start_desktop(s, binary):
             raise RuntimeError("Could not initialize " + driver + ": " + result)
         print("Input driver ready:", driver)
     print(cmd(s,"run /t575-plasma-launch --start"))
-    time.sleep(7)
-    print("\n=== PLASMA STARTUP LOG ===")
-    print(cmd(s,"cat /t575-plasma-desktop.log"))
-    print("\nLook at the tablet screen! If blank, share this log.")
+    print("Attempting full graphical desktop; collecting startup output...", flush=True)
+    time.sleep(18)
+    print("\n=== PLASMA STARTUP LOG (after desktop initialization) ===")
+    log = cmd(s,"cat /t575-plasma-desktop.log")
+    print(log)
+    if "Starting full graphical Plasma Mobile session" in log:
+        print("\nPlasma session exec was reached; look at the tablet screen.")
+    elif "FAIL:" in log:
+        print("\nA setup error stopped the session; no reboot or reflash is needed.")
+    else:
+        print("\nSession startup has not yet reached the compositor; log its latest lines.")
 
 def main():
     if sys.platform != "darwin":
