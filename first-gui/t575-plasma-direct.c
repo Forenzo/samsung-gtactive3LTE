@@ -89,6 +89,46 @@ static int existing_nfs_root(void) {
     endmntent(m);
     return result;
 }
+/* Avoid glibc NSS/module lookups in a statically linked launcher after
+ * entering an Alpine (musl-based) rootfs. We only need the known local
+ * account that the Mac script explicitly prepared.
+ */
+static int guest_account_present(void) {
+    FILE *fp = fopen("/etc/passwd", "r");
+    char line[1024];
+    int found = 0;
+    if (!fp) { msg("FAIL: cannot read guest /etc/passwd: %s\n", strerror(errno)); return 0; }
+    while (fgets(line, sizeof(line), fp)) {
+        if (!strncmp(line, "t575:x:1000:1000:", sizeof("t575:x:1000:1000:") - 1)) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(fp);
+    return found;
+}
+static int guest_supplementary_groups(gid_t ids[], size_t capacity) {
+    FILE *fp = fopen("/etc/group", "r");
+    char line[1024];
+    int count = 0;
+    if (!fp) { msg("FAIL: cannot read guest /etc/group: %s\n", strerror(errno)); return -1; }
+    while (fgets(line, sizeof(line), fp)) {
+        char *colon = strchr(line, ':');
+        if (!colon) continue;
+        *colon++ = '\0';
+        if (strcmp(line, "video") && strcmp(line, "input") && strcmp(line, "render")) continue;
+        char *gid_field = strchr(colon, ':');
+        if (!gid_field) continue;
+        gid_field++;
+        char *end = NULL;
+        errno = 0;
+        unsigned long val = strtoul(gid_field, &end, 10);
+        if (errno || !end || *end != ':' || val > 65535UL) continue;
+        if ((size_t)count < capacity) ids[count++] = (gid_t)val;
+    }
+    fclose(fp);
+    return count;
+}
 static void configure_usb_ipv4(void) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     must(sock, "socket IPv4");
@@ -163,27 +203,30 @@ static void launch(void) {
     }
     msg("DRM card0 ready; GPU render node %s\n",
         access("/dev/dri/renderD128", F_OK) ? "ABSENT" : "PRESENT");
-    if (!getpwuid(DESKTOP_UID)) {
-        msg("FAIL: guest uid 1000 missing from /etc/passwd; run Mac preparation\n"); _exit(3);
+    msg("Checking guest account directly in Alpine /etc/passwd\n");
+    if (!guest_account_present()) {
+        msg("FAIL: t575 uid 1000 account missing from /etc/passwd; run Mac preparation\n"); _exit(3);
     }
+    msg("PASS: guest t575 uid 1000 present\n");
     static const char *const udev[] = {"/sbin/udevd","--daemon",NULL};
     static const char *const seat[] = {"/usr/bin/seatd","-g","video",NULL};
     static const char *const dbus[] = {"/usr/bin/dbus-daemon","--system","--nofork",NULL};
     static const char *const trigger[] = {"/sbin/udevadm","trigger","--action=add",NULL};
+    msg("Starting graphical seat and IPC services\n");
     if (!access(udev[0], X_OK)) spawn(udev);
     if (!access(seat[0], X_OK)) spawn(seat);
     else { msg("FAIL: seatd missing\n"); _exit(3); }
     if (!access(dbus[0], X_OK)) spawn(dbus);
     if (!access(trigger[0], X_OK)) spawn(trigger);
+    msg("PASS: seatd / D-Bus launch requested\n");
     sleep(3);
-    const char *names[] = {"video","input","render"};
-    gid_t groups[3]; int ngroups = 0;
-    for (size_t i = 0; i < 3; i++) {
-        struct group *g = getgrnam(names[i]);
-        if (g) groups[ngroups++] = g->gr_gid;
-    }
+    gid_t groups[3];
+    int ngroups = guest_supplementary_groups(groups, 3);
+    if (ngroups < 0) _exit(3);
+    msg("PASS: parsed %d device-access groups from /etc/group\n", ngroups);
     must(setgroups(ngroups, groups), "guest groups");
     must(setgid(DESKTOP_GID), "guest gid"); must(setuid(DESKTOP_UID), "guest uid");
+    msg("PASS: switched to unprivileged uid 1000 for Plasma\n");
     setenv("HOME","/home/t575",1);
     setenv("USER","t575",1); setenv("LOGNAME","t575",1);
     setenv("SHELL","/bin/sh",1);
