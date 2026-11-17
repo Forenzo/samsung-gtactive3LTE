@@ -83,7 +83,7 @@ jobs:
             --no-recursion -C / -T /tmp/t575-overlay-paths
           docker cp "$CID:/tmp/t575-cage-overlay-aarch64.tar.gz" out/t575-cage-overlay-aarch64.tar.gz
           tar tzf out/t575-cage-overlay-aarch64.tar.gz | tee out/archive-paths.txt
-          tar tzf out/t575-cage-overlay-aarch64.tar.gz | grep -q '^usr/bin/cage$'
+          grep -Fxq 'usr/bin/cage' out/archive-paths.txt
           (cd out && sha256sum t575-cage-overlay-aarch64.tar.gz > SHA256SUMS)
           echo 'PASS: Cage addon contains only new ARM64 files; Android untouched'
       - name: Validate Mac overlay installer
