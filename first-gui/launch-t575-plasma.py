@@ -140,17 +140,45 @@ def start_desktop(s, binary, mountport):
             raise RuntimeError("Could not initialize " + driver + ": " + result)
         print("Input driver ready:", driver)
     print(cmd(s,f"run /t575-plasma-launch --start {mountport}"))
-    print("Attempting full graphical desktop; collecting startup output...", flush=True)
-    time.sleep(18)
-    print("\n=== PLASMA STARTUP LOG (after desktop initialization) ===")
-    log = cmd(s,"cat /t575-plasma-desktop.log")
-    print(log)
-    if "Starting full graphical Plasma Mobile session" in log:
-        print("\nPlasma session exec was reached; look at the tablet screen.")
-    elif "FAIL:" in log:
-        print("\nA setup error stopped the session; no reboot or reflash is needed.")
+    print("Attempting Plasma Mobile; saving a log trail on this Mac in case the tablet resets...", flush=True)
+    capture = Path.cwd() / ("t575-plasma-capture-" + time.strftime("%Y%m%d-%H%M%S") + ".log")
+    capture.touch(exist_ok=False)
+    capture.chmod(0o644)
+    print(f"Mac evidence file: {capture}", flush=True)
+    latest = ""
+    disconnected = False
+    # Each snapshot is written to the Mac BEFORE waiting for another sample.
+    # The tablet's /t575-plasma-desktop.log is RAM-only and lost on reboot.
+    s.settimeout(12)
+    for sample in range(1, 9):
+        time.sleep(8)
+        try:
+            latest = cmd(s, "cat /t575-plasma-desktop.log")
+            with capture.open("a", encoding="utf-8") as fp:
+                fp.write(f"\\n========== CAPTURE {sample} ({time.strftime('%H:%M:%S')}) ==========\\n")
+                fp.write(latest + "\\n")
+            print(f"Captured startup log snapshot {sample}/8 ({len(latest)} characters)", flush=True)
+            if latest.strip() == "error":
+                print("Tablet reported no current log; it may have restarted.", flush=True)
+                break
+        except (OSError, RuntimeError) as ex:
+            disconnected = True
+            with capture.open("a", encoding="utf-8") as fp:
+                fp.write(f"\\nUSB console lost after snapshot {sample-1}: {type(ex).__name__}: {ex}\\n")
+            print(f"USB diagnostic console lost: {type(ex).__name__}: {ex}", flush=True)
+            print("Saved earlier log snapshots remain on the Mac.", flush=True)
+            break
+    print("\n=== LAST AVAILABLE PLASMA STARTUP LOG ===")
+    print(latest[-40000:] if latest else "(No startup output captured)")
+    print("\nMac capture saved at:", capture)
+    if disconnected:
+        print("Tablet reboot or USB disconnect detected. Check screen and preserve Mac capture.")
+    elif "Starting Cage (seatd / DRM)" in latest:
+        print("Cage startup reached; look for Plasma graphical desktop on tablet.")
+    elif "FAIL:" in latest:
+        print("Desktop setup reported a failure; inspect full Mac capture.")
     else:
-        print("\nSession startup has not yet reached the compositor; log its latest lines.")
+        print("Inspect capture for last startup stage; no flash or wipe was performed.")
 
 def main():
     if sys.platform != "darwin":
