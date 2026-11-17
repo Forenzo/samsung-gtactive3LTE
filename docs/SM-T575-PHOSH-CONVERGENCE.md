@@ -1,51 +1,96 @@
-# SM-T575: Phosh and desktop-convergence design
+# SM-T575 Phosh native installation and desktop-convergence plan
 
-Status: design and build-only testing; **not yet boot-tested** on LTE hardware.
+**Active development branch:** `work/t575-phosh-convergence`
+**Retained Plasma branch:** `work/t575-gpu-genpd-config-review`
 
-## Scope and non-negotiable constraints
-- Target: Samsung Galaxy Tab Active3 LTE SM-T575 (Exynos 9810, 4 GB RAM).
-- Keep the working LTE **7.3.0** GPU/NFS diagnostic BOOT and previously verified Magisk-rooted Android BOOT backup. Do not flash an SM-T570 image.
-- First sessions run from a **separate read-only Mac USB/NFS rootfs**. Do not touch Android `userdata`, `metadata`, `super`, EFS, DTBO or install Duranium to Android storage.
-- Retain native 1200x1920 LCD, display DRM card0, Panfrost renderD128, Wacom stylus, Himax touchscreen and USB NCM paths from the demonstrated Plasma bring-up.
-- Phosh is the default **touch** UI. Phoc (wlroots) replaces the nested Cage/KWin compositor chain; no Plasma components or Cage are installed in this new rootfs.
-- A separate **desktop session** will use labwc plus a lightweight panel (yambar) and app launcher (fuzzel), all from the same userspace, **never active concurrently with Phosh**.
-- Session switching must be clean: terminate old compositor, restore input/seat, then launch the other. Hot switching and external output require hardware verification.
-- Focus first on reliability, input, power and observable idle RAM before installing applications or elaborate themes.
+Plasma's NFS/Cage GPU milestones remain preserved in the retained branch. Do
+not merge this Phosh branch back into Plasma or rewrite its history. The
+current owner choice (2026-11-17) is the upstream-style **native postmarketOS
+Duranium Phosh** install, not NFS. Loss of Android `userdata` is accepted,
+but protected identity/boot-security partitions must remain untouched.
 
-## Phases
+## Use upstream design, adapted to the LTE device
 
-### P0: Boot-only isolated rootfs (current build target)
-- Alpine 3.22 AArch64, Phosh/Phoc/squeekboard + only required services.
-- Include labwc/yambar/fuzzel/foot for a *future* desktop session, not automatic startup.
-- Export a fully hashed userspace tarball in GitHub Actions; do not flash.
-- Stage separately on the Mac SSD under `/Volumes/T575-Plasma/phosh-rootfs`; preserve the known-working Plasma rootfs untouched.
-- Add a new Mac NFS **read-only** export for the new root only when a launcher is reviewed; test mount and use dynamic mountd port from `rpcinfo`.
-- Build a Phosh-specific AArch64 diagnostic launcher reusing the verified non-wiping host RAM upload, network, devtmpfs, DRM, seatd, USB and input initialization. **Do not reuse the Plasma executable unmodified** because root paths, startup and user service requirements differ.
+Verified Wi-Fi architecture: Samsung S-Boot → uniLoader → U-Boot →
+systemd-boot → native Duranium image with Phosh installed inside `userdata`.
 
-### P1: First *usable* Phosh
-- Seatd/libseat + Phoc controls DRM and Panfrost directly; Phosh provides shell.
-- Verify display orientation, touch event mapping, S Pen, lockscreen, screen blanking, buttons, text entry and watchdog behavior.
-- Capture device log snapshots on the Mac so resets don't erase evidence.
-- Measure `MemAvailable`, `MemTotal`, major process RSS/PSS, swap and rootfs size before claiming lower memory use.
+Already committed in this Phosh branch:
+- `.github/workflows/t575-lte-phosh-first-desktop.yml`: build the local LTE
+  native Duranium Phosh `.raw.zst` image (never publishes or flashes).
+- `.github/workflows/t575-lte-phosh-chain-boot-review.yml`: compile the
+  separate LTE `uniLoader-chain-gtactive3` payload (never flashes).
+- Existing LTE DTS, GPU power workaround and `device-samsung-gtactive3`.
+- `config.toml` keeps LTE `images = false` until first boot confirmed.
+- The earlier lightweight NFS userspace build is NOT the selected install
+  method. It remains in Git history for reference only.
 
-### P2: Desktop mode ("DeX-like", not Samsung DeX)
-- Lightweight labwc window-stacking Wayland session with yambar panel, fuzzel launcher and foot terminal.
-- Window decorations, resize, maximize, multiwindow, keyboard shortcuts, external keyboard/mouse, landscape mode, S Pen.
-- A user-facing **Touch / Desktop** switch initially logs out and re-launches the selected session; no simultaneous compositor duplication.
-- Verify USB-C/HDMI display output from Linux *independently*. Samsung DeX compatibility in Android does not prove Linux DP Alt Mode support without kernel/DRM work.
-- Consider external-display docking after a locally usable desktop is stable.
+**Not yet proven** on the physical SM-T575: the complete LTE U-Boot chain,
+systemd-boot, signed-image acceptance, native Phosh encrypted first boot,
+and an end-to-end *non-wiping recovery after chain failure*. Successful
+standalone Linux GPU/Plasma boot does not verify these handovers.
 
-### P3: Theming
-- No hard gray default. Start with a light warm-cream/teal/indigo palette, high-contrast readable controls and colorful wallpaper.
-- Add dark plum/teal and retro 1990s geometric "Jazz" theme variants later.
-- Apply Phosh/libadwaita-compatible color-scheme settings, GTK CSS, icons, wallpaper and matching labwc panel/theme. Avoid global fragile CSS monkey-patching of security dialogs and system components.
-- Themes are optional, no background compositor and no animated wallpaper, protecting 4 GB RAM.
+## Before writing to userdata or BOOT
 
-## Acceptance checks
-1. Phosh shell drawn on SM-T575 with functional input, no nested KDE processes.
-2. No Android partition writes; no unverified stock restore assumptions.
-3. Responsive idle screen and recorded idle memory measurements.
-4. Proper windowed desktop session can start *instead of* Phosh, with terminal and app launcher.
-5. Theme switch changes actual shell/panel and application colors, not only wallpaper.
+1. Confirm EXACT physical model SM-T575 (not SM-T570/577), bootloader
+   `T575XXSFEYI1`, unlocked state, PIT identities, and `userdata` / BOOT
+   partition lengths. Do not reuse Wi-Fi assumptions without verification.
+2. Keep the exact rooted Android BOOT image archived on the Mac:
+   61,865,984 bytes; SHA-256
+   `a69a724b75a51821a0baa4ccda424173a003b17de19e2b381bb7d4f30596e372`.
+   Keep the DTBO backup (8,388,608 bytes) and the working diagnostic BOOT
+   candidate separately. Verify local checksums *immediately before use*.
+3. Obtain and verify final CI artifacts: LTE native `.raw.zst`, LTE
+   chainloader + diagnostic loader and manifest. Require explicit LTE
+   board/DTB select and offline BOOT v2 size/AVB/PIT admission.
+4. Ensure a real recovery route: rooted Android BOOT restore has already
+   worked; Duranium data cannot be undone simply by reflashing BOOT.
+   A clean Android reset/restore procedure must account for Samsung
+   KnoxGuard. EFS, SEC_EFS, PRISM, VBMETA, bootloader, PARAM, DTBO and
+   unrelated partitions are never write targets.
+5. The current upstream installer still **deliberately blocks LTE install**:
+   `scripts/installer/lib/flow.sh` stops on `VARIANT=gtactive3`,
+   `bootimg.sh` suppresses `BOOT_CHAIN`, and `release.sh` omits the LTE
+   chainloader payload check. Do not bypass a single condition manually:
+   a reviewed, LTE-specific opt-in path must update all three together,
+   with non-bypassable model/geometry checks and a dry run first.
+6. Do not run the Wi-Fi `./setup.sh install` as-is. The upstream
+   `docs/INSTALL.md` currently documents SM-T570 only. Mac is the build
+   host, but `setup.sh` currently requires a Linux host; any installer
+   must explicitly support macOS/Heimdall or use a controlled Linux host.
+7. Only after all gates pass, erase **userdata only**, verify the image
+   readback, flash BOOT chain with a checked LTE loader, and perform the
+   encrypted native first boot. No NFS path, no Plasma installation, no
+   `super` repartition or destructive root reconfiguration.
 
-This file is a plan, not a claim that Phosh or desktop mode has booted successfully.
+## Phosh + lightweight desktop mode
+
+Start with native upstream Phosh/Phoc as the sole running compositor. Then
+introduce a second, **exclusive** labwc session (windowed, resizeable apps,
+panel, launcher, keyboard/mouse, S Pen) selected by a Touch / Desktop switch.
+Never keep Phosh and labwc concurrently resident just to change modes.
+
+For the 4 GB RAM constraint, measure actual MemAvailable, zram/swap and
+process RSS/PSS on the tablet after first boot; avoid promising specific
+RAM savings versus Plasma before measurements. Optimize unneeded services
+only after driver, lockscreen and power-management stability are known.
+
+## Themes
+
+Avoid the plain gray default. Phase 1: warm cream + teal/indigo with
+high-contrast controls, polished light/dark GTK/libadwaita appearances.
+Phase 2: tasteful 1990s Jazz geometric textures and coordinated icon/panel
+colors across Phosh and labwc. Keep themes lightweight (no animated
+backgrounds or second desktop process).
+
+## Acceptance
+
+- [ ] Native LTE Duranium full Phosh build passes and is audited.
+- [ ] LTE chainloader compiles and offline BOOT safety/admission passes.
+- [ ] Installer supports exact LTE model, consented userdata erase and
+      tested recovery path, without requiring NFS.
+- [ ] Phosh boot + touch + pen + brightness/power run on physical tablet.
+- [ ] RAM measured under representative idle/desktop workload.
+- [ ] Exclusive keyboard/mouse desktop mode verified.
+- [ ] Coordinated non-gray themes installed and switchable.
+
+Status is **build/review, not ready to flash**.
