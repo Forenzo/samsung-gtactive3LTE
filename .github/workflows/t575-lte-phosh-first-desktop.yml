@@ -145,9 +145,9 @@ jobs:
           command -v podman
           podman --version
           docker info --format 'Docker daemon: {{.ServerVersion}}'
-          # Verify that the just-built Alpine builder can launch its shell.
-          docker run --rm --entrypoint /bin/sh gta3-pkgbuilder -c 'echo CONTAINER_SHELL_PASS; command -v abuild; command -v apk; command -v gcc'
-          echo "First failed generated build.sh command will now be visible above its exit code."
+          # Upstream build-apks.sh constructs the builder image itself, so
+          # testing that image must happen only after it has been built.
+          echo "Tracing commands executed inside the upstream package builder."
           GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
             DISTFILES="$PWD/distfiles" CCACHE="$PWD/ccache" JOBS=4 \
             sh -x work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
