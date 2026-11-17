@@ -121,8 +121,25 @@ jobs:
           SH
           chmod +x ci-build-compat/podman
           docker info >/dev/null
-          PATH="$PWD/ci-build-compat:$PATH" \
-            GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
+          # Print the exact upstream command being adapted. With one builder
+          # process on one Actions runner, flock/nice serve no useful purpose.
+          # They also hide the real container failure as exit status 127.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("work/duranium-build/contrib/samsung-gtactive3/build-apks.sh")
+          s = p.read_text()
+          anchor = 'flock "$LOCK" nice -n 19 podman run'
+          if s.count(anchor) != 1:
+              raise SystemExit("Unexpected upstream builder launch: " + "\n".join(x for x in s.splitlines() if "podman run" in x))
+          s = s.replace(anchor, 'podman run')
+          p.write_text(s)
+          print("CI-only: removed flock/nice from single-runner package build")
+          PY
+          export PATH="$PWD/ci-build-compat:$PATH"
+          command -v podman
+          podman --version
+          docker info --format 'Docker daemon: {{.ServerVersion}}'
+          GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
             DISTFILES="$PWD/distfiles" CCACHE="$PWD/ccache" JOBS=4 \
             sh -x work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
           test -n "$(find pkgs -maxdepth 1 -name 'linux-postmarketos-exynos9810-gtactive3-*.apk' -print -quit)"
