@@ -131,7 +131,10 @@ jobs:
           anchor = 'flock "$LOCK" nice -n 19 podman run'
           if s.count(anchor) != 1:
               raise SystemExit("Unexpected upstream builder launch: " + "\n".join(x for x in s.splitlines() if "podman run" in x))
-          s = s.replace(anchor, 'podman run')
+          # Alpine abuild-keygen -i defaults to 'doas' when doas and sudo
+          # are absent. This disposable builder already runs as root; set
+          # SUDO to empty so it installs the test package key directly.
+          s = s.replace(anchor, 'podman run -e SUDO=')
           # Upstream creates a temporary /s/build.sh inside its builder.
           # Expose its first failing command instead of an opaque status 127.
           chmod = 'chmod +x "$work/build.sh"'
