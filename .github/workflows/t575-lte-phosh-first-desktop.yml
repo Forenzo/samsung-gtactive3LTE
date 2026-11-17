@@ -137,7 +137,7 @@ jobs:
           chmod = 'chmod +x "$work/build.sh"'
           if s.count(chmod) != 1:
               raise SystemExit("Cannot instrument upstream generated build.sh")
-          s = s.replace(chmod, chmod + '\\n' + 'sed -i \'2i set -x\' "$work/build.sh"')
+          s = s.replace(chmod, chmod + '\n' + 'sed -i \'2i set -x\' "$work/build.sh"')
           p.write_text(s)
           print("CI-only: removed flock/nice, enabled generated shell tracing")
           PY
