@@ -17,6 +17,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Audit LTE image identity and safe build configuration
+        run: |
+          set -euo pipefail
+          python3 ci/t575-phosh-preflight.py source
+          bash -n ci/check-image
+          echo 'PASS: check-image syntax'
+
       - name: Inspect upstream mkosi launcher
         run: |
           set -euo pipefail
@@ -31,5 +38,5 @@ jobs:
           docker run --rm --user=0:0 \
             -v "$PWD/mkosi-ci-workspace:/workspace:rw" \
             --entrypoint /bin/sh gitlab.nura.eco:5050/nura/nura-oci/mkosi:edge \
-            -c 'set -eux; id; ls -ld /workspace; mkdir /workspace/mkosi-keyring-permissions-smoke; rmdir /workspace/mkosi-keyring-permissions-smoke; echo PASS_MKOSI_WORKSPACE'
+            -c 'set -eux; id; ls -ld /workspace; mkdir /workspace/mkosi-keyring-permissions-smoke; rmdir /workspace/mkosi-keyring-permissions-smoke; command -v mkosi; mkosi --version; echo PASS_MKOSI_WORKSPACE'
           echo 'PASS: OCI mkosi container can create a keyring directory in a writable bind mount'
