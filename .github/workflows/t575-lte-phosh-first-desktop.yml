@@ -110,8 +110,19 @@ jobs:
       - name: Build original family packages and LTE variant
         run: |
           set -euo pipefail
-          mkdir -p ci-root/build pkgs ccache
-          GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
+          mkdir -p ci-root/build pkgs ccache ci-build-compat
+          # The upstream builder shells out to 'podman'. Ubuntu's hosted
+          # rootless podman can exit 127 when spawning a nested container;
+          # use the runner's preconfigured Docker daemon through a
+          # command-compatible wrapper, without editing upstream scripts.
+          cat > ci-build-compat/podman <<'SH'
+          #!/bin/sh
+          exec /usr/bin/docker "$@"
+          SH
+          chmod +x ci-build-compat/podman
+          docker info >/dev/null
+          PATH="$PWD/ci-build-compat:$PATH" \
+            GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
             DISTFILES="$PWD/distfiles" CCACHE="$PWD/ccache" JOBS=4 \
             sh -x work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
           test -n "$(find pkgs -maxdepth 1 -name 'linux-postmarketos-exynos9810-gtactive3-*.apk' -print -quit)"
