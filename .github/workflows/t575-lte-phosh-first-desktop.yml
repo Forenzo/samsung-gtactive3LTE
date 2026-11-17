@@ -172,8 +172,16 @@ jobs:
           CHANNEL: dev
         run: |
           set -euo pipefail
-          # Reuse Docker adapter in the image assembly step as well.
+          # The upstream mkosi OCI image has a non-root default user.
+          # In Docker on GitHub-hosted runners, its bind-mounted /workspace
+          # is runner-owned (different uid), leading to PermissionError
+          # creating mkosi-keyring-*. In this disposable CI container, run
+          # the assembler as root, as the upstream Podman user namespace
+          # ordinarily permits, and keep signed package validation enabled.
           export PATH="$PWD/ci-build-compat:$PATH"
+          export MKOSI_CONTAINER_ARGS="${MKOSI_CONTAINER_ARGS:-} --user=0:0"
+          # Keep source checked out and output directory writable.
+          chmod u+rwx work/duranium-build
           ln -sfn "$PWD/work/pmaports" work/duranium-build/pmaports
           echo '26111790' > work/duranium-build/mkosi.version
           GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
