@@ -129,6 +129,73 @@ static int guest_supplementary_groups(gid_t ids[], size_t capacity) {
     fclose(fp);
     return count;
 }
+/* Read GIDs without glibc NSS plugins (Alpine's rootfs uses musl). */
+static gid_t gid_in_file(const char *wanted, gid_t fallback) {
+    FILE *fp = fopen("/etc/group", "r");
+    if (!fp) return fallback;
+    char line[1024];
+    gid_t gid = fallback;
+    while (fgets(line, sizeof(line), fp)) {
+        char *sep = strchr(line, ':');
+        if (!sep) continue;
+        *sep++ = '\0';
+        if (strcmp(line, wanted)) continue;
+        sep = strchr(sep, ':');
+        if (!sep) continue;
+        errno = 0;
+        char *end;
+        unsigned long parsed = strtoul(sep + 1, &end, 10);
+        if (!errno && end && *end == ':' && parsed <= 65535UL)
+            gid = (gid_t)parsed;
+        break;
+    }
+    fclose(fp);
+    return gid;
+}
+static void prepare_drm_devtmpfs_node(const char *path, const char *group) {
+    struct stat st;
+    if (lstat(path, &st) < 0) {
+        msg("DRM node absent: %s: %s\n", path, strerror(errno));
+        return;
+    }
+    msg("DRM node %s: mode %04o uid %lu gid %lu\n",
+        path, (unsigned)(st.st_mode & 07777),
+        (unsigned long)st.st_uid, (unsigned long)st.st_gid);
+    if (!S_ISCHR(st.st_mode)) {
+        msg("FAIL: expected character device at %s, refusing permission changes\n", path);
+        _exit(3);
+    }
+    /* Only change temporary /dev nodes; NEVER touch internal partitions. */
+    gid_t gid = gid_in_file(group, gid_in_file("video", DESKTOP_GID));
+    if (lchown(path, 0, gid) < 0 || chmod(path, 0660) < 0) {
+        msg("WARNING: devtmpfs node permissions could not be adjusted: %s\n",
+            strerror(errno));
+    } else {
+        msg("PASS: %s granted root:%s group access (RAM devtmpfs only)\n",
+            path, group);
+    }
+}
+static void probe_unprivileged_drm(void) {
+    const char *nodes[] = { "/dev/dri/card0", "/dev/dri/renderD128" };
+    for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
+        errno = 0;
+        int fd = open(nodes[i], O_RDWR | O_CLOEXEC);
+        if (fd < 0)
+            msg("DRM OPEN as uid1000: %s FAILED: errno %d (%s)\n",
+                nodes[i], errno, strerror(errno));
+        else {
+            msg("DRM OPEN as uid1000: %s PASS\n", nodes[i]);
+            close(fd);
+        }
+    }
+    struct stat st;
+    if (lstat("/run/seatd.sock", &st) < 0)
+        msg("SEATD socket: missing (%s)\n", strerror(errno));
+    else
+        msg("SEATD socket: mode %04o uid %lu gid %lu\n",
+            (unsigned)(st.st_mode & 07777),
+            (unsigned long)st.st_uid, (unsigned long)st.st_gid);
+}
 static void configure_usb_ipv4(void) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     must(sock, "socket IPv4");
@@ -220,6 +287,8 @@ static void launch(void) {
     if (!access(trigger[0], X_OK)) spawn(trigger);
     msg("PASS: seatd / D-Bus launch requested\n");
     sleep(3);
+    prepare_drm_devtmpfs_node("/dev/dri/card0", "video");
+    prepare_drm_devtmpfs_node("/dev/dri/renderD128", "render");
     gid_t groups[3];
     int ngroups = guest_supplementary_groups(groups, 3);
     if (ngroups < 0) _exit(3);
@@ -227,6 +296,7 @@ static void launch(void) {
     must(setgroups(ngroups, groups), "guest groups");
     must(setgid(DESKTOP_GID), "guest gid"); must(setuid(DESKTOP_UID), "guest uid");
     msg("PASS: switched to unprivileged uid 1000 for Plasma\n");
+    probe_unprivileged_drm();
     setenv("HOME","/home/t575",1);
     setenv("USER","t575",1); setenv("LOGNAME","t575",1);
     setenv("SHELL","/bin/sh",1);
