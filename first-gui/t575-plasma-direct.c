@@ -9,6 +9,7 @@
 #include <grp.h>
 #include <mntent.h>
 #include <net/if.h>
+#include <sys/sysmacros.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -220,6 +221,45 @@ static void create_shm_mount(void) {
     must(chmod("/dev/shm", 01777), "/dev/shm mode 1777");
     msg("PASS: /dev/shm shared-memory tmpfs ready\n");
 }
+/*
+ * Device nodes are initially 0600 root:root in the minimal initramfs.
+ * Give the unprivileged desktop account access to evdev only after udev
+ * settles, and only for verified character devices under /dev/input/event*.
+ * No /dev/block or Android storage path is touched.
+ */
+static void grant_desktop_input_nodes(void) {
+    DIR *dir = opendir("/dev/input");
+    if (!dir) {
+        msg("INPUT PERMISSIONS: /dev/input unavailable: %s\n", strerror(errno));
+        return;
+    }
+    gid_t input_gid = gid_in_file("input", DESKTOP_GID);
+    struct dirent *ent;
+    unsigned int adjusted = 0;
+    while ((ent = readdir(dir))) {
+        if (strncmp(ent->d_name, "event", 5)) continue;
+        char path[256];
+        snprintf(path, sizeof(path), "/dev/input/%.230s", ent->d_name);
+        struct stat st;
+        if (lstat(path, &st) < 0 || !S_ISCHR(st.st_mode)) continue;
+        /* evdev major = 13, minors 64..95; do not change unrelated nodes */
+        if (major(st.st_rdev) != 13 || minor(st.st_rdev) < 64 ||
+            minor(st.st_rdev) > 95) {
+            msg("INPUT PERMISSIONS: skipped unexpected event node %s\n", path);
+            continue;
+        }
+        if (lchown(path, 0, input_gid) < 0 || chmod(path, 0660) < 0) {
+            msg("INPUT PERMISSIONS: %s unable to grant access: %s\n",
+                path, strerror(errno));
+        } else {
+            msg("INPUT PERMISSIONS: %s root:gid%lu mode 0660 (RAM devtmpfs)\n",
+                path, (unsigned long)input_gid);
+            adjusted++;
+        }
+    }
+    closedir(dir);
+    msg("PASS: %u input event node(s) prepared for Plasma user\n", adjusted);
+}
 static int describe_input_nodes(void) {
     DIR *dir = opendir("/dev/input");
     if (!dir) {
@@ -354,8 +394,9 @@ static void launch(long mountport) {
     if (!access(settle[0], X_OK)) spawn(settle);
     sleep(2);
     int event_count = describe_input_nodes();
-    msg("INPUT CHECK: no devices still permits Cage to display; interaction requires evdev + udev\n");
-    (void)event_count;
+    grant_desktop_input_nodes();
+    if (event_count == 0)
+        msg("INPUT CHECK: Cage can display without event nodes, but touch input remains unavailable\n");
     prepare_drm_devtmpfs_node("/dev/dri/card0", "video");
     prepare_drm_devtmpfs_node("/dev/dri/renderD128", "render");
     gid_t groups[3];
