@@ -48,7 +48,7 @@ jobs:
           for line in changed:
               if len(line) < 4 or line[1:3] != " /":
                   continue
-              status, path = line[0], line[3:]
+              status, path = line[0], "/" + line[3:].lstrip("/")
               if status == "C" and (path.startswith("/usr/") or path.startswith("/lib/")):
                   critical_changed.append(path)
               if status != "A":
