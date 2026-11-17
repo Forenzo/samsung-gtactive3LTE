@@ -88,9 +88,14 @@ if [ -n "${BRINGUP_EXTRA_DTS_PATCH:-}" ]; then
 	[ -f "$BRINGUP_EXTRA_DTS_PATCH" ] ||
 		{ echo "Missing BRINGUP_EXTRA_DTS_PATCH: $BRINGUP_EXTRA_DTS_PATCH" >&2; exit 1; }
 	target='diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts'
-	[ "$(grep -c '^diff --git ' "$BRINGUP_EXTRA_DTS_PATCH")" = 1 ] &&
-	grep -Fxq "$target" "$BRINGUP_EXTRA_DTS_PATCH" ||
-		{ echo "Refusing non-LTE or multi-file experimental DT patch" >&2; exit 1; }
+	if ! [ "$(grep -c '^diff --git ' "$BRINGUP_EXTRA_DTS_PATCH")" = 1 ]; then
+		echo "Refusing multi-file experimental DT patch" >&2
+		exit 1
+	fi
+	if ! grep -Fxq "$target" "$BRINGUP_EXTRA_DTS_PATCH"; then
+		echo "Refusing non-LTE experimental DT patch" >&2
+		exit 1
+	fi
 	log "opt-in LTE-only GPU DT patch (EXPERIMENTAL; offline build)"
 	patch -d "$K" -p1 --batch --forward --fuzz=0 < "$BRINGUP_EXTRA_DTS_PATCH"
 fi
