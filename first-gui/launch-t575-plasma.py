@@ -155,8 +155,8 @@ def start_desktop(s, binary, mountport):
         try:
             latest = cmd(s, "cat /t575-plasma-desktop.log")
             with capture.open("a", encoding="utf-8") as fp:
-                fp.write(f"\\n========== CAPTURE {sample} ({time.strftime('%H:%M:%S')}) ==========\\n")
-                fp.write(latest + "\\n")
+                fp.write(f"\n========== CAPTURE {sample} ({time.strftime('%H:%M:%S')}) ==========\n")
+                fp.write(latest + "\n")
             print(f"Captured startup log snapshot {sample}/8 ({len(latest)} characters)", flush=True)
             if latest.strip() == "error":
                 print("Tablet reported no current log; it may have restarted.", flush=True)
@@ -164,7 +164,7 @@ def start_desktop(s, binary, mountport):
         except (OSError, RuntimeError) as ex:
             disconnected = True
             with capture.open("a", encoding="utf-8") as fp:
-                fp.write(f"\\nUSB console lost after snapshot {sample-1}: {type(ex).__name__}: {ex}\\n")
+                fp.write(f"\nUSB console lost after snapshot {sample-1}: {type(ex).__name__}: {ex}\n")
             print(f"USB diagnostic console lost: {type(ex).__name__}: {ex}", flush=True)
             print("Saved earlier log snapshots remain on the Mac.", flush=True)
             break
