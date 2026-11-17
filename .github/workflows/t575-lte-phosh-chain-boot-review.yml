@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - work/t575-gpu-genpd-config-review
+      - work/t575-phosh-convergence
     paths:
       - '.github/workflows/t575-lte-phosh-chain-boot-review.yml'
       - 'bootchain/build.sh'
