@@ -13,6 +13,7 @@ on:
       - '.github/workflows/t575-lte-phosh-first-desktop.yml'
       - 'pmos/aports/device/testing/linux-postmarketos-exynos9810/APKBUILD'
       - 'pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch'
+      - 'ci/keys/build.postmarketos.org.rsa.pub'
 
 permissions:
   contents: read
@@ -60,6 +61,30 @@ jobs:
 
       - name: Prepare original postmarketOS Duranium build trees
         run: ci/prepare
+
+      - name: Use signed-package Alpine builder when GitLab registry is unavailable
+        run: |
+          set -euo pipefail
+          P=work/duranium-build/contrib/samsung-gtactive3/pkgbuilder.Containerfile
+          test -f "$P"
+          grep -Fxq 'FROM gitlab.postmarketos.org:5050/postmarketos/docker-postmarketos:edge' "$P"
+          cp ci/keys/build.postmarketos.org.rsa.pub work/duranium-build/contrib/samsung-gtactive3/pmos-repository-key.pub
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("work/duranium-build/contrib/samsung-gtactive3/pkgbuilder.Containerfile")
+          old="FROM gitlab.postmarketos.org:5050/postmarketos/docker-postmarketos:edge"
+          new="""FROM docker.io/library/alpine:edge
+          # postmarketOS public release key comes from pmbootstrap's distributed
+          # public key; keep APK signature verification ENABLED.
+          COPY pmos-repository-key.pub /etc/apk/keys/build.postmarketos.org.rsa.pub
+          RUN printf '%s\\n' https://dl-cdn.alpinelinux.org/alpine/edge/testing \\
+              https://mirror.postmarketos.org/postmarketos/master >> /etc/apk/repositories
+          """
+          data=p.read_text()
+          assert data.count(old)==1
+          p.write_text(data.replace(old,new))
+          PY
+          echo 'Package-builder base substituted; APK signature checks still on'
 
       - name: Obtain upstream Linux source (no Samsung binaries)
         env:
