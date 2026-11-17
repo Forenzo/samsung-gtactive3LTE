@@ -23,9 +23,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  full-phosh-image:
+  build-lte-apks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 330
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
 
@@ -33,6 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           scripts/config check
+          python3 ci/t575-phosh-preflight.py source
           python3 - <<'PY'
           from pathlib import Path
           s = Path("config.toml").read_text()
@@ -165,6 +166,83 @@ jobs:
           test -n "$(find pkgs -maxdepth 1 -name 'device-samsung-gtactive3-*.apk' -print -quit)"
           echo 'PASS: built LTE kernel DTB and device packages'
 
+
+      - name: Verify APKs and record exact upstream revisions for reproducible assembly
+        run: |
+          set -euo pipefail
+          python3 ci/t575-phosh-preflight.py packages pkgs
+          (
+            cd pkgs
+            sha256sum -- *.apk > SHA256SUMS
+          )
+          printf 'DURANIUM_UPSTREAM=%s\nPMAPORTS_UPSTREAM=%s\n' \
+            "$(git -C work/duranium-build rev-parse origin/main)" \
+            "$(git -C work/pmaports rev-parse HEAD)" > pkgs/UPSTREAM-REVISIONS
+          echo "PASSED: LTE APKs preserved, hash manifest and upstream provenance recorded"
+
+      - name: Upload compiled LTE APKs for independent Phosh image retries
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-lte-phosh-compiled-apks-UNTESTED
+          path: |
+            pkgs/*.apk
+            pkgs/SHA256SUMS
+            pkgs/UPSTREAM-REVISIONS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  assemble-phosh-image:
+    needs: build-lte-apks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare ARM64 image assembler (no kernel rebuild)
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            qemu-user-static binfmt-support erofs-utils zstd gnupg
+          ls /proc/sys/fs/binfmt_misc/ | grep -i aarch64
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          df -h /
+
+      - name: Recreate the patched upstream mkosi and pmaports source trees
+        run: ci/prepare
+
+      - name: Download successful LTE kernel and device packages from this build
+        uses: actions/download-artifact@v4
+        with:
+          name: t575-lte-phosh-compiled-apks-UNTESTED
+          path: pkgs
+
+      - name: Verify APK contents, signatures manifest, and upstream source consistency
+        run: |
+          set -euo pipefail
+          python3 ci/t575-phosh-preflight.py source
+          python3 ci/t575-phosh-preflight.py packages pkgs
+          (cd pkgs && sha256sum -c SHA256SUMS)
+          printf 'DURANIUM_UPSTREAM=%s\nPMAPORTS_UPSTREAM=%s\n' \
+            "$(git -C work/duranium-build rev-parse origin/main)" \
+            "$(git -C work/pmaports rev-parse HEAD)" > expected-upstream-revisions
+          cmp pkgs/UPSTREAM-REVISIONS expected-upstream-revisions
+          echo "PASS: no upstream revision drift between compiled packages and image assembly"
+
+      - name: Set up the same Docker-compatible mkosi launcher
+        run: |
+          set -euo pipefail
+          mkdir -p ci-build-compat ci-root/build
+          cat > ci-build-compat/podman <<'SH'
+          #!/bin/sh
+          exec /usr/bin/docker "$@"
+          SH
+          chmod +x ci-build-compat/podman
+          docker info >/dev/null
+          echo "PASS: Docker-backed Podman command available for mkosi"
+
       - name: Assemble a complete, unpublished Phosh desktop system for SM-T575
         env:
           DEVICE: samsung-gtactive3
@@ -192,12 +270,33 @@ jobs:
             sh work/duranium-build/contrib/samsung-gtactive3/build-image.sh --profile=compressed
           ls -lh work/duranium-build/mkosi.output/*/
 
+      - name: Make mkosi output readable by the unprivileged runner
+        if: always()
+        run: |
+          set -euo pipefail
+          for p in work/duranium-build/mkosi.output work/duranium-build/mkosi.cache work/duranium-build/mkosi.pkgcache; do
+            if [ -e "$p" ]; then
+              sudo chown -R "$(id -u):$(id -g)" "$p"
+            fi
+          done
+          echo 'PASS: any generated images are accessible for validation and upload'
+
       - name: Check complete image, identity and Phosh session
         run: |
           set -euo pipefail
           OUT=work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge
           TAG=samsung-gtactive3-lte_phosh_edge-dev
+          python3 ci/t575-phosh-preflight.py image "$OUT"
           ci/check-image "$OUT" 26111790 dev "$TAG" gtactive3
+          (
+            cd "$OUT"
+            for file in *.raw.zst; do
+              test -s "$file"
+              zstd --test -q "$file"
+            done
+            sha256sum -- *.raw.zst *.efi > SHA256SUMS
+          )
+          echo 'PASS: compressed image integrity, UKI, upstream signing key and SHA256 manifest'
           test -n "$(find "$OUT" -maxdepth 1 -name '*.raw.zst' -print -quit)"
           echo 'PASS: SM-T575 Phosh compressed full OS image'
           echo 'UNTESTED: boot chain, first boot, desktop render on physical LTE'
@@ -212,5 +311,7 @@ jobs:
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.raw.zst
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.efi
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.sha256
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/SHA256SUMS
           if-no-files-found: error
+          compression-level: 0
           retention-days: 14
