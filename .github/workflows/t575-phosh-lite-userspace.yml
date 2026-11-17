@@ -1,0 +1,69 @@
+name: t575-phosh-lite-userspace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-phosh-convergence
+    paths:
+      - '.github/workflows/t575-phosh-lite-userspace.yml'
+      - 'first-gui/Dockerfile.phosh-lite'
+      - 'first-gui/phosh-preflight.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t575-phosh-lite-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  isolated-phosh-rootfs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build light Phosh rootfs for ARM64 (no flash)
+        run: |
+          set -euo pipefail
+          docker buildx build --load --platform linux/arm64 \
+            -t t575-phosh-lite:local -f first-gui/Dockerfile.phosh-lite .
+
+      - name: Verify Phosh and desktop-mode binaries in ARM64 userspace
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            t575-phosh-lite:local -c /usr/local/sbin/t575-phosh-preflight | tee dist/preflight.txt
+          docker run --rm --platform linux/arm64 --entrypoint /bin/sh \
+            t575-phosh-lite:local -c 'apk info -vv' | sort > dist/packages-aarch64.txt
+          if grep -E '(plasma-mobile|kwin|^plasma-)' dist/packages-aarch64.txt; then
+            echo 'FAIL: this isolated rootfs unexpectedly contains KDE/Plasma' >&2
+            exit 1
+          fi
+
+      - name: Export separately mountable read-only NFS rootfs
+        run: |
+          set -euo pipefail
+          CID="$(docker create --platform linux/arm64 t575-phosh-lite:local)"
+          trap 'docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+          docker export "$CID" | gzip -1n > dist/t575-phosh-lite-aarch64-rootfs.tar.gz
+          tar -tzf dist/t575-phosh-lite-aarch64-rootfs.tar.gz > dist/archive-contents.txt
+          grep -Eq '(^|/)usr/bin/phoc$' dist/archive-contents.txt
+          grep -Eq '(^|/)usr/bin/labwc$' dist/archive-contents.txt
+          (cd dist && sha256sum *.gz *.txt > SHA256SUMS)
+          du -h dist/t575-phosh-lite-aarch64-rootfs.tar.gz
+          echo 'PASS: ARM64 package build and offline NFS rootfs archive'
+          echo 'NOT tested on tablet; do not flash or install to Android userdata'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-phosh-lite-aarch64-NFS-ROOTFS-NOT-BOOTED
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
