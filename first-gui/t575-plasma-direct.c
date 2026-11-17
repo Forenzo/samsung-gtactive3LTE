@@ -332,6 +332,8 @@ static void launch(long mountport) {
      */
     setenv("LIBSEAT_BACKEND", "seatd", 1);
     setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
+    /* Exynos DPU provides KMS while Mali-G72/Panfrost is its render device. */
+    setenv("WLR_RENDER_DRM_DEVICE", "/dev/dri/renderD128", 1);
     if (access("/usr/bin/cage", X_OK) < 0) {
         msg("FAIL: Cage compositor not installed in NFS rootfs; install desktop overlay first\n");
         _exit(4);
