@@ -211,8 +211,6 @@ while read -r cn dtb; do
 			modes="chain:0 linux:1"
 			;;
 		gtactive3)
-			# LTE is diagnostic-only unless the owner explicitly opts
-			# into an unpublished, full-desktop U-Boot first-boot trial.
 			ul_config=gtactive3lte_defconfig
 			modes="linux:1"
 			if [ "${BRINGUP_LTE_CHAIN_TEST:-0}" = 1 ]; then
@@ -247,89 +245,11 @@ while read -r cn dtb; do
 			grep -q '^#define CONFIG_LINUX_KRNL_HEADER_IMG 1$' "$UL/include/generated/autoconf.h" ||
 				{ echo "LTE ARM64 Image header disabled" >&2; exit 1; }
 			if [ "${m%:*}" = chain ] && [ "${BRINGUP_LTE_CHAIN_TEST:-0}" = 1 ]; then
-				grep -q '^#define CONFIG_CHAINLOAD 1
-		fi
-
-		cp "$UL/uniLoader" "$OUT/uniLoader-${m%:*}$sfx"
-		PAYLOAD+=("uniLoader-${m%:*}$sfx")
-	done
-done <<<"$VARIANTS"
-
-tree_id() { git -C "$R" rev-parse "HEAD:$1" 2>/dev/null || echo unknown; }
-{
-	echo "version: $VER"
-	echo "repo: https://github.com/$CFG_PROJECT_REPO $(git -C "$R" rev-parse HEAD 2>/dev/null || echo unknown)"
-	echo "linux: https://github.com/torvalds/linux $KBASE + $CFG_KERNEL_APORT/$(basename "$KPATCH") (sha256 $(sha256sum < "$KPATCH" | cut -c1-64))"
-	echo "linux-config: $CFG_BOOTCHAIN_BRINGUP_CONFIG"
-	echo "init: initramfs/init.c"
-	echo "u-boot: bootchain/u-boot (tree $(tree_id bootchain/u-boot)), $CFG_BOOTCHAIN_U_BOOT_DEFCONFIG"
-	echo "variants: $(awk '{ printf "%s%s=%s", NR > 1 ? " " : "", $1, $2 }' <<<"$VARIANTS")"
-	echo "uniloader: bootchain/uniLoader (tree $(tree_id bootchain/uniLoader)), $CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
-	echo "f2fs-tools: $F2FS_VER (https://dl-cdn.alpinelinux.org/alpine/v3.22/main, aarch64)"
-	echo "licenses: GPL-2.0 (Linux, U-Boot, uniLoader, init), GPL-2.0/LGPL-2.1 (f2fs-tools), MIT (musl)"
-	echo "contains no Samsung files: the installer adds the owner's stock DTB and the AVB footer"
-	(cd "$OUT" && sha256sum "${PAYLOAD[@]}" ramdisk.cpio.gz)
-} > "$OUT/MANIFEST"
-tar -C "$OUT" -czf "$OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz" "${PAYLOAD[@]}" ramdisk.cpio.gz MANIFEST
-log "payload: $OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz"
-cat "$OUT/MANIFEST"
- "$UL/include/generated/autoconf.h" ||
-					{ echo "LTE chainload unexpectedly missing" >&2; exit 1; }
-				grep -q '^#define CONFIG_CHAINLOAD_DEFAULT 0
-		fi
-
-		cp "$UL/uniLoader" "$OUT/uniLoader-${m%:*}$sfx"
-		PAYLOAD+=("uniLoader-${m%:*}$sfx")
-	done
-done <<<"$VARIANTS"
-
-tree_id() { git -C "$R" rev-parse "HEAD:$1" 2>/dev/null || echo unknown; }
-{
-	echo "version: $VER"
-	echo "repo: https://github.com/$CFG_PROJECT_REPO $(git -C "$R" rev-parse HEAD 2>/dev/null || echo unknown)"
-	echo "linux: https://github.com/torvalds/linux $KBASE + $CFG_KERNEL_APORT/$(basename "$KPATCH") (sha256 $(sha256sum < "$KPATCH" | cut -c1-64))"
-	echo "linux-config: $CFG_BOOTCHAIN_BRINGUP_CONFIG"
-	echo "init: initramfs/init.c"
-	echo "u-boot: bootchain/u-boot (tree $(tree_id bootchain/u-boot)), $CFG_BOOTCHAIN_U_BOOT_DEFCONFIG"
-	echo "variants: $(awk '{ printf "%s%s=%s", NR > 1 ? " " : "", $1, $2 }' <<<"$VARIANTS")"
-	echo "uniloader: bootchain/uniLoader (tree $(tree_id bootchain/uniLoader)), $CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
-	echo "f2fs-tools: $F2FS_VER (https://dl-cdn.alpinelinux.org/alpine/v3.22/main, aarch64)"
-	echo "licenses: GPL-2.0 (Linux, U-Boot, uniLoader, init), GPL-2.0/LGPL-2.1 (f2fs-tools), MIT (musl)"
-	echo "contains no Samsung files: the installer adds the owner's stock DTB and the AVB footer"
-	(cd "$OUT" && sha256sum "${PAYLOAD[@]}" ramdisk.cpio.gz)
-} > "$OUT/MANIFEST"
-tar -C "$OUT" -czf "$OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz" "${PAYLOAD[@]}" ramdisk.cpio.gz MANIFEST
-log "payload: $OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz"
-cat "$OUT/MANIFEST"
- "$UL/include/generated/autoconf.h" ||
-					{ echo "LTE chainloader must default to U-Boot" >&2; exit 1; }
-			elif grep -q '^#define CONFIG_CHAINLOAD 1
-		fi
-
-		cp "$UL/uniLoader" "$OUT/uniLoader-${m%:*}$sfx"
-		PAYLOAD+=("uniLoader-${m%:*}$sfx")
-	done
-done <<<"$VARIANTS"
-
-tree_id() { git -C "$R" rev-parse "HEAD:$1" 2>/dev/null || echo unknown; }
-{
-	echo "version: $VER"
-	echo "repo: https://github.com/$CFG_PROJECT_REPO $(git -C "$R" rev-parse HEAD 2>/dev/null || echo unknown)"
-	echo "linux: https://github.com/torvalds/linux $KBASE + $CFG_KERNEL_APORT/$(basename "$KPATCH") (sha256 $(sha256sum < "$KPATCH" | cut -c1-64))"
-	echo "linux-config: $CFG_BOOTCHAIN_BRINGUP_CONFIG"
-	echo "init: initramfs/init.c"
-	echo "u-boot: bootchain/u-boot (tree $(tree_id bootchain/u-boot)), $CFG_BOOTCHAIN_U_BOOT_DEFCONFIG"
-	echo "variants: $(awk '{ printf "%s%s=%s", NR > 1 ? " " : "", $1, $2 }' <<<"$VARIANTS")"
-	echo "uniloader: bootchain/uniLoader (tree $(tree_id bootchain/uniLoader)), $CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
-	echo "f2fs-tools: $F2FS_VER (https://dl-cdn.alpinelinux.org/alpine/v3.22/main, aarch64)"
-	echo "licenses: GPL-2.0 (Linux, U-Boot, uniLoader, init), GPL-2.0/LGPL-2.1 (f2fs-tools), MIT (musl)"
-	echo "contains no Samsung files: the installer adds the owner's stock DTB and the AVB footer"
-	(cd "$OUT" && sha256sum "${PAYLOAD[@]}" ramdisk.cpio.gz)
-} > "$OUT/MANIFEST"
-tar -C "$OUT" -czf "$OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz" "${PAYLOAD[@]}" ramdisk.cpio.gz MANIFEST
-log "payload: $OUT/${CFG_DEVICE_FAMILY}-bootchain_$VER.tar.gz"
-cat "$OUT/MANIFEST"
- "$UL/include/generated/autoconf.h"; then
+				grep -q '^#define CONFIG_CHAINLOAD 1$' "$UL/include/generated/autoconf.h" ||
+					{ echo "LTE trial chainloader did not enable chainload" >&2; exit 1; }
+				grep -q '^#define CONFIG_CHAINLOAD_DEFAULT 0$' "$UL/include/generated/autoconf.h" ||
+					{ echo "LTE trial chainloader did not default to U-Boot" >&2; exit 1; }
+			elif grep -q '^#define CONFIG_CHAINLOAD 1$' "$UL/include/generated/autoconf.h"; then
 				echo "LTE diagnostic loader unexpectedly enabled chainloading" >&2
 				exit 1
 			fi
