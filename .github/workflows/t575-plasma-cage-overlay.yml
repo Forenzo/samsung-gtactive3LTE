@@ -58,7 +58,7 @@ jobs:
                       "/usr/share/xdg-desktop-portal",
                       "/usr/share/xdg-desktop-portal/portals",
                   }
-                  if not path.startswith("/lib/apk/") and path not in changed_parent_dirs:
+                  if path != "/lib/apk" and not path.startswith("/lib/apk/") and path not in changed_parent_dirs:
                       critical_changed.append(path)
               if status != "A":
                   continue
