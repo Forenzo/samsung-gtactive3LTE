@@ -228,11 +228,19 @@ static void redirect_log(void) {
     fd = open("/dev/null", O_RDONLY);
     if (fd >= 0) { dup2(fd, 0); if (fd > 2) close(fd); }
 }
-static void launch(void) {
+static void launch(long mountport) {
     msg("SM-T575 Plasma Mobile direct boot over USB/NFS\n");
     configure_usb_ipv4();
     mkdir_ok("/mnt", 0755); mkdir_ok(ROOT, 0755);
-    const char *options = "vers=3,proto=tcp,mountproto=tcp,mountport=1023,port=2049,nolock,ro,soft,timeo=30,retrans=2,addr=10.77.57.1";
+    char options[256];
+    int len = snprintf(options, sizeof(options),
+        "vers=3,proto=tcp,mountproto=tcp,mountport=%ld,port=2049,"
+        "nolock,ro,soft,timeo=30,retrans=2,addr=10.77.57.1",
+        mountport);
+    if (len <= 0 || (size_t)len >= sizeof(options)) {
+        msg("FAIL: invalid NFS mount options\n"); _exit(2);
+    }
+    msg("Using host-advertised NFSv3 mountd TCP port %ld (not hardcoded)\n", mountport);
     int present = existing_nfs_root();
     if (present < 0) {
         msg("FAIL: %s already has an unexpected/writable mount\n", ROOT);
@@ -322,8 +330,14 @@ static void launch(void) {
     msg("FAIL: dbus-run-session: %s\n", strerror(errno)); _exit(4);
 }
 int main(int argc, char **argv) {
-    if (argc != 2 || strcmp(argv[1], "--start")) {
-        fprintf(stderr, "usage: %s --start\n", argv[0]); return 2;
+    if (argc != 3 || strcmp(argv[1], "--start")) {
+        fprintf(stderr, "usage: %s --start MOUNTD_TCP_PORT\n", argv[0]); return 2;
+    }
+    char *end = NULL;
+    errno = 0;
+    long mountport = strtol(argv[2], &end, 10);
+    if (errno || !end || *end || mountport < 1 || mountport > 65535) {
+        fprintf(stderr, "Invalid mountd TCP port: %s\n", argv[2]); return 2;
     }
     // Console's 'run' has a 60-second limit. The desktop runs in a detached
     // descendant, while the command returns immediately.
@@ -334,6 +348,6 @@ int main(int argc, char **argv) {
                (long)child, LOG);
         return 0;
     }
-    setsid(); redirect_log(); launch();
+    setsid(); redirect_log(); launch(mountport);
     return 1;
 }
