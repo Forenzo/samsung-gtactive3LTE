@@ -135,6 +135,13 @@ jobs:
           # are absent. This disposable builder already runs as root; set
           # SUDO to empty so it installs the test package key directly.
           s = s.replace(anchor, 'podman run -e SUDO=')
+          # The disposable build container leaves root-owned APKs inside
+          # the host mktemp repo. Use sudo only to remove that directory
+          # after the signed packages have already been copied to PKGS.
+          cleanup = "trap 'rm -rf \"$work\"' EXIT"
+          if s.count(cleanup) != 1:
+              raise SystemExit("Unexpected upstream temp cleanup: " + "\\n".join(x for x in s.splitlines() if "trap " in x))
+          s = s.replace(cleanup, "trap 'sudo rm -rf \"$work\"' EXIT")
           # Upstream creates a temporary /s/build.sh inside its builder.
           # Expose its first failing command instead of an opaque status 127.
           chmod = 'chmod +x "$work/build.sh"'
