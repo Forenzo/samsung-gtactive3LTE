@@ -69,7 +69,17 @@ def prepare_guest():
         raise RuntimeError("Refusing symlinked /etc/machine-id")
     if not machine.exists() or not machine.read_text().strip():
         machine.write_text(uuid.uuid4().hex + "\n")
-    print("Mac NFS rootfs guest ready (Android partitions untouched)")
+    # The tablet receives this tree as a READ-ONLY NFS export.
+    # Mount-point directories MUST exist before it is mounted on Linux:
+    # Linux cannot create /proc, /sys, /dev, /run, /tmp, /home, /var
+    # below a read-only NFS mount. Create only directories on the Mac host.
+    # Android internal partitions are never accessed.
+    for name in ("proc", "sys", "dev", "run", "tmp", "home", "var"):
+        p = ROOT / name
+        if p.is_symlink() or (p.exists() and not p.is_dir()):
+            raise RuntimeError(f"Unsafe NFS rootfs mountpoint: {p}")
+        p.mkdir(mode=0o755, exist_ok=True)
+    print("Mac NFS rootfs guest and read-only mountpoints ready (Android untouched)")
 
 def response(s, maximum=1000000):
     data = bytearray()
