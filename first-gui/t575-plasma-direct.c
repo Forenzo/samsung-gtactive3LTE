@@ -264,6 +264,12 @@ static void launch(void) {
     must(chmod("/run/user/1000", 0700), "runtime chmod");
     mkdir_ok("/run/dbus", 0755); mkdir_ok("/var/log", 0755);
     mkdir_ok("/var/lib", 0755); mkdir_ok("/home/t575", 0700);
+    /* The /tmp directory is a fresh RAM tmpfs. Xwayland requires these. */
+    mkdir_ok("/tmp/.X11-unix", 01777);
+    must(chmod("/tmp/.X11-unix", 01777), "X11 socket directory permissions");
+    mkdir_ok("/tmp/.ICE-unix", 01777);
+    must(chmod("/tmp/.ICE-unix", 01777), "ICE socket directory permissions");
+    msg("PASS: temporary Xwayland and ICE socket directories ready\n");
     must(chown("/home/t575", DESKTOP_UID, DESKTOP_GID), "home chown");
     if (access("/dev/dri/card0", F_OK) < 0) {
         msg("FAIL: Exynos DRM /dev/dri/card0 is absent\n"); _exit(3);
