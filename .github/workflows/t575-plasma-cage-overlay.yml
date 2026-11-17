@@ -50,7 +50,16 @@ jobs:
                   continue
               status, path = line[0], "/" + line[3:].lstrip("/")
               if status == "C" and (path.startswith("/usr/") or path.startswith("/lib/")):
-                  critical_changed.append(path)
+                  # Docker reports a containing directory as changed whenever
+                  # APK adds a child file. Those are NOT file replacements.
+                  changed_parent_dirs = {
+                      "/usr/bin", "/usr/lib", "/usr/libexec", "/usr/share",
+                      "/usr/share/dbus-1", "/usr/share/dbus-1/services",
+                      "/usr/share/xdg-desktop-portal",
+                      "/usr/share/xdg-desktop-portal/portals",
+                  }
+                  if not path.startswith("/lib/apk/") and path not in changed_parent_dirs:
+                      critical_changed.append(path)
               if status != "A":
                   continue
               if not (path.startswith("/usr/") or path.startswith("/lib/")):
