@@ -9,7 +9,9 @@
 # (091acc188, kernel r25), linearised (its merge commits replayed in order),
 # plus patches/linux/0153 (the board DT split into a common file and one
 # file per Galaxy Tab Active3 variant) and 0154 (the Shannon CP remoteproc
-# sketch, not enabled); the patched tree is _commit.
+# sketch, not enabled); the patched tree is _commit. The additional
+# t575-gpu-first-desktop.patch is an experimental LTE-only DTS override
+# (not part of _commit), for an unpublished Phosh first-desktop trial.
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=linux-postmarketos-exynos9810
 pkgver=7.3.0_git20261021
@@ -79,6 +81,7 @@ subpackages="
 source="
 	linux-$_base.tar.gz::https://github.com/torvalds/linux/archive/$_base.tar.gz
 	gtactive3.patch
+	t575-gpu-first-desktop.patch
 	$_config
 	"
 builddir="$srcdir/linux-$_base"
@@ -124,5 +127,6 @@ _dtb() {
 sha512sums="
 4cc471f94509680acb6f55e5c14babab5bf2a60edf014bcc48b55da8cb96dbd262645a82c81e9e2108d01d2eda59dae1844c797475a9691c7e43a43d53ff0917  linux-f47d223627f80cb7a1eb14c585fe6cb35de5e984.tar.gz
 9e6943b460f69bc0e2a2370b7bb4f5290969e8a1e38c11cdc136bdbd779521777d1523bfb28c359c01ad66703a74e7b6f4a5a938b18067f77f6f8d3f45a42faa  gtactive3.patch
+006c2489f0371f1c94096f85233de414e7454fa6f878c06b237338cddf5fe67c094778ae70c70cfb4421006960c229167f500c042867259dd5cdba96fd8fce3f  t575-gpu-first-desktop.patch
 0402088aaf882452446809b2b278b8b8282b7a09a638267ac77e652e41a8b4af36efc6863ce0f6ffdddbc1d93b78c820a25ca849d2aefa1e9f8f5dbb39ae65a2  config-postmarketos-exynos9810.aarch64
 "

@@ -81,6 +81,25 @@ else
 fi
 patch -d "$K" -p1 -s --no-backup-if-mismatch < "$KPATCH"
 
+# Optional, build-only LTE GPU DT staging patch. Never applied by the default
+# bring-up workflow. Restrict this opt-in hook to the per-variant LTE DTS:
+# Wi-Fi DTS, shared DT, kernel drivers, BOOT, and Android are not modified.
+if [ -n "${BRINGUP_EXTRA_DTS_PATCH:-}" ]; then
+	[ -f "$BRINGUP_EXTRA_DTS_PATCH" ] ||
+		{ echo "Missing BRINGUP_EXTRA_DTS_PATCH: $BRINGUP_EXTRA_DTS_PATCH" >&2; exit 1; }
+	target='diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts'
+	if ! [ "$(grep -c '^diff --git ' "$BRINGUP_EXTRA_DTS_PATCH")" = 1 ]; then
+		echo "Refusing multi-file experimental DT patch" >&2
+		exit 1
+	fi
+	if ! grep -Fxq "$target" "$BRINGUP_EXTRA_DTS_PATCH"; then
+		echo "Refusing non-LTE experimental DT patch" >&2
+		exit 1
+	fi
+	log "opt-in LTE-only GPU DT patch (EXPERIMENTAL; offline build)"
+	patch -d "$K" -p1 --batch --forward --fuzz=0 < "$BRINGUP_EXTRA_DTS_PATCH"
+fi
+
 # out-of-tree U-Boot build; uniLoader builds in place, so in a copy: the
 # vendored trees stay clean
 UB=$R/bootchain/u-boot
@@ -194,6 +213,9 @@ while read -r cn dtb; do
 		gtactive3)
 			ul_config=gtactive3lte_defconfig
 			modes="linux:1"
+			if [ "${BRINGUP_LTE_CHAIN_TEST:-0}" = 1 ]; then
+				modes="linux:1 chain:0"
+			fi
 			;;
 		*)
 			echo "No audited uniLoader board for $cn" >&2
@@ -202,6 +224,9 @@ while read -r cn dtb; do
 	esac
 
 	for m in $modes; do
+		if [ "$cn" = gtactive3 ] && [ "${m%:*}" = chain ]; then
+			ul_config=gtactive3lte_chain_defconfig
+		fi
 		make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC clean >/dev/null 2>&1 || true
 		make -s -C "$UL" ARCH=aarch64 CROSS_COMPILE=$CC "$ul_config"
 
@@ -219,8 +244,13 @@ while read -r cn dtb; do
 				{ echo "LTE board selection failed" >&2; exit 1; }
 			grep -q '^#define CONFIG_LINUX_KRNL_HEADER_IMG 1$' "$UL/include/generated/autoconf.h" ||
 				{ echo "LTE ARM64 Image header disabled" >&2; exit 1; }
-			if grep -q '^#define CONFIG_CHAINLOAD 1$' "$UL/include/generated/autoconf.h"; then
-				echo "LTE chainloading unexpectedly enabled" >&2
+			if [ "${m%:*}" = chain ] && [ "${BRINGUP_LTE_CHAIN_TEST:-0}" = 1 ]; then
+				grep -q '^#define CONFIG_CHAINLOAD 1$' "$UL/include/generated/autoconf.h" ||
+					{ echo "LTE trial chainloader did not enable chainload" >&2; exit 1; }
+				grep -q '^#define CONFIG_CHAINLOAD_DEFAULT 0$' "$UL/include/generated/autoconf.h" ||
+					{ echo "LTE trial chainloader did not default to U-Boot" >&2; exit 1; }
+			elif grep -q '^#define CONFIG_CHAINLOAD 1$' "$UL/include/generated/autoconf.h"; then
+				echo "LTE diagnostic loader unexpectedly enabled chainloading" >&2
 				exit 1
 			fi
 		fi
