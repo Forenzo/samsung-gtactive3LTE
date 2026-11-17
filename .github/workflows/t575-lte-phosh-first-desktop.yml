@@ -257,7 +257,12 @@ jobs:
           # the assembler as root, as the upstream Podman user namespace
           # ordinarily permits, and keep signed package validation enabled.
           export PATH="$PWD/ci-build-compat:$PATH"
-          export MKOSI_CONTAINER_ARGS="${MKOSI_CONTAINER_ARGS:-} --user=0:0"
+          # Fast OCI smoke validated writable workspace plus unshare user/mount
+          # namespaces with SYS_ADMIN and an unconfined AppArmor profile.
+          # Give these only to the disposable mkosi image container; the
+          # package-builder Docker container keeps its normal restrictions.
+          # Avoid --privileged: it unnecessarily grants many more powers.
+          export MKOSI_CONTAINER_ARGS="${MKOSI_CONTAINER_ARGS:-} --user=0:0 --cap-add=SYS_ADMIN --security-opt apparmor=unconfined"
           # Keep source checked out and output directory writable.
           chmod u+rwx work/duranium-build
           ln -sfn "$PWD/work/pmaports" work/duranium-build/pmaports
