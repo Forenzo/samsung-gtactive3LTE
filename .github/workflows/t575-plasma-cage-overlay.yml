@@ -1,0 +1,92 @@
+name: t575-plasma-cage-overlay
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-gpu-genpd-config-review
+    paths:
+      - '.github/workflows/t575-plasma-cage-overlay.yml'
+      - 'first-gui/Dockerfile.plasma'
+      - 'first-gui/install-t575-cage-overlay.py'
+
+permissions:
+  contents: read
+
+jobs:
+  cage-overlay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - name: Build matching existing ARM64 Plasma filesystem
+        run: |
+          set -euo pipefail
+          docker buildx build --load --platform linux/arm64 \
+            -t t575-plasma-overlay-base:local -f first-gui/Dockerfile.plasma .
+      - name: Add Cage to a disposable build container and capture only added files
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          CID="$(docker create --platform linux/arm64 --name t575-cage-overlay-temp \
+            t575-plasma-overlay-base:local sleep 900)"
+          trap 'docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+          docker start "$CID"
+          docker exec "$CID" sh -c 'apk info | sort > /tmp/t575-before-pkgs && apk add --no-cache cage && apk info | sort > /tmp/t575-after-pkgs && comm -13 /tmp/t575-before-pkgs /tmp/t575-after-pkgs > /tmp/t575-new-pkgs'
+          docker exec "$CID" test -x /usr/bin/cage
+          docker cp "$CID:/tmp/t575-new-pkgs" out/added-packages.txt
+          docker diff "$CID" > out/docker-changes.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          changed = Path("out/docker-changes.txt").read_text().splitlines()
+          new = []
+          critical_changed = []
+          for line in changed:
+              if len(line) < 4 or line[1:3] != " /":
+                  continue
+              status, path = line[0], line[3:]
+              if status == "C" and (path.startswith("/usr/") or path.startswith("/lib/")):
+                  critical_changed.append(path)
+              if status != "A":
+                  continue
+              if not (path.startswith("/usr/") or path.startswith("/lib/")):
+                  continue
+              if path.startswith("/lib/apk/"):
+                  continue
+              new.append(path.lstrip("/"))
+          if critical_changed:
+              raise SystemExit(f"Package upgrade changes existing files, stop: {critical_changed[:20]}")
+          # GNU tar --no-recursion handles explicitly listed directories; the
+          # archive contains ONLY added paths, never the base Plasma rootfs.
+          new = sorted(set(new))
+          if "usr/bin/cage" not in new:
+              raise SystemExit("FAIL: Cage executable not in overlay")
+          Path("out/added-paths.txt").write_text("\n".join(new)+"\n")
+          print("New /usr and /lib paths:", len(new))
+          PY
+          docker cp out/added-paths.txt "$CID:/tmp/t575-overlay-paths"
+          docker exec "$CID" apk add --no-cache tar
+          docker exec "$CID" tar -czf /tmp/t575-cage-overlay-aarch64.tar.gz \
+            --no-recursion -C / -T /tmp/t575-overlay-paths
+          docker cp "$CID:/tmp/t575-cage-overlay-aarch64.tar.gz" out/t575-cage-overlay-aarch64.tar.gz
+          tar tzf out/t575-cage-overlay-aarch64.tar.gz | tee out/archive-paths.txt
+          tar tzf out/t575-cage-overlay-aarch64.tar.gz | grep -q '^usr/bin/cage$'
+          (cd out && sha256sum t575-cage-overlay-aarch64.tar.gz > SHA256SUMS)
+          echo 'PASS: Cage addon contains only new ARM64 files; Android untouched'
+      - name: Validate Mac overlay installer
+        run: python3 -m py_compile first-gui/install-t575-cage-overlay.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-cage-plasma-overlay-aarch64-UNTESTED
+          path: |
+            out/t575-cage-overlay-aarch64.tar.gz
+            out/SHA256SUMS
+            out/added-packages.txt
+            out/archive-paths.txt
+            first-gui/install-t575-cage-overlay.py
+          retention-days: 14
+          if-no-files-found: error
