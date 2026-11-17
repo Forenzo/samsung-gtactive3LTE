@@ -20,7 +20,7 @@ permissions:
 
 concurrency:
   group: t575-lte-phosh-first-desktop
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   full-phosh-image:
@@ -162,6 +162,8 @@ jobs:
           CHANNEL: dev
         run: |
           set -euo pipefail
+          # Reuse Docker adapter in the image assembly step as well.
+          export PATH="$PWD/ci-build-compat:$PATH"
           ln -sfn "$PWD/work/pmaports" work/duranium-build/pmaports
           echo '26111790' > work/duranium-build/mkosi.version
           GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
