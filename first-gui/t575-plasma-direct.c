@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <mntent.h>
 #include <net/if.h>
 #include <pwd.h>
 #include <signal.h>
@@ -48,6 +49,29 @@ static void mount_tmp(const char *name, const char *opts, mode_t mode) {
     mkdir_ok(dest, mode);
     must(mount("tmpfs", dest, "tmpfs", MS_NOSUID | MS_NODEV, opts), "RAM tmpfs");
 }
+/* The diagnostic console leaves a successful NFS mount in place when a
+ * subsequent step fails. Reuse only the identical READ-ONLY NFSv3 export.
+ * Never unmount or replace anything we do not recognize.
+ */
+static int existing_nfs_root(void) {
+    FILE *m = setmntent("/proc/mounts", "r");
+    if (!m) return -1;
+    struct mntent *e;
+    int result = 0;
+    while ((e = getmntent(m))) {
+        if (strcmp(e->mnt_dir, ROOT)) continue;
+        if (strcmp(e->mnt_fsname, SOURCE) ||
+            strcmp(e->mnt_type, "nfs") ||
+            !hasmntopt(e, "ro")) {
+            result = -1;  /* unexpected or writable mount: refuse */
+        } else {
+            result = 1;
+        }
+        break;
+    }
+    endmntent(m);
+    return result;
+}
 static void configure_usb_ipv4(void) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     must(sock, "socket IPv4");
@@ -85,8 +109,22 @@ static void launch(void) {
     configure_usb_ipv4();
     mkdir_ok("/mnt", 0755); mkdir_ok(ROOT, 0755);
     const char *options = "vers=3,proto=tcp,mountproto=tcp,mountport=1023,port=2049,nolock,ro,soft,timeo=30,retrans=2,addr=10.77.57.1";
-    must(mount(SOURCE, ROOT, "nfs", MS_RDONLY | MS_NOSUID | MS_NODEV, options), "NFS mount");
-    msg("PASS: remote rootfs mounted READ ONLY\n");
+    int present = existing_nfs_root();
+    if (present < 0) {
+        msg("FAIL: %s already has an unexpected/writable mount\n", ROOT);
+        _exit(2);
+    }
+    if (present == 1) {
+        msg("PASS: reusing already-mounted READ-ONLY NFS rootfs\n");
+    } else {
+        if (mount(SOURCE, ROOT, "nfs", MS_RDONLY | MS_NOSUID | MS_NODEV, options) < 0) {
+            if (errno != EBUSY || existing_nfs_root() != 1)
+                must(-1, "NFS mount");
+            msg("PASS: reusing existing READ-ONLY NFS rootfs\n");
+        } else {
+            msg("PASS: remote rootfs mounted READ ONLY\n");
+        }
+    }
     if (access(ROOT "/usr/bin/startplasma-wayland", X_OK) < 0) {
         msg("FAIL: Plasma Mobile session not installed\n"); _exit(3);
     }
