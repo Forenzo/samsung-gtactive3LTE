@@ -132,13 +132,22 @@ jobs:
           if s.count(anchor) != 1:
               raise SystemExit("Unexpected upstream builder launch: " + "\n".join(x for x in s.splitlines() if "podman run" in x))
           s = s.replace(anchor, 'podman run')
+          # Upstream creates a temporary /s/build.sh inside its builder.
+          # Expose its first failing command instead of an opaque status 127.
+          chmod = 'chmod +x "$work/build.sh"'
+          if s.count(chmod) != 1:
+              raise SystemExit("Cannot instrument upstream generated build.sh")
+          s = s.replace(chmod, chmod + '\\n' + 'sed -i \'2i set -x\' "$work/build.sh"')
           p.write_text(s)
-          print("CI-only: removed flock/nice from single-runner package build")
+          print("CI-only: removed flock/nice, enabled generated shell tracing")
           PY
           export PATH="$PWD/ci-build-compat:$PATH"
           command -v podman
           podman --version
           docker info --format 'Docker daemon: {{.ServerVersion}}'
+          # Verify that the just-built Alpine builder can launch its shell.
+          docker run --rm --entrypoint /bin/sh gta3-pkgbuilder -c 'echo CONTAINER_SHELL_PASS; command -v abuild; command -v apk; command -v gcc'
+          echo "First failed generated build.sh command will now be visible above its exit code."
           GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
             DISTFILES="$PWD/distfiles" CCACHE="$PWD/ccache" JOBS=4 \
             sh -x work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
