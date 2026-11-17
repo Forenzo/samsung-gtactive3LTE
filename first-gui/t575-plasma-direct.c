@@ -4,6 +4,7 @@
 #define _GNU_SOURCE
 #include <arpa/inet.h>
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <grp.h>
 #include <mntent.h>
@@ -196,6 +197,53 @@ static void probe_unprivileged_drm(void) {
             (unsigned)(st.st_mode & 07777),
             (unsigned long)st.st_uid, (unsigned long)st.st_gid);
 }
+/* Both /run and /tmp live in RAM, but wlroots also needs POSIX shared
+ * memory at /dev/shm. It does not necessarily exist in our tiny initramfs.
+ */
+static int mounted_here(const char *path) {
+    FILE *m = setmntent("/proc/mounts", "r");
+    if (!m) return 0;
+    int present = 0;
+    struct mntent *e;
+    while ((e = getmntent(m))) {
+        if (!strcmp(e->mnt_dir, path)) { present = 1; break; }
+    }
+    endmntent(m);
+    return present;
+}
+static void create_shm_mount(void) {
+    mkdir_ok("/dev/shm", 01777);
+    if (!mounted_here("/dev/shm")) {
+        must(mount("tmpfs", "/dev/shm", "tmpfs", MS_NOSUID | MS_NODEV,
+                   "size=32m,mode=1777"), "shared-memory tmpfs");
+    }
+    must(chmod("/dev/shm", 01777), "/dev/shm mode 1777");
+    msg("PASS: /dev/shm shared-memory tmpfs ready\n");
+}
+static int describe_input_nodes(void) {
+    DIR *dir = opendir("/dev/input");
+    if (!dir) {
+        msg("INPUT CHECK: /dev/input unavailable: %s\n", strerror(errno));
+        return 0;
+    }
+    int count = 0;
+    struct dirent *ent;
+    while ((ent = readdir(dir))) {
+        if (strncmp(ent->d_name, "event", 5)) continue;
+        char path[256];
+        snprintf(path, sizeof(path), "/dev/input/%.230s", ent->d_name);
+        struct stat st;
+        if (lstat(path, &st) == 0 && S_ISCHR(st.st_mode)) {
+            msg("INPUT CHECK: %s mode %04o uid %lu gid %lu\n",
+                path, (unsigned)(st.st_mode & 07777),
+                (unsigned long)st.st_uid, (unsigned long)st.st_gid);
+            count++;
+        }
+    }
+    closedir(dir);
+    msg("INPUT CHECK: %d event character device(s) visible\n", count);
+    return count;
+}
 static void configure_usb_ipv4(void) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     must(sock, "socket IPv4");
@@ -272,6 +320,7 @@ static void launch(long mountport) {
     must(chmod("/run/user/1000", 0700), "runtime chmod");
     mkdir_ok("/run/dbus", 0755); mkdir_ok("/var/log", 0755);
     mkdir_ok("/var/lib", 0755); mkdir_ok("/home/t575", 0700);
+    create_shm_mount();
     /* The /tmp directory is a fresh RAM tmpfs. Xwayland requires these. */
     mkdir_ok("/tmp/.X11-unix", 01777);
     must(chmod("/tmp/.X11-unix", 01777), "X11 socket directory permissions");
@@ -301,6 +350,12 @@ static void launch(long mountport) {
     if (!access(trigger[0], X_OK)) spawn(trigger);
     msg("PASS: seatd / D-Bus launch requested\n");
     sleep(3);
+    const char *const settle[] = {"/sbin/udevadm","settle","--timeout=8",NULL};
+    if (!access(settle[0], X_OK)) spawn(settle);
+    sleep(2);
+    int event_count = describe_input_nodes();
+    msg("INPUT CHECK: no devices still permits Cage to display; interaction requires evdev + udev\n");
+    (void)event_count;
     prepare_drm_devtmpfs_node("/dev/dri/card0", "video");
     prepare_drm_devtmpfs_node("/dev/dri/renderD128", "render");
     gid_t groups[3];
@@ -331,6 +386,11 @@ static void launch(long mountport) {
      * nested backend instead of KWin's unavailable DRM session.
      */
     setenv("LIBSEAT_BACKEND", "seatd", 1);
+    /* This only disables wlroots' fatal no-input-device check; if an
+     * evdev/libinput device is available, wlroots still discovers it.
+     */
+    setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
+    msg("Cage startup: allowing display even if no libinput device is discovered\n");
     setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
     /* Exynos DPU provides KMS while Mali-G72/Panfrost is its render device. */
     setenv("WLR_RENDER_DRM_DEVICE", "/dev/dri/renderD128", 1);
