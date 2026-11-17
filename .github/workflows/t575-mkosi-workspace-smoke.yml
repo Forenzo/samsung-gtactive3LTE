@@ -1,0 +1,35 @@
+name: t575-mkosi-workspace-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-phosh-convergence
+    paths:
+      - '.github/workflows/t575-mkosi-workspace-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect upstream mkosi launcher
+        run: |
+          set -euo pipefail
+          ci/prepare
+          echo '=== upstream mkosi-container ==='
+          sed -n '1,220p' work/duranium-build/scripts/mkosi-container
+
+      - name: Confirm writable workspace under real mkosi OCI image
+        run: |
+          set -euo pipefail
+          mkdir -p mkosi-ci-workspace
+          docker run --rm --user=0:0 \
+            -v "$PWD/mkosi-ci-workspace:/workspace:rw" \
+            --entrypoint /bin/sh gitlab.nura.eco:5050/nura/nura-oci/mkosi:edge \
+            -c 'set -eux; id; ls -ld /workspace; mkdir /workspace/mkosi-keyring-permissions-smoke; rmdir /workspace/mkosi-keyring-permissions-smoke; echo PASS_MKOSI_WORKSPACE'
+          echo 'PASS: OCI mkosi container can create a keyring directory in a writable bind mount'
