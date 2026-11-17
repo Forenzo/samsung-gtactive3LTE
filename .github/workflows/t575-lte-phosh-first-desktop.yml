@@ -113,7 +113,7 @@ jobs:
           mkdir -p ci-root/build pkgs ccache
           GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
             DISTFILES="$PWD/distfiles" CCACHE="$PWD/ccache" JOBS=4 \
-            sh work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
+            sh -x work/duranium-build/contrib/samsung-gtactive3/build-apks.sh $(cat pmos/aports/BUILD)
           test -n "$(find pkgs -maxdepth 1 -name 'linux-postmarketos-exynos9810-gtactive3-*.apk' -print -quit)"
           test -n "$(find pkgs -maxdepth 1 -name 'device-samsung-gtactive3-*.apk' -print -quit)"
           echo 'PASS: built LTE kernel DTB and device packages'
