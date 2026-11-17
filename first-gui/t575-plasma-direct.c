@@ -21,7 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define ROOT "/mnt/t575-plasma"
+#define ROOT "/mnt/t575-plasma-gui-v2"
 #define SOURCE "10.77.57.1:/Volumes/T575-Plasma/rootfs"
 #define LOG "/t575-plasma-desktop.log"
 #define DESKTOP_UID 1000
@@ -37,20 +37,37 @@ static void must(int rc, const char *what) {
 static void mkdir_ok(const char *path, mode_t mode) {
     if (mkdir(path, mode) < 0 && errno != EEXIST) must(-1, path);
 }
+/*
+ * RO NFS: mkdir() is forbidden even if the directory was just created
+ * on macOS but is temporarily invisible in an older NFS dentry cache.
+ * The Mac host pre-creates all 7 targets. Validate them before submounts.
+ */
+static void verify_nfs_mountpoints(void) {
+    const char *names[] = { "proc", "sys", "dev", "run", "tmp", "home", "var" };
+    char dest[256];
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        struct stat st;
+        snprintf(dest, sizeof(dest), ROOT "/%s", names[i]);
+        if (lstat(dest, &st) < 0 || !S_ISDIR(st.st_mode)) {
+            msg("FAIL: NFS export missing directory %s; Mac host must create it before mounting\n", dest);
+            _exit(2);
+        }
+    }
+    msg("PASS: seven NFS mountpoints visible without filesystem writes\n");
+}
 static void mount_bind(const char *src, const char *name) {
     char dest[256];
     snprintf(dest, sizeof(dest), ROOT "/%s", name);
-    mkdir_ok(dest, 0755);
     must(mount(src, dest, NULL, MS_BIND | MS_REC, NULL), "bind mount");
 }
-static void mount_tmp(const char *name, const char *opts, mode_t mode) {
+static void mount_tmp(const char *name, const char *opts) {
     char dest[256];
     snprintf(dest, sizeof(dest), ROOT "/%s", name);
-    mkdir_ok(dest, mode);
     must(mount("tmpfs", dest, "tmpfs", MS_NOSUID | MS_NODEV, opts), "RAM tmpfs");
 }
 /* The diagnostic console leaves a successful NFS mount in place when a
- * subsequent step fails. Reuse only the identical READ-ONLY NFSv3 export.
+ * subsequent step fails. Reuse only the identical READ-ONLY NFSv3 export
+ * at the NEW mount path, not the prior stale /mnt/t575-plasma mount.
  * Never unmount or replace anything we do not recognize.
  */
 static int existing_nfs_root(void) {
@@ -128,11 +145,12 @@ static void launch(void) {
     if (access(ROOT "/usr/bin/startplasma-wayland", X_OK) < 0) {
         msg("FAIL: Plasma Mobile session not installed\n"); _exit(3);
     }
+    verify_nfs_mountpoints();
     mount_bind("/proc", "proc"); mount_bind("/sys", "sys"); mount_bind("/dev", "dev");
-    mount_tmp("run", "size=64m,mode=0755", 0755);
-    mount_tmp("tmp", "size=256m,mode=1777", 01777);
-    mount_tmp("home", "size=512m,mode=0755", 0755);
-    mount_tmp("var", "size=128m,mode=0755", 0755);
+    mount_tmp("run", "size=64m,mode=0755");
+    mount_tmp("tmp", "size=256m,mode=1777");
+    mount_tmp("home", "size=512m,mode=0755");
+    mount_tmp("var", "size=128m,mode=0755");
     must(chroot(ROOT), "chroot"); must(chdir("/"), "chdir");
     mkdir_ok("/run/user", 0755); mkdir_ok("/run/user/1000", 0700);
     must(chown("/run/user/1000", DESKTOP_UID, DESKTOP_GID), "runtime chown");
