@@ -44,7 +44,8 @@ jobs:
       - name: Probe user and mount namespace support needed by mkosi
         run: |
           set -euo pipefail
-          docker run --rm --user=0:0 --security-opt seccomp=unconfined \
+          docker run --rm --user=0:0 --cap-add SYS_ADMIN \
+            --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
             --entrypoint /bin/sh gitlab.nura.eco:5050/nura/nura-oci/mkosi:edge \
             -c 'set -eux; command -v unshare; unshare --user --map-root-user --mount /bin/true; echo PASS_MKOSI_USERNS'
 
