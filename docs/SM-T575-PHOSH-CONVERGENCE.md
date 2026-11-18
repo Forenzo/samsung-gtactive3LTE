@@ -133,6 +133,50 @@ for flashing should be issued until a fresh successful build, valid
 offline Android BOOT packaging, and an explicit recovery/rollback plan
 are in place. The real Phosh OS still has not been written to userdata.
 
+## Native disk image geometry and Mac installation admission (2026-11-18)
+
+The owner ran `t575-phosh-image-offline-audit.py` against
+`samsung-gtactive3-lte_phosh_edge_26111790.raw.zst` and reported:
+
+- Primary GPT header CRC **PASS**, partition-array CRC **PASS**, and
+  **4096-byte** internal sectors.
+- The compressed source's projected raw disk size is **6,862,950,400 B**;
+  the measured `userdata` capacity is **55,461,281,792 B**.
+- ESP #1 starts at **1,048,576 B** and is **1,073,741,824 B** (1 GiB).
+- Verity partition #2 is **419,430,400 B** (400 MiB).
+- The main usr partition #3 is **5,368,709,120 B** (5 GiB).
+- With **6,861,881,344 B** reserved for first-boot partitions, remaining
+  storage headroom is **41,736,450,048 B**.
+- **Still unverified** by that particular audit: local backup GPT integrity,
+  EFI contents, vendor firmware import, userdata flash/readback, full
+  EFI chain and first Phosh boot. CI previously tested compressed frames,
+  the UKI and trust configuration.
+
+A new, strictly read-only **macOS** installation admission checker is at
+`tools/t575-native-phosh-macos-preflight.py`, with
+`.github/workflows/t575-native-phosh-macos-admission.yml` validating
+its CLI/source. It verifies the local full-image manifest and primary GPT,
+the hash-verified stock and diagnostic BOOT backups, the updated LTE chain
+candidate, and exact **live** SM-T575 model and `/dev/sda12` BOOT /
+`/dev/sda31` userdata sysfs geometry via the existing USB console. It
+issues only `cat` commands and has **no flash or erase mode**. Pass does
+not authorize wiping or prove that recovery from failed first boot works.
+
+The LTE U-Boot source now additionally includes **an explicitly selected**
+`TRY native Phosh EFI` menu item. The first (default) menu entry still
+performs the physically tested timed warm return to diagnostic Linux.
+The new option mounts no filesystem and writes no UFS contents: it
+checks the LTE board, maps UFS partition 31 in RAM, and tries to load
+`EFI/BOOT/BOOTAA64.EFI` from the nested GPT ESP. This updated bootchain
+requires a new successful CI build and separate first-on-device UFS/EFI
+handoff validation; old BOOT candidates do not have the new menu item.
+
+**No native image has been installed**, the existing cross-platform
+Wi-Fi installer intentionally blocks LTE, and no destructive Mac install
+command is approved. Firmware availability, Android user-data backup/
+explicit erase approval, storage/boot readback and rollback all require
+separate handling before the first write.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
