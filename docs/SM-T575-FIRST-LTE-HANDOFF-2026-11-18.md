@@ -1,0 +1,85 @@
+# SM-T575 LTE U-Boot first-handoff safety and recovery notes (2026-11-18)
+
+This is a test plan, **not permission to flash**. The first usable native
+Duranium Phosh OS remains uninstalled. Only test the experimentally built
+LTE chainloader after a fresh green CI run, artifact manifest verification,
+repackaging from the owner's verified stock Android BOOT and an explicit
+owner decision to accept a BOOT-only experimental test.
+
+## Known-good observations
+
+- Physical tablet: **SM-T575**, unlocked Samsung S-Boot revision
+  `T575XXSFEYI1`, 4-KiB UFS logical blocks.
+- `BOOT` PIT partition 12 (`/dev/sda12` under mainline Linux):
+  exactly **61,865,984 bytes**. `userdata` is partition 31, not a test target.
+- Original rooted Android BOOT, locally held in
+  `~/Downloads/SM-T575-Recovery/boot-current.img`:
+  SHA-256 `a69a724b75a51821a0baa4ccda424173a003b17de19e2b381bb7d4f30596e372`.
+- Last known-working diagnostic GPU BOOT:
+  `~/Downloads/SM-T575-Recovery/t575-gpu-BOOT-CANDIDATE.img`:
+  SHA-256 `8225061aa97b72f41f27ffc0119d84f1fd22c0d6b009d5e123b811f1796792f7`.
+- Manual Samsung Download Mode + Heimdall v2.2.2 BOOT-only restoration of
+  stock Android has worked. The owner has also recovered to diagnostic Linux
+  after an accidental Download Mode entry without writing partitions.
+- With physical keys released, GPIO GPA0_DAT `0x14050024` read `0x3e`.
+  Pressing Volume Down read `0x2e` (active-low bit 4). A long hold of
+  volume keys interrupted the USB diagnostic by entering Download Mode;
+  don't repeat long-hold key tests.
+- Native Phosh disk image and UKI passed CI and SHA-256, and old
+  `T575-BOOT-review-LTE-20261118` BOOT candidates passed AVB checks.
+  **Those older BOOT candidates are superseded** by newer loader source.
+  Verification does not imply first boot, correct FDT handover, or functioning
+  touch and pen.
+
+## Latest LTE first-stage source adjustments
+
+1. uniLoader `board-gtactive3lte.c` uses a passive `simplefb` on the
+   physically observed 1200x1920 ARGB8888 handover at `0xca000000`.
+   **No DECON_F MMIO writes** copied from the Wi-Fi board.
+2. The optional LTE uniLoader `chain_select` samples GPIO and reset status
+   **read-only**. Volume Down or cluster 0 watchdog reset status requests
+   embedded diagnostic Linux instead of U-Boot. This branch still has **no
+   watchdog programming or automatic recovery from a hung U-Boot**.
+3. Experimental U-Boot defaults to `exynos9810-gtactive3` (LTE) with
+   a *read-only* diagnostic boot menu, no Duranium autoboot, no Fastboot
+   flashing, and no USB mass-storage host exposing protected partitions.
+   The first menu entry attempts a **warm reset**; the 30-second menu
+   timeout selects that entry. This *might* return to diagnostic Linux by
+   the previous-run handoff record, but RAM retention and reset behavior are
+   unproven on this LTE tablet.
+4. Finger and S Pen tests are for full Linux/Phosh, not the U-Boot menu.
+
+## Before an explicitly authorized BOOT-only experiment
+
+- Verify fresh green CI run and SHA-256 manifest, then repackage using the
+  known stock Android BOOT header and embedded Samsung DTB. Keep old files.
+- Verify the new BOOT candidate's exact 61,865,984-byte length, ARM64
+  header, signed AVB footer, embedded LTE identification and checksum.
+- Confirm full stock Android **and working diagnostic** BOOT backups remain
+  on the Mac and hash-match above. Keep their copies off the tablet.
+- Prepare and practice the **manual** path to Samsung Download Mode without
+  accidentally pressing buttons during U-Boot menu navigation. Have Heimdall
+  `detect` working and a stable USB connection.
+- Never write to `DTBO`, `VBMETA`, `EFS`, `SEC_EFS`, `super`, `userdata`
+  or any other partition during this experiment. This is **BOOT only**.
+- Collect a video of the boot display or a clear text observation; don't
+  assume a dark screen proves U-Boot did or did not execute.
+
+## If first boot hangs / panel stays dark
+
+Manual recovery takes precedence over speculative watchdog commands:
+enter Samsung Download Mode with the previously proven physical recovery
+method, reconnect the Mac and use **only** the verified saved BOOT image
+through the known Heimdall BOOT-only procedure. Start a fresh Heimdall
+session; prior `print-pit --no-reboot` caused session-end errors.
+A BOOT-only restore does **not** undo future userdata erasure; don't erase
+userdata during this handoff test. If Download Mode is unreachable,
+stop: do not use alternative firmware partition commands.
+
+## Exit criteria
+
+A first controlled handoff provides evidence only after (a) a visible
+U-Boot menu or readback RAM log showing that U-Boot actually ran, and
+(b) successful return to diagnostic Linux via the warm-reset fallback or
+manual BOOT-only restore. A successful CI build or AVB hash verification
+is not a substitute for either physical result.
