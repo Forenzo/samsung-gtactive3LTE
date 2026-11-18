@@ -60,7 +60,11 @@ def check_boot(path, expected=None, marker=False):
             struct.unpack_from("<I", hdr, 8 + 8 * 4)[0] == 2 and
             struct.unpack_from("<I", hdr, 8 + 7 * 4)[0] == 2048,
             f"{path.name}: Android BOOT v2, 2048-byte page")
-    require(footer[:4] == b"AVBf", f"{path.name}: AVB footer present")
+    # Stock Samsung and the previously boot-tested diagnostic image are
+    # authenticated by their EXACT measured hashes. Do not require them to
+    # carry our experimental locally signed AVB footer format.
+    if marker:
+        require(footer[:4] == b"AVBf", f"{path.name}: new chain BOOT has AVB footer")
     if expected is not None:
         require(sha256(path) == expected, f"{path.name}: exact known-good SHA-256")
     if marker:
