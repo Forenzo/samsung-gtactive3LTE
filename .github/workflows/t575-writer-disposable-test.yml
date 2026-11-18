@@ -1,0 +1,17 @@
+name: SM-T575 v4 writer disposable file integration test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'native-install/test-t575-writer-v4-disposable.py'
+      - 'native-install/t575-writer-v4.c'
+      - '.github/workflows/t575-writer-disposable-test.yml'
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise full v4 protocol on a disposable file (never a device)
+        run: python3 native-install/test-t575-writer-v4-disposable.py
