@@ -2,8 +2,9 @@
 """Safe, read-only SM-T575 key GPIO / watchdog STATUS snapshot.
 
 IMPORTANT: The original interactive Volume Down hold test was RETIRED
-after pressing and holding Volume Down on the physical SM-T575 entered
-Samsung Download Mode (owner observation, 2026-11-18).
+after a physical volume-key test unexpectedly entered Samsung
+Download Mode during the Volume Up phase (owner observation, 2026-11-18).
+The preceding Volume Down measurement showed 0x3e -> 0x2e (bit 4 low).
 
 This replacement performs a SINGLE snapshot with NO button instructions.
 Remote commands are ONLY 'peek ADDR' through the existing Linux console.
