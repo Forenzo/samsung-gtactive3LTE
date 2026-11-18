@@ -177,6 +177,37 @@ command is approved. Firmware availability, Android user-data backup/
 explicit erase approval, storage/boot readback and rollback all require
 separate handling before the first write.
 
+## Physical Mac read-only admission result: PASS (owner, 2026-11-18)
+
+Owner ran `tools/t575-native-phosh-macos-preflight.py` against the
+physical SM-T575 diagnostic Linux over IPv6 TCP 23 and reported a complete
+**PASS** with no device writes. The result establishes:
+
+- Compressed `samsung-gtactive3-lte_phosh_edge_26111790.raw.zst`
+  SHA-256 matches the locally saved CI `SHA256SUMS`.
+- Primary GPT/entry CRCs, 4096-byte sectors, three partitions, expected
+  6,862,950,400-byte raw size and 41,736,450,048-byte post-reserve
+  storage headroom passed.
+- Current installed chain BOOT
+  `t575-phosh-chain-BOOT-UNTESTED.img` hash is
+  `c8905935441566f20cb6877f34d5dd73764cefc39820fee361e61710856a0474`;
+  Android BOOT v2 and embedded LTE U-Boot marker passed.
+- Original rooted Android BOOT and previously working GPU diagnostic BOOT
+  both match their reference SHA-256 and exact 61,865,984-byte sizes.
+- Live kernel DTS identifies **SM-T575**; sysfs identifies `sda12`
+  as BOOT (61,865,984 B) and `sda31` as userdata
+  (55,461,281,792 B); neither target is mounted.
+
+The dedicated non-flashing admission checker CI run
+[44290206772](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/44290206772)
+also passed.
+
+**Still required:** read-only *U-Boot UFS* probe via existing boot menu
+(item "Show detected UFS partitions"), test the new manual-only EFI
+menu build, validate actual ESP EFI path and backup GPT, plan vendor
+firmware and Android-data backup/consent. No userdata erase or flash
+authorization follows from this static admission.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
