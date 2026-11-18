@@ -62,6 +62,38 @@ standalone Linux GPU/Plasma boot does not verify these handovers.
    encrypted native first boot. No NFS path, no Plasma installation, no
    `super` repartition or destructive root reconfiguration.
 
+## Verified offline progress, and first-boot input requirement (2026-11-18)
+
+- Native LTE Phosh image, EFI and eight compressed parts passed CI and
+  owner-side SHA-256 verification. Both offline Android BOOT v2 candidates
+  fit the measured 61,865,984-byte BOOT and verified their AVB footers;
+  neither has been physically tested.
+- The measured BOOT partition is /dev/sda12, and userdata is /dev/sda31
+  with 4096-byte sectors. The stock Android BOOT backup is verified.
+  The previously working Linux diagnostic BOOT image is
+  `~/Downloads/SM-T575-Recovery/t575-gpu-BOOT-CANDIDATE.img`,
+  SHA-256 `8225061aa97b72f41f27ffc0119d84f1fd22c0d6b009d5e123b811f1796792f7`.
+- The initial experimental LTE chain archive embedded Wi-Fi-default U-Boot;
+  a dedicated LTE U-Boot configuration is now built for opt-in test builds.
+  **Do not flash any existing chain candidate until the newly built archive
+  and recovery behavior are reviewed.** The LTE uniLoader board still has
+  no watchdog/volume-key fallback hooks, unlike the Wi-Fi variant.
+- **Touch must work before we call Phosh usable.** The common LTE-inherited
+  DTS already declares the HX83102E touchscreen on SPI21, and the packaged
+  kernel config builds `CONFIG_TOUCHSCREEN_HIMAX_HX83112B=m`,
+  `CONFIG_INPUT_EVDEV=y`, and `CONFIG_TOUCHSCREEN_WACOM_W9000=m`.
+  This only proves build configuration: we must inspect Linux dmesg,
+  SPI binding, and physical `/dev/input/event*` touch events first.
+  The Wacom pen is separate from finger touch. Do not claim that Phosh's
+  menus are interactive until fingers actually generate events.
+- U-Boot's bootmenu is a distinct pre-Linux environment and currently uses
+  physical keys through `button-kbd`; it has no HX83102E input driver.
+  Keep volume/power recovery controls. Supporting touch in U-Boot would
+  require a separate SPI touchscreen and menu-input implementation, not
+  a Linux or Phosh setting. Do not delay Linux touch bring-up on U-Boot touch.
+- The read-only Mac diagnostics script `tools/t575-touch-readonly-check.py`
+  examines the running diagnostic console without writing to the tablet.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
@@ -84,11 +116,11 @@ backgrounds or second desktop process).
 
 ## Acceptance
 
-- [ ] Native LTE Duranium full Phosh build passes and is audited.
+- [x] Native LTE Duranium full Phosh build passes CI and SHA-256 integrity checks (physical boot untested).
 - [ ] LTE chainloader compiles and offline BOOT safety/admission passes.
 - [ ] Installer supports exact LTE model, consented userdata erase and
       tested recovery path, without requiring NFS.
-- [ ] Phosh boot + touch + pen + brightness/power run on physical tablet.
+- [ ] Phosh boot + finger touch input (Himax HX83102E) + pen (Wacom) + brightness/power run on physical tablet.
 - [ ] RAM measured under representative idle/desktop workload.
 - [ ] Exclusive keyboard/mouse desktop mode verified.
 - [ ] Coordinated non-gray themes installed and switchable.
