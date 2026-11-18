@@ -255,9 +255,15 @@ Specific code finding from `bootchain/u-boot/`:
   `UFSHCD_QUIRK_BROKEN_OCS_FATAL_ERROR` for Exynos9810, but
   `ufs-uclass.c:ufs_scsi_exec` still unconditionally rejects any
   nonzero OCS without consulting that quirk.
-- Follow-up: build an **LTE-only 8-normal-LUN scan limit** to avoid
-  probing 119 impossible regular LUN numbers, leaving the normal
-  OCS error handling strict, before reconsidering any Exynos quirk.
+- Implemented on the LTE Phosh development branch: an **opt-in
+  LTE-only 8-normal-LUN scan limit** (`UFS_LTE_NORMAL_LUN_SCAN`) to
+  avoid probing 119 impossible regular LUN numbers, leaving the normal
+  OCS error handling strict. Existing Wi-Fi configuration unchanged.
+  The U-Boot menu now includes a compact read-only BOOT-12 /
+  userdata-31 geometry summary; the full partition map is optional.
+  Source and CI gates were committed; **physical effect untested**
+  pending a successful corrected GitHub Actions run and separate
+  BOOT-only test. Do not assume this fixes genuine UFS data errors.
   Separately verify `part start`/`part size` for actual BOOT/userdata
   and successful read of known sectors before attempting EFI handoff.
 
