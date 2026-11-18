@@ -2200,7 +2200,13 @@ int ufshcd_probe(struct udevice *ufs_dev, struct ufs_hba_ops *hba_ops)
 
 	scsi_plat = dev_get_uclass_plat(scsi_dev);
 	scsi_plat->max_id = UFSHCD_MAX_ID;
-	scsi_plat->max_lun = UFS_MAX_LUNS;
+	/* The experimental SM-T575 probes only UFS's 8 regular data LUNs.
+	 * The common 127-LUN scan pointlessly asks non-existent LUNs on
+	 * the real 5-LUN device, generating repeated OCS=7 reports.
+	 * Keep every SCSI/OCS error path unchanged; this is scan scope only.
+	 */
+	scsi_plat->max_lun = IS_ENABLED(CONFIG_UFS_LTE_NORMAL_LUN_SCAN) ?
+			     8 : UFS_MAX_LUNS;
 	scsi_plat->max_bytes_per_req = UFS_MAX_BYTES;
 
 	hba->dev = ufs_dev;
