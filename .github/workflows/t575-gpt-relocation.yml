@@ -1,0 +1,17 @@
+name: SM-T575 offline GPT relocation patch tests
+on:
+  push:
+    paths:
+      - 'native-install/t575-gpt-relocate.py'
+      - 'native-install/test-t575-gpt-relocate.py'
+      - '.github/workflows/t575-gpt-relocation.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify primary/backup GPT transformation and fail-closed cases
+        run: python3 native-install/test-t575-gpt-relocate.py -v
