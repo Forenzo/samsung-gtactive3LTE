@@ -54,6 +54,27 @@ will recover automatically. The observed diagnostic-kernel watchdog is
 running with reset output permitted; do not reprogram its registers
 during exploratory tests.
 
+## Latest inspected LTE chainloader archive (offline-only)
+
+GitHub Actions [run 44283262697](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/44283262697)
+successfully built the updated LTE passive-framebuffer / read-only GPIO
+selection / inspection menu payload at commit
+`af2354e40d6e62cb3011f126d0b9b2223374567b`.
+
+Artifact ZIP locally inspected in an isolated container:
+- GitHub artifact: `t575-lte-phosh-bootchain-UNTESTED` (id 14417963078).
+- Downloaded ZIP SHA-256:
+  `343a813907a9de1f2e84a49165aa6f7931dbc5d39d809b449b5aeb0f0e5f44b0`.
+- ZIP CRC **PASS**; nested tar archive members **PASS**.
+- All five payload SHA-256 values match the nested `MANIFEST`.
+- `uniLoader-chain-gtactive3` SHA-256:
+  `9bc42c2f09606039d3ffd5ae468954cde6d5655877a09c72d78dba6358b0e740`.
+- The actual LTE chain payload contains `samsung-gtactive3lte`,
+  `SM-T575 LTE RESEARCH BOOTCHAIN`, and `bootmenu 30`.
+- This validates provenance and inclusion, **NOT** actual board/video boot,
+  fallback behavior, or a flashable Android BOOT image. The new ZIP must be
+  packaged from the owner's verified stock Samsung BOOT and checked offline.
+
 ## Latest LTE first-stage source adjustments
 
 1. uniLoader `board-gtactive3lte.c` uses a passive `simplefb` on the
