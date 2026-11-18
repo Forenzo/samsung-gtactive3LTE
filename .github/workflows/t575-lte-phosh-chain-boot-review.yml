@@ -13,6 +13,7 @@ on:
       - 'bootchain/u-boot/configs/gtactive3lte_defconfig'
       - 'bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env'
       - 'bootchain/uniLoader/configs/gtactive3lte_chain_defconfig'
+      - 'bootchain/uniLoader/board/samsung/board-gtactive3lte.c'
 
 permissions:
   contents: read
@@ -39,6 +40,10 @@ jobs:
           ! grep -q '^CONFIG_CMD_USB_MASS_STORAGE=y$' bootchain/u-boot/configs/gtactive3lte_defconfig
           ! grep -q '^.*run duranium' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           echo 'PASS: LTE U-Boot defaults to LTE DT and inspection-only menu, no fastboot/USB storage write interface'
+          grep -q '0xca000000' bootchain/uniLoader/board/samsung/board-gtactive3lte.c
+          grep -q 't575_chain_select' bootchain/uniLoader/board/samsung/board-gtactive3lte.c
+          ! grep -qE '^[[:space:]]*\*\([^)]+\)[[:space:]]*=' bootchain/uniLoader/board/samsung/board-gtactive3lte.c
+          echo 'PASS: LTE board source includes S-Boot framebuffer and passive key selection'
           echo 'PASS: existing diagnostic loader remains non-chainload'
       - name: Install cross-build requirements
         run: |
@@ -81,6 +86,11 @@ jobs:
           lte = Path("out/uniLoader-chain-gtactive3").read_bytes()
           assert b"SM-T575 LTE RESEARCH BOOTCHAIN" in lte, "LTE U-Boot menu not embedded"
           assert b"LTE board selection and menu navigation are untested" in lte, "LTE inspection environment missing"
+          # Both identifiers originate from our LTE-specific uniLoader board.
+          assert b"samsung-gtactive3lte" in lte, "LTE uniLoader board name missing"
+          # The passive simplefb prints early uniLoader information into S-Boot's
+          # framebuffer; visual output on physical hardware remains unproven.
+          print("PASS: LTE board string and passive simplefb source reviewed")
           print("PASS: LTE inspection-only U-Boot environment embedded in LTE chainloader")
           print("PASS: isolated LTE chainloader + LTE diagnostic loader compiled")
           print("BOOT/ANDROID/USERDATA WRITES: NONE")
