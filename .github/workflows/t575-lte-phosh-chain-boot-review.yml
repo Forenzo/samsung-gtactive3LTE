@@ -34,168 +34,9 @@ jobs:
           grep -qx 'CONFIG_DEFAULT_DEVICE_TREE="exynos/exynos9810-gtactive3"' bootchain/u-boot/configs/gtactive3lte_defconfig
           grep -qx 'CONFIG_ENV_SOURCE_FILE="gtactive3lte"' bootchain/u-boot/configs/gtactive3lte_defconfig
           grep -q '^bootcmd=echo "SM-T575 LTE RESEARCH BOOTCHAIN' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
-          ! grep -q '^CONFIG_FASTBOOT_FLASH=y
-      - name: Install cross-build requirements
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-            make bc bison flex libssl-dev libelf-dev libgnutls28-dev uuid-dev device-tree-compiler \
-            swig python3-dev python3-setuptools python3-pyelftools cpio kmod patch curl git tar gzip file
-      - name: Build full LTE boot chain and recovery diagnostic loader (NO DEVICE)
-        env:
-          NO_F2FS: '1'
-          JOBS: '4'
-          BRINGUP_LTE_CHAIN_TEST: '1'
-          BRINGUP_EXTRA_DTS_PATCH: ${{ github.workspace }}/patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch
-        run: |
-          set -euo pipefail
-          mkdir -p out
-          ci/bootchain/build out t575-lte-phosh-firstdesktop-1
-      - name: Audit LTE and Wi-Fi loaders
-        run: |
-          set -euo pipefail
-          test -s out/uniLoader-chain-gtactive3
-          test -s out/uniLoader-linux-gtactive3
-          test -s out/uniLoader-chain
-          test -s out/uniLoader-linux
-          test -s out/ramdisk.cpio.gz
-          test -s out/MANIFEST
-          python3 - <<'PY'
-          from pathlib import Path
-          import tarfile
-          p=Path("out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz")
-          assert p.is_file()
-          with tarfile.open(p,"r:gz") as f:
-              names=set(f.getnames())
-          required={"uniLoader-chain-gtactive3","uniLoader-linux-gtactive3",
-                    "uniLoader-chain","uniLoader-linux","ramdisk.cpio.gz","MANIFEST"}
-          assert names == required,(names, required)
-          for name in ("uniLoader-chain-gtactive3","uniLoader-linux-gtactive3"):
-              data=Path("out",name).read_bytes()
-              assert len(data)>4096 and data[56:60]==bytes.fromhex("41524d64"),name
-          # Ensure this binary actually embeds the LTE-only inspection
-          # environment, not the production Wi-Fi boot command.
-          lte = Path("out/uniLoader-chain-gtactive3").read_bytes()
-          assert b"SM-T575 LTE RESEARCH BOOTCHAIN" in lte, "LTE U-Boot menu not embedded"
-          assert b"LTE board selection and menu navigation are untested" in lte, "LTE inspection environment missing"
-          print("PASS: LTE inspection-only U-Boot environment embedded in LTE chainloader")
-          print("PASS: isolated LTE chainloader + LTE diagnostic loader compiled")
-          print("BOOT/ANDROID/USERDATA WRITES: NONE")
-          PY
-      - name: Upload bootchain for offline assembly only
-        uses: actions/upload-artifact@v4
-        with:
-          name: t575-lte-phosh-bootchain-UNTESTED
-          path: |
-            out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz
-            out/MANIFEST
-          retention-days: 14
-          if-no-files-found: error
- bootchain/u-boot/configs/gtactive3lte_defconfig
-          ! grep -q '^CONFIG_FASTBOOT_OEM_RUN=y
-      - name: Install cross-build requirements
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-            make bc bison flex libssl-dev libelf-dev libgnutls28-dev uuid-dev device-tree-compiler \
-            swig python3-dev python3-setuptools python3-pyelftools cpio kmod patch curl git tar gzip file
-      - name: Build full LTE boot chain and recovery diagnostic loader (NO DEVICE)
-        env:
-          NO_F2FS: '1'
-          JOBS: '4'
-          BRINGUP_LTE_CHAIN_TEST: '1'
-          BRINGUP_EXTRA_DTS_PATCH: ${{ github.workspace }}/patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch
-        run: |
-          set -euo pipefail
-          mkdir -p out
-          ci/bootchain/build out t575-lte-phosh-firstdesktop-1
-      - name: Audit LTE and Wi-Fi loaders
-        run: |
-          set -euo pipefail
-          test -s out/uniLoader-chain-gtactive3
-          test -s out/uniLoader-linux-gtactive3
-          test -s out/uniLoader-chain
-          test -s out/uniLoader-linux
-          test -s out/ramdisk.cpio.gz
-          test -s out/MANIFEST
-          python3 - <<'PY'
-          from pathlib import Path
-          import tarfile
-          p=Path("out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz")
-          assert p.is_file()
-          with tarfile.open(p,"r:gz") as f:
-              names=set(f.getnames())
-          required={"uniLoader-chain-gtactive3","uniLoader-linux-gtactive3",
-                    "uniLoader-chain","uniLoader-linux","ramdisk.cpio.gz","MANIFEST"}
-          assert names == required,(names, required)
-          for name in ("uniLoader-chain-gtactive3","uniLoader-linux-gtactive3"):
-              data=Path("out",name).read_bytes()
-              assert len(data)>4096 and data[56:60]==bytes.fromhex("41524d64"),name
-          print("PASS: isolated LTE chainloader + LTE diagnostic loader compiled")
-          print("BOOT/ANDROID/USERDATA WRITES: NONE")
-          PY
-      - name: Upload bootchain for offline assembly only
-        uses: actions/upload-artifact@v4
-        with:
-          name: t575-lte-phosh-bootchain-UNTESTED
-          path: |
-            out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz
-            out/MANIFEST
-          retention-days: 14
-          if-no-files-found: error
- bootchain/u-boot/configs/gtactive3lte_defconfig
-          ! grep -q '^CONFIG_CMD_USB_MASS_STORAGE=y
-      - name: Install cross-build requirements
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-            make bc bison flex libssl-dev libelf-dev libgnutls28-dev uuid-dev device-tree-compiler \
-            swig python3-dev python3-setuptools python3-pyelftools cpio kmod patch curl git tar gzip file
-      - name: Build full LTE boot chain and recovery diagnostic loader (NO DEVICE)
-        env:
-          NO_F2FS: '1'
-          JOBS: '4'
-          BRINGUP_LTE_CHAIN_TEST: '1'
-          BRINGUP_EXTRA_DTS_PATCH: ${{ github.workspace }}/patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch
-        run: |
-          set -euo pipefail
-          mkdir -p out
-          ci/bootchain/build out t575-lte-phosh-firstdesktop-1
-      - name: Audit LTE and Wi-Fi loaders
-        run: |
-          set -euo pipefail
-          test -s out/uniLoader-chain-gtactive3
-          test -s out/uniLoader-linux-gtactive3
-          test -s out/uniLoader-chain
-          test -s out/uniLoader-linux
-          test -s out/ramdisk.cpio.gz
-          test -s out/MANIFEST
-          python3 - <<'PY'
-          from pathlib import Path
-          import tarfile
-          p=Path("out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz")
-          assert p.is_file()
-          with tarfile.open(p,"r:gz") as f:
-              names=set(f.getnames())
-          required={"uniLoader-chain-gtactive3","uniLoader-linux-gtactive3",
-                    "uniLoader-chain","uniLoader-linux","ramdisk.cpio.gz","MANIFEST"}
-          assert names == required,(names, required)
-          for name in ("uniLoader-chain-gtactive3","uniLoader-linux-gtactive3"):
-              data=Path("out",name).read_bytes()
-              assert len(data)>4096 and data[56:60]==bytes.fromhex("41524d64"),name
-          print("PASS: isolated LTE chainloader + LTE diagnostic loader compiled")
-          print("BOOT/ANDROID/USERDATA WRITES: NONE")
-          PY
-      - name: Upload bootchain for offline assembly only
-        uses: actions/upload-artifact@v4
-        with:
-          name: t575-lte-phosh-bootchain-UNTESTED
-          path: |
-            out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz
-            out/MANIFEST
-          retention-days: 14
-          if-no-files-found: error
- bootchain/u-boot/configs/gtactive3lte_defconfig
+          ! grep -q '^CONFIG_FASTBOOT_FLASH=y$' bootchain/u-boot/configs/gtactive3lte_defconfig
+          ! grep -q '^CONFIG_FASTBOOT_OEM_RUN=y$' bootchain/u-boot/configs/gtactive3lte_defconfig
+          ! grep -q '^CONFIG_CMD_USB_MASS_STORAGE=y$' bootchain/u-boot/configs/gtactive3lte_defconfig
           ! grep -q '^.*run duranium' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           echo 'PASS: LTE U-Boot defaults to LTE DT and inspection-only menu, no fastboot/USB storage write interface'
           echo 'PASS: existing diagnostic loader remains non-chainload'
@@ -237,6 +78,10 @@ jobs:
           for name in ("uniLoader-chain-gtactive3","uniLoader-linux-gtactive3"):
               data=Path("out",name).read_bytes()
               assert len(data)>4096 and data[56:60]==bytes.fromhex("41524d64"),name
+          lte = Path("out/uniLoader-chain-gtactive3").read_bytes()
+          assert b"SM-T575 LTE RESEARCH BOOTCHAIN" in lte, "LTE U-Boot menu not embedded"
+          assert b"LTE board selection and menu navigation are untested" in lte, "LTE inspection environment missing"
+          print("PASS: LTE inspection-only U-Boot environment embedded in LTE chainloader")
           print("PASS: isolated LTE chainloader + LTE diagnostic loader compiled")
           print("BOOT/ANDROID/USERDATA WRITES: NONE")
           PY
