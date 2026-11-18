@@ -61,7 +61,7 @@ jobs:
           grep -q 'test "${t575_boot_sectors}" = "3b00"' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q 'scsi read ${kernel_addr_r} ${t575_boot_lba} 1' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q 'md.b ${kernel_addr_r} 0x10' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
-          grep -q '^CONFIG_CMD_MEMORY=y
+          grep -qx 'CONFIG_CMD_MEMORY=y' bootchain/u-boot/configs/gtactive3lte_defconfig
           grep -q '^lte_phosh_boot=' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q 'test "${board}" != gtactive3' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q 'part size scsi 0 ${ud_part}' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
