@@ -230,6 +230,40 @@ or modifying userdata. If the RAM log has not survived the reset,
 add a *bounded* single-screen UFS/partition summary to a future
 experimental menu build; don't assume an earlier image already has it.
 
+## LTE U-Boot physical UFS log: repeated OCS 7 (2026-11-18)
+
+The owner recovered the persisted U-Boot RAM console using read-only
+`ulog` from diagnostic Linux on the real SM-T575. The log contains
+`exynos-ufshc ufs@11120000: [RX, TX]: gear=[3, 3],
+lane[2, 2], pwr[FAST MODE, FAST MODE], rate = 2`,
+many repetitions of `OCS error from controller = 7`, and
+`Partition Map for scsi device 0 -- Partition Type: EFI`.
+
+**Do not consider this evidence of fully reliable U-Boot sector reads or
+native EFI boot.** UFS OCS 0x7 is a fatal command status; on Exynos,
+a documented quirk can create abnormal OCS 7 responses, but it requires
+examination of the UPIU result, not blind error suppression.
+
+Specific code finding from `bootchain/u-boot/`:
+- `drivers/scsi/scsi.c:scsi_scan_dev` attempts **all** LUNs up to
+  `scsi_plat->max_lun`, and `ufs-uclass.c` sets it to
+  `UFS_MAX_LUNS=0x7f` (127 probes). The real tablet's Linux enumerates
+  five UFS devices. Unavailable-LUN INQUIRY commands plausibly explain
+  a large fraction of the repeated OCS errors while LUN 0 succeeds.
+  This is an inference pending per-command error attribution.
+- `drivers/ufs/ufs-exynos.c` already declares
+  `UFSHCD_QUIRK_BROKEN_OCS_FATAL_ERROR` for Exynos9810, but
+  `ufs-uclass.c:ufs_scsi_exec` still unconditionally rejects any
+  nonzero OCS without consulting that quirk.
+- Follow-up: build an **LTE-only 8-normal-LUN scan limit** to avoid
+  probing 119 impossible regular LUN numbers, leaving the normal
+  OCS error handling strict, before reconsidering any Exynos quirk.
+  Separately verify `part start`/`part size` for actual BOOT/userdata
+  and successful read of known sectors before attempting EFI handoff.
+
+Do not erase userdata, and do not convert OCS 7 into unconditional
+success. These are command-level errors, not proof of damaged flash.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
