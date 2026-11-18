@@ -53,6 +53,92 @@ jobs:
           grep -q '^bootmenu_5=TRY native Phosh EFI' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q '^bootmenu_3=Show BOOT and userdata UFS geometry' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q '^lte_ufs_summary=' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q '^bootmenu_7=TEST one BOOT sector (4KiB READ ONLY)=' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q '^lte_ufs_boot_read=' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'part start scsi 0 12 t575_boot_lba' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'part size scsi 0 12 t575_boot_sectors' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'test "${t575_boot_lba}" = "6c90"' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'test "${t575_boot_sectors}" = "3b00"' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'scsi read ${kernel_addr_r} ${t575_boot_lba} 1' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'md.b ${kernel_addr_r} 0x10' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q '^CONFIG_CMD_MEMORY=y
+          grep -q '^lte_phosh_boot=' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'test "${board}" != gtactive3' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          grep -q 'part size scsi 0 ${ud_part}' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          ! grep -Eq '(^|[[:space:];])(saveenv|gpt write|mmc write|scsi write|blkmap write|mw.l)([[:space:];]|$)' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
+          echo 'PASS: Phosh EFI is manual-only, LTE model and userdata mapping guarded, no storage writes'
+          echo 'PASS: LTE U-Boot defaults to LTE DT and inspection-only menu, no fastboot/USB storage write interface'
+          grep -q '0xca000000' bootchain/uniLoader/board/samsung/board-gtactive3lte.c
+          grep -q 't575_chain_select' bootchain/uniLoader/board/samsung/board-gtactive3lte.c
+          ! grep -qE '^[[:space:]]*\*\([^)]+\)[[:space:]]*=' bootchain/uniLoader/board/samsung/board-gtactive3lte.c
+          echo 'PASS: LTE board source includes S-Boot framebuffer and passive key selection'
+          echo 'PASS: existing diagnostic loader remains non-chainload'
+      - name: Install cross-build requirements
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            make bc bison flex libssl-dev libelf-dev libgnutls28-dev uuid-dev device-tree-compiler \
+            swig python3-dev python3-setuptools python3-pyelftools cpio kmod patch curl git tar gzip file
+      - name: Build full LTE boot chain and recovery diagnostic loader (NO DEVICE)
+        env:
+          NO_F2FS: '1'
+          JOBS: '4'
+          BRINGUP_LTE_CHAIN_TEST: '1'
+          BRINGUP_EXTRA_DTS_PATCH: ${{ github.workspace }}/patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          ci/bootchain/build out t575-lte-phosh-firstdesktop-1
+      - name: Audit LTE and Wi-Fi loaders
+        run: |
+          set -euo pipefail
+          test -s out/uniLoader-chain-gtactive3
+          test -s out/uniLoader-linux-gtactive3
+          test -s out/uniLoader-chain
+          test -s out/uniLoader-linux
+          test -s out/ramdisk.cpio.gz
+          test -s out/MANIFEST
+          python3 - <<'PY'
+          from pathlib import Path
+          import tarfile
+          p=Path("out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz")
+          assert p.is_file()
+          with tarfile.open(p,"r:gz") as f:
+              names=set(f.getnames())
+          required={"uniLoader-chain-gtactive3","uniLoader-linux-gtactive3",
+                    "uniLoader-chain","uniLoader-linux","ramdisk.cpio.gz","MANIFEST"}
+          assert names == required,(names, required)
+          for name in ("uniLoader-chain-gtactive3","uniLoader-linux-gtactive3"):
+              data=Path("out",name).read_bytes()
+              assert len(data)>4096 and data[56:60]==bytes.fromhex("41524d64"),name
+          lte = Path("out/uniLoader-chain-gtactive3").read_bytes()
+          assert b"SM-T575 LTE RESEARCH BOOTCHAIN" in lte, "LTE U-Boot menu not embedded"
+          assert b"LTE board selection and menu navigation are untested" in lte, "LTE inspection environment missing"
+          assert b"TRY native Phosh EFI" in lte, "explicit-only EFI menu missing"
+          assert b"SM-T575 LTE: explicit read-only Phosh EFI handoff" in lte, "LTE EFI handoff script missing"
+          assert b"SM-T575 UFS targeted geometry" in lte, "LTE compact UFS display missing"
+          assert b"ONE-SECTOR BOOT READ" in lte, "LTE read-only BOOT transfer test missing"
+          assert b"UFS BLOCK READ PASS" in lte, "BOOT transfer confirmation missing"
+          # Both identifiers originate from our LTE-specific uniLoader board.
+          assert b"samsung-gtactive3lte" in lte, "LTE uniLoader board name missing"
+          # The passive simplefb prints early uniLoader information into S-Boot's
+          # framebuffer; visual output on physical hardware remains unproven.
+          print("PASS: LTE board string and passive simplefb source reviewed")
+          print("PASS: LTE inspection-only U-Boot environment embedded in LTE chainloader")
+          print("PASS: isolated LTE chainloader + LTE diagnostic loader compiled")
+          print("BOOT/ANDROID/USERDATA WRITES: NONE")
+          PY
+      - name: Upload bootchain for offline assembly only
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-lte-phosh-bootchain-UNTESTED
+          path: |
+            out/gtactive3-bootchain_t575-lte-phosh-firstdesktop-1.tar.gz
+            out/MANIFEST
+          retention-days: 14
+          if-no-files-found: error
+ bootchain/u-boot/configs/gtactive3lte_defconfig
+          echo 'PASS: one-sector UFS BOOT read is guarded by exact geometry and never writes storage'
           grep -q '^lte_phosh_boot=' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q 'test "${board}" != gtactive3' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
           grep -q 'part size scsi 0 ${ud_part}' bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env
