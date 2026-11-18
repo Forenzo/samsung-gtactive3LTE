@@ -105,9 +105,12 @@ The experimental LTE-specific U-Boot configuration now has:
   inside the experimental LTE uniLoader chainloader.
 
 **The LTE uniLoader board still has no watchdog or Volume Down fallback
-hooks**. The USB diagnostic's `peek` commands can compare GPIO key state
-and watchdog registers via `tools/t575-lte-keys-watchdog-readonly.py`.
-These reads are necessary observations, NOT proof that a watchdog-driven
+hooks**. A physical 2026-11-18 key test was stopped when prolonged Volume Down
+sent the running LTE diagnostic tablet into Samsung Download Mode. **Do not
+repeat prolonged Volume Down holding to sample GPIOs.** The updated
+`tools/t575-lte-keys-watchdog-readonly.py` is baseline-only (no key hold),
+and can inspect current registers with `peek` commands after Linux boots.
+These reads are observations, NOT proof that a watchdog-driven
 recovery will work. The only presently established recovery is manual
 Samsung Download Mode + Heimdall restoration of a saved BOOT image.
 
