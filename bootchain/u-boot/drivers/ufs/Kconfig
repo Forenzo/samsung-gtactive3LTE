@@ -8,6 +8,17 @@ config UFS
 	  This selects support for Universal Flash Subsystem (UFS).
 	  Say Y here if you want UFS Support.
 
+config UFS_LTE_NORMAL_LUN_SCAN
+	bool "Limit experimental Exynos9810 LTE UFS SCSI scans to 8 regular LUNs"
+	depends on UFS && UFS_EXYNOS
+	help
+	  UFS normal data LUN numbers are 0-7. The SM-T575's experimental
+	  U-Boot currently probes 127 LUN numbers during scsi scan, causing
+	  a large burst of OCS 7 failures while probing absent LUNs.
+	  Use only the normal range in the LTE research build and leave
+	  the common Wi-Fi and other UFS configurations unchanged.
+	  This does not ignore command failures or change any I/O data.
+
 config UFS_AMD_VERSAL2
 	bool "AMD Versal Gen 2 UFS controller platform driver"
 	depends on UFS && ZYNQMP_FIRMWARE
