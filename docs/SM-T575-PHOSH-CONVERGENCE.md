@@ -270,6 +270,51 @@ Specific code finding from `bootchain/u-boot/`:
 Do not erase userdata, and do not convert OCS 7 into unconditional
 success. These are command-level errors, not proof of damaged flash.
 
+## Eight-LUN UFS hardware retest: read-only partition geometry PASS, OCS 7 persists
+
+After flashing the BOOT-only image assembled from corrected LTE bootchain
+CI run [44293467052](https://github.com/Forenzo/samsung-gtactive3LTE/actions/runs/44293467052),
+the owner confirmed U-Boot started and ran the **targeted read-only UFS
+inspection twice**. The post-reboot `ulog` returned the exact output:
+
+```text
+SM-T575 UFS targeted geometry (READ ONLY)
+exynos-ufshc ufs@11120000: Power mode changed to : FAST series_B G_3 L_2
+exynos-ufshc ufs@11120000: [RX, TX]: gear=[3, 3], lane[2, 2], pwr[FAST MODE, FAST MODE], rate = 2
+OCS error from controller = 7 (8 occurrences)
+t575_boot_lba=6c90
+t575_boot_sectors=3b00
+t575_data_lba=1fa700
+t575_data_sectors=ce9c00
+
+SM-T575 UFS targeted geometry (READ ONLY)
+OCS error from controller = 7 (3 occurrences)
+t575_boot_lba=6c90
+t575_boot_sectors=3b00
+t575_data_lba=1fa700
+t575_data_sectors=ce9c00
+```
+
+**PASS:** Both repeated U-Boot GPT queries report matching sector starts
+and sizes for BOOT=12 and userdata=31 on physical LTE SM-T575. For
+4096-byte blocks, `0x3b00` and `0xce9c00` are respectively
+61,865,984 B and 55,461,281,792 B. The new eight-LUN scan build was
+accepted by S-Boot/uniLoader/U-Boot and timed diagnostic Linux fallback
+remained available to supply `ulog`.
+
+**OPEN:** 11 total OCS=7 errors (8 first scan and 3 second) indicate the
+eight-LUN scan limit did NOT eliminate failures. The exact failed SCSI
+commands/LUNs and their response-UPIU status have not yet been
+correlated. The source `ufs-uclass.c:ufs_scsi_exec` reports/rejects all
+non-OCS_SUCCESS completions; Exynos9810 driver declares
+`UFSHCD_QUIRK_BROKEN_OCS_FATAL_ERROR`, but this routine does not use it.
+A correct fix must record failing LUN/opcode and validate the response,
+**not** blanket-ignore OCS errors.
+
+**NEXT gate:** demonstrate actual repeatable read-only UFS data I/O
+(ideally known BOOT magic or other bounded verified read) before relying
+on U-Boot to load the Phosh EFI image. Do not erase userdata yet.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
