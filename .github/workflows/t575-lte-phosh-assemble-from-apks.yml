@@ -1,0 +1,156 @@
+# Image-only retry. Reuses already compiled SM-T575 LTE packages from an
+# independently successful job; never rebuilds the kernel and never flashes.
+name: t575-lte-phosh-assemble-from-apks
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Successful LTE APK run with downloadable compiled package artifact'
+        required: true
+        default: '44186618054'
+        type: string
+  push:
+    branches:
+      - work/t575-phosh-convergence
+    paths:
+      - '.github/workflows/t575-lte-phosh-assemble-from-apks.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: t575-lte-phosh-assemble-from-apks
+  cancel-in-progress: true
+
+jobs:
+  assemble-from-saved-apks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare ARM64 image assembler (no kernel rebuild)
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends \
+            qemu-user-static binfmt-support erofs-utils zstd gnupg
+          ls /proc/sys/fs/binfmt_misc/ | grep -i aarch64
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          df -h /
+
+      - name: Recreate the patched upstream mkosi and pmaports source trees
+        run: ci/prepare
+
+      - name: Download already compiled LTE kernel/device packages from successful run
+        uses: actions/download-artifact@v4
+        with:
+          name: t575-lte-phosh-compiled-apks-UNTESTED
+          path: pkgs
+          run-id: ${{ inputs.source_run_id || '44186618054' }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify APK contents, signatures manifest, and upstream source consistency
+        run: |
+          set -euo pipefail
+          python3 ci/t575-phosh-preflight.py source
+          python3 ci/t575-phosh-preflight.py packages pkgs
+          (cd pkgs && sha256sum -c SHA256SUMS)
+          printf 'DURANIUM_UPSTREAM=%s\nPMAPORTS_UPSTREAM=%s\n' \
+            "$(git -C work/duranium-build rev-parse origin/main)" \
+            "$(git -C work/pmaports rev-parse HEAD)" > expected-upstream-revisions
+          cmp pkgs/UPSTREAM-REVISIONS expected-upstream-revisions
+          echo "PASS: no upstream revision drift between compiled packages and image assembly"
+
+      - name: Set up the same Docker-compatible mkosi launcher
+        run: |
+          set -euo pipefail
+          mkdir -p ci-build-compat ci-root/build
+          cat > ci-build-compat/podman <<'SH'
+          #!/bin/sh
+          exec /usr/bin/docker "$@"
+          SH
+          chmod +x ci-build-compat/podman
+          docker info >/dev/null
+          echo "PASS: Docker-backed Podman command available for mkosi"
+
+      - name: Assemble a complete, unpublished Phosh desktop system for SM-T575
+        env:
+          DEVICE: samsung-gtactive3
+          UI: phosh
+          CHANNEL: dev
+        run: |
+          set -euo pipefail
+          # The upstream mkosi OCI image has a non-root default user.
+          # In Docker on GitHub-hosted runners, its bind-mounted /workspace
+          # is runner-owned (different uid), leading to PermissionError
+          # creating mkosi-keyring-*. In this disposable CI container, run
+          # the assembler as root, as the upstream Podman user namespace
+          # ordinarily permits, and keep signed package validation enabled.
+          export PATH="$PWD/ci-build-compat:$PATH"
+          # Fast OCI smoke validated writable workspace plus unshare user/mount
+          # namespaces with SYS_ADMIN and an unconfined AppArmor profile.
+          # Give these only to the disposable mkosi image container; the
+          # package-builder Docker container keeps its normal restrictions.
+          # Avoid --privileged: it unnecessarily grants many more powers.
+          export MKOSI_CONTAINER_ARGS="${MKOSI_CONTAINER_ARGS:-} --user=0:0 --cap-add=SYS_ADMIN --security-opt apparmor=unconfined"
+          # Keep source checked out and output directory writable.
+          chmod u+rwx work/duranium-build
+          ln -sfn "$PWD/work/pmaports" work/duranium-build/pmaports
+          echo '26111790' > work/duranium-build/mkosi.version
+          GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
+            SKIP_APKS=1 FRESH=1 \
+            GTA3_UPDATE_BASE="$(GITHUB_REPOSITORY="$GITHUB_REPOSITORY" scripts/config get update.base)" \
+            GTA3_CHANNEL_FILE="$(scripts/config get variants.gtactive3.channel_file)" \
+            GTA3_IMAGE_ID=samsung-gtactive3-lte GTA3_LEGACY_IMAGE_IDS='' \
+            sh work/duranium-build/contrib/samsung-gtactive3/build-image.sh --profile=compressed
+          ls -lh work/duranium-build/mkosi.output/*/
+
+      - name: Make mkosi output readable by the unprivileged runner
+        if: always()
+        run: |
+          set -euo pipefail
+          for p in work/duranium-build/mkosi.output work/duranium-build/mkosi.cache work/duranium-build/mkosi.pkgcache; do
+            if [ -e "$p" ]; then
+              sudo chown -R "$(id -u):$(id -g)" "$p"
+            fi
+          done
+          echo 'PASS: any generated images are accessible for validation and upload'
+
+      - name: Check complete image, identity and Phosh session
+        run: |
+          set -euo pipefail
+          OUT=work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge
+          TAG=samsung-gtactive3-lte_phosh_edge-dev
+          python3 ci/t575-phosh-preflight.py image "$OUT"
+          ci/check-image "$OUT" 26111790 dev "$TAG" gtactive3
+          (
+            cd "$OUT"
+            for file in *.raw.zst; do
+              test -s "$file"
+              zstd --test -q "$file"
+            done
+            sha256sum -- *.raw.zst *.efi > SHA256SUMS
+          )
+          echo 'PASS: compressed image integrity, UKI, upstream signing key and SHA256 manifest'
+          test -n "$(find "$OUT" -maxdepth 1 -name '*.raw.zst' -print -quit)"
+          echo 'PASS: SM-T575 Phosh compressed full OS image'
+          echo 'UNTESTED: boot chain, first boot, desktop render on physical LTE'
+          echo 'NO FLASHING / NO WRITES TO TABLET'
+          echo 'INSTALLATION WOULD ERASE ANDROID USERDATA; BOOT BACKUP IS NOT A FULL DATA BACKUP'
+
+      - name: Upload complete LTE Phosh image for owner review
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-lte-phosh-full-desktop-UNTESTED
+          path: |
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.raw.zst
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.efi
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.sha256
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
