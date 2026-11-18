@@ -24,10 +24,16 @@ Already committed in this Phosh branch:
 - The earlier lightweight NFS userspace build is NOT the selected install
   method. It remains in Git history for reference only.
 
-**Not yet proven** on the physical SM-T575: the complete LTE U-Boot chain,
-systemd-boot, signed-image acceptance, native Phosh encrypted first boot,
-and an end-to-end *non-wiping recovery after chain failure*. Successful
-standalone Linux GPU/Plasma boot does not verify these handovers.
+**Proven on physical SM-T575 (2026-11-18):** the S-Boot -> LTE
+uniLoader -> U-Boot inspection-menu handoff, readable framebuffer, volume-key
+navigation, inactivity-triggered warm reset, and return to a responding
+diagnostic Linux 7.3.0 USB console. See
+[the first LTE hardware handoff log](SM-T575-FIRST-LTE-HANDOFF-2026-11-18.md).
+
+**Not yet proven:** the native LTE U-Boot -> EFI/systemd-boot handoff,
+signed-image acceptance, Phosh encrypted first boot, touch or pen events,
+watchdog recovery from an actual hang, and recovery of Android userdata.
+The timed warm-reset fallback is not the same as tested watchdog recovery.
 
 ## Before writing to userdata or BOOT
 
@@ -106,8 +112,8 @@ The experimental LTE-specific U-Boot configuration now has:
 - an Actions gate proving that this LTE environment is actually embedded
   inside the experimental LTE uniLoader chainloader.
 
-**The LTE uniLoader board still has no watchdog or Volume Down fallback
-hooks**. In the 2026-11-18 physical key test, GPIO GPA0_DAT
+**The LTE uniLoader board has a read-only Volume Down/reset-status
+selection hook but no watchdog-arm or automatic hung-boot recovery hook**. In the 2026-11-18 physical key test, GPIO GPA0_DAT
 (0x14050024) changed from 0x0000003e (all keys released) to 0x0000002e
 (Volume Down pressed): bit 4 (0x10) cleared, consistent with active-low
 Volume Down on this T575. During the subsequent Volume Up measurement, the
@@ -150,7 +156,7 @@ backgrounds or second desktop process).
 ## Acceptance
 
 - [x] Native LTE Duranium full Phosh build passes CI and SHA-256 integrity checks (physical boot untested).
-- [ ] LTE chainloader compiles and offline BOOT safety/admission passes.
+- [x] LTE chainloader compiled, offline BOOT admission passed, and physical U-Boot menu + timed warm-reset return to diagnostic Linux confirmed.
 - [ ] Installer supports exact LTE model, consented userdata erase and
       tested recovery path, without requiring NFS.
 - [ ] Phosh boot + finger touch input (Himax HX83102E) + pen (Wacom) + brightness/power run on physical tablet.
@@ -158,4 +164,6 @@ backgrounds or second desktop process).
 - [ ] Exclusive keyboard/mouse desktop mode verified.
 - [ ] Coordinated non-gray themes installed and switchable.
 
-Status is **build/review, not ready to flash**.
+Status: **LTE U-Boot handoff and timed diagnostic return physically verified;
+native Phosh installation remains blocked pending offline image geometry and
+reviewed LTE-specific installer/recovery gates.**
