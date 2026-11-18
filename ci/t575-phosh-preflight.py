@@ -70,6 +70,23 @@ def source():
     patch = ROOT / "pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch"
     check("t575-gpu-first-desktop.patch" in kernel and patch.is_file(),
           "LTE GPU workaround is included in the kernel package build")
+    # An accessible Phosh UI requires finger input separately from the S Pen.
+    # This is a source/packaging gate, NOT proof that the SPI controller
+    # successfully probes or generates touch events on the physical tablet.
+    kconfig = (ROOT / "pmos/aports/device/testing/linux-postmarketos-exynos9810"
+               / "config-postmarketos-exynos9810.aarch64").read_text()
+    check("CONFIG_TOUCHSCREEN_HIMAX_HX83112B=m" in kconfig and
+          "CONFIG_INPUT_EVDEV=y" in kconfig,
+          "Himax HX83102E finger-touch module and evdev input are enabled")
+    check("CONFIG_TOUCHSCREEN_WACOM_W9000=m" in kconfig,
+          "Wacom pen input is enabled separately from finger touch")
+    tree_split = (ROOT / "patches/linux/"
+                  "0153-arm64-dts-exynos9810-gtactive3-split-into-common-and.patch").read_text()
+    check('compatible = "himax,hx83102e"' in tree_split and
+          "touchscreen@0" in tree_split and
+          "&spi_21" in tree_split and
+          '#include "exynos9810-gtactive3-common.dtsi"' in tree_split,
+          "LTE device tree inherits the common HX83102E SPI21 touchscreen")
     diffs = [x for x in patch.read_text().splitlines() if x.startswith("diff --git ")]
     check(diffs == ["diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts"],
           "GPU DT patch is restricted to the LTE device tree")
