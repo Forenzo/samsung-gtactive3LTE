@@ -42,8 +42,10 @@ standalone Linux GPU/Plasma boot does not verify these handovers.
 3. Obtain and verify final CI artifacts: LTE native `.raw.zst`, LTE
    chainloader + diagnostic loader and manifest. Require explicit LTE
    board/DTB select and offline BOOT v2 size/AVB/PIT admission.
-4. Ensure a real recovery route: rooted Android BOOT restore has already
-   worked; Duranium data cannot be undone simply by reflashing BOOT.
+4. Ensure a real recovery route: previous Heimdall BOOT-only flashing of
+   diagnostic Linux worked, but restoration of rooted Android BOOT has
+   NOT yet been independently tested. Duranium data cannot be undone
+   simply by reflashing BOOT.
    A clean Android reset/restore procedure must account for Samsung
    KnoxGuard. EFS, SEC_EFS, PRISM, VBMETA, bootloader, PARAM, DTBO and
    unrelated partitions are never write targets.
