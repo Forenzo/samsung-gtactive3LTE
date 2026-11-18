@@ -31,6 +31,29 @@ owner decision to accept a BOOT-only experimental test.
   Verification does not imply first boot, correct FDT handover, or functioning
   touch and pen.
 
+## Read-only PMU/watchdog snapshot (owner, 2026-11-18)
+
+Physical SM-T575, running the known-working diagnostic Linux, with
+physical keys released. All readings are from USB IPv6 diagnostic
+`peek` commands; no register writes or reset attempt were performed.
+
+| Address | Register | Value | Narrow observation |
+|---|---|---|---|
+| `0x14050024` | GPA0_DAT | `0x0000003e` | buttons released |
+| `0x14060404` | PMU RST_STAT | `0x00010000` | cluster-0 WDT reset bit 24 clear |
+| `0x14060408` | PMU WDT_DISABLE | `0xfeffffff` | bit 24 clear (reset not disabled by this mask) |
+| `0x1406040c` | PMU WDT_MASK_RESET | `0xfeffffff` | bit 24 clear (reset not masked by this register) |
+| `0x10050000` | CL0 WDT WTCON | `0x00005c39` | enable (bit 5) and reset enable (bit 0) both set |
+| `0x10050008` | CL0 WDT WTCNT | `0x0000f827` | readable single counter value; no movement observed |
+
+This supports the LTE uniLoader source's RST_STAT bit-24 test not
+misidentifying an initial watchdog reset **at this sampled moment**. It
+does not prove watchdog reset actually fires, the reset reason survives
+S-Boot, the warm-reset handoff record persists, or an early U-Boot hang
+will recover automatically. The observed diagnostic-kernel watchdog is
+running with reset output permitted; do not reprogram its registers
+during exploratory tests.
+
 ## Latest LTE first-stage source adjustments
 
 1. uniLoader `board-gtactive3lte.c` uses a passive `simplefb` on the
