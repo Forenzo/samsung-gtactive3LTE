@@ -62,6 +62,32 @@ def packet(sock, operation, offset, data):
     response(sock, data)
 
 
+def verify_image_sha256(image):
+    checksum = Path(str(image) + ".sha256")
+    if not checksum.is_file():
+        raise ValueError("missing image SHA256 manifest")
+
+    fields = checksum.read_text().strip().split()
+    if len(fields) != 2:
+        raise ValueError("invalid image SHA256 manifest")
+
+    expected, filename = fields
+    if (len(expected) != 64 or
+            any(c not in "0123456789abcdef" for c in expected) or
+            filename.lstrip("*") not in (str(image), image.name)):
+        raise ValueError("unexpected image checksum entry")
+
+    digest = hashlib.sha256()
+    with image.open("rb") as f:
+        while block := f.read(4 * 1024 * 1024):
+            digest.update(block)
+
+    if digest.hexdigest() != expected:
+        raise ValueError("IMAGE SHA256 MISMATCH: refusing transfer")
+
+    print("PASS: complete image SHA256 verified", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--image', type=Path, required=True)
@@ -72,6 +98,7 @@ def main():
     ap.add_argument('--interface', default='en7')
     args = ap.parse_args()
     patch_data = validate(args.image, args.patches)
+    verify_image_sha256(args.image)
     print('PASS: exact release and four checksummed GPT relocation patches', flush=True)
     if not args.apply:
         print('DRY RUN PASS: no tablet connection; no userdata writes')
