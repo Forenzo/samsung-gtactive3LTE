@@ -1,0 +1,41 @@
+# Mac-side preinstallation admission unit gate. Never contacts or writes a tablet.
+name: t575-native-phosh-macos-admission
+
+on:
+  push:
+    branches:
+      - work/t575-phosh-convergence
+    paths:
+      - 'tools/t575-native-phosh-macos-preflight.py'
+      - '.github/workflows/t575-native-phosh-macos-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-admission-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python compile and read-only interface contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/t575-native-phosh-macos-preflight.py
+          python3 tools/t575-native-phosh-macos-preflight.py --help >/tmp/t575-help.txt
+          grep -q -- '--offline-only' /tmp/t575-help.txt
+          ! grep -qE -- '--apply|--flash|--write|--erase' /tmp/t575-help.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tools/t575-native-phosh-macos-preflight.py').read_text()
+          assert 'cat ' in p and 'socket.AF_INET6' in p
+          assert 'EXPECTED_STOCK' in p and 'EXPECTED_DIAG' in p
+          assert 'BOOT_BYTES = 61_865_984' in p
+          assert 'USERDATA_BYTES = 55_461_281_792' in p
+          assert 'No --apply/--write mode exists' in p
+          assert 'subprocess.Popen([zstd, "-dcq"' in p
+          forbidden = ('s.sendall(b"write ', 's.sendall(b"poke ',
+                       'heimdall flash', 'discard /dev/', 'dd of=/dev/')
+          assert not any(x in p for x in forbidden)
+          print("PASS: parser/CLI compiled; no device-write option exists")
+          PY
