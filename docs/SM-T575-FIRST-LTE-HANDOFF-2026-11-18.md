@@ -72,6 +72,36 @@ remains experimental; retain the verified diagnostic BOOT image and manual
 Download Mode / Heimdall rollback in case the reset reenters the menu
 or hangs. Avoid prolonged volume-key holds.
 
+## First timed LTE U-Boot recovery to diagnostic Linux: PASS
+
+After photographing the working LTE U-Boot inspection menu, the owner
+reported that the tablet **restarted by itself following inactivity**.
+A subsequently run Mac-side IPv6 TCP 23 console request
+`cat /proc/version` succeeded and returned:
+
+```text
+Linux version 7.3.0 (runner@runnervm8axu0) (aarch64-linux-gnu-gcc
+(Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, GNU ld (GNU Binutils for
+Ubuntu) 2.42) #2 SMP PREEMPT Wed Nov 18 10:18:18 UTC 2026
+```
+
+The diagnostic console still displays the inherited static greeting
+`SM-T570 mainline bring-up console`, but the tested hardware is SM-T575.
+
+**Physically proven on SM-T575:** first LTE S-Boot -> uniLoader ->
+U-Boot handoff, readable inspection menu, hardware-button navigation,
+inactivity-triggered warm restart, embedded diagnostic Linux boot and
+host-accessible USB/IP console afterward. The observed return is
+consistent with the recorded `CHAIN_STAGE_JUMP` / `CHAIN_R_CHAIN_DIED`
+fallback mechanism but the exact internal branch was not independently
+read back after the reset.
+
+**Still unproven:** automatic recovery from an actual frozen U-Boot,
+cluster-0 watchdog timeout, native userdata image installation,
+U-Boot EFI/systemd-boot handoff, Phosh first boot, finger touch and
+Wacom S Pen. Do NOT generalize successful timed fallback into complete
+watchdog protection, and do NOT wipe userdata solely based on this test.
+
 ## Read-only PMU/watchdog snapshot (owner, 2026-11-18)
 
 Physical SM-T575, running the known-working diagnostic Linux, with
