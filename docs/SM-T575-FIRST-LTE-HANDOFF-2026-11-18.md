@@ -18,9 +18,11 @@ owner decision to accept a BOOT-only experimental test.
 - Last known-working diagnostic GPU BOOT:
   `~/Downloads/SM-T575-Recovery/t575-gpu-BOOT-CANDIDATE.img`:
   SHA-256 `8225061aa97b72f41f27ffc0119d84f1fd22c0d6b009d5e123b811f1796792f7`.
-- Manual Samsung Download Mode + Heimdall v2.2.2 BOOT-only restoration of
-  stock Android has worked. The owner has also recovered to diagnostic Linux
-  after an accidental Download Mode entry without writing partitions.
+- Heimdall v2.2.2 BOOT-only flashing of an experimental diagnostic Linux
+  image has succeeded. A later accidental Download Mode exit returned to
+  the existing diagnostic image **without** a partition write. **Actual
+  stock rooted Android BOOT restoration has NOT been demonstrated.** The
+  verified original Android BOOT is an archived option, not a tested recovery.
 - With physical keys released, GPIO GPA0_DAT `0x14050024` read `0x3e`.
   Pressing Volume Down read `0x2e` (active-low bit 4). A long hold of
   volume keys interrupted the USB diagnostic by entering Download Mode;
@@ -112,9 +114,12 @@ Artifact ZIP locally inspected in an isolated container:
 ## If first boot hangs / panel stays dark
 
 Manual recovery takes precedence over speculative watchdog commands:
-enter Samsung Download Mode with the previously proven physical recovery
-method, reconnect the Mac and use **only** the verified saved BOOT image
-through the known Heimdall BOOT-only procedure. Start a fresh Heimdall
+enter Samsung Download Mode with the previously used physical recovery
+method, reconnect the Mac and prefer the **previously boot-tested GPU
+Linux diagnostic BOOT** for BOOT-only restoration. Heimdall has previously
+flashed a diagnostic image successfully; this rollback itself still needs
+physical verification. The stock Android BOOT image is hash-verified but
+has not been restored in a completed test. Start a fresh Heimdall
 session; prior `print-pit --no-reboot` caused session-end errors.
 A BOOT-only restore does **not** undo future userdata erasure; don't erase
 userdata during this handoff test. If Download Mode is unreachable,
