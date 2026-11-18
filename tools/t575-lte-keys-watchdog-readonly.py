@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Read-only SM-T575 key and watchdog register observations over USB IPv6.
+"""Safe, read-only SM-T575 key GPIO / watchdog STATUS snapshot.
 
-Designed for the already-running Linux diagnostic on physical SM-T575.
-The remote diagnostic console receives ONLY 'peek ADDR' commands.
-NO 'poke', 'write', 'reboot', 'insmod', flashing, or filesystem changes.
+IMPORTANT: The original interactive Volume Down hold test was RETIRED
+after pressing and holding Volume Down on the physical SM-T575 entered
+Samsung Download Mode (owner observation, 2026-11-18).
 
-The resulting readings are evidence for auditing the LTE uniLoader's
-proposed Volume Down fallback. This DOES NOT test watchdog reset behavior.
+This replacement performs a SINGLE snapshot with NO button instructions.
+Remote commands are ONLY 'peek ADDR' through the existing Linux console.
+No register writes, key holds, reboot, flashing, or storage access.
+The readout cannot prove a safe uniLoader fallback or watchdog recovery.
 """
 import argparse
-import re
 import socket
 import sys
 
-# The Wi-Fi uniLoader source assumes GPA0_DAT and PMU/cluster-0 watchdog.
 REGISTERS = [
-    ("GPIO GPA0_DAT (Wi-Fi assumed Volume Down bit 4)", "0x14050024"),
+    ("GPIO GPA0_DAT baseline (not a confirmed LTE Volume Down bit)", "0x14050024"),
     ("PMU RST_STAT", "0x14060404"),
     ("PMU WDT_DISABLE", "0x14060408"),
     ("PMU WDT_MASK_RESET", "0x1406040c"),
@@ -43,53 +43,29 @@ def ask_console(host, interface, port, command):
     return b"".join(chunks).decode("utf-8", errors="replace").replace("\r", "")
 
 
-def read_register(label, address, args):
-    print(f"\n  {label} | peek {address}")
-    data = ask_console(args.host, args.interface, args.port, f"peek {address}")
-    # Keep raw output: register presentation differs among diagnostic builds.
-    lines = [x for x in data.splitlines() if not x.startswith("SM-T570 mainline")]
-    print("\n".join(lines[-12:]) or "(no response)")
-    # Parse conservatively only when an explicit hexadecimal address:value
-    # response exists. Never use an ambiguous hex number as proof of a key.
-    found = re.findall(r"(?:0x)?[0-9a-fA-F]{8,16}\s*[:=]\s*(0x[0-9a-fA-F]{1,16})", data)
-    return int(found[-1], 16) if found else None
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--interface", default="en7")
     ap.add_argument("--host", default="fe80::57:aff:fe00:1")
     ap.add_argument("--port", type=int, default=23)
     args = ap.parse_args()
-    print("SM-T575 USB DIAGNOSTIC: READ-ONLY KEY / PMU REGISTER CHECK")
-    print("Remote commands: peek only. No persistent changes or reboots.")
-    try:
-        input("\nRelease ALL physical keys, then press Return on your Mac...")
-        released = read_register(*REGISTERS[0], args)
-        input("\nHold VOLUME DOWN on the tablet, then press Return on your Mac (keep holding)...")
-        voldown = read_register(*REGISTERS[0], args)
-        input("\nRelease all keys and hold VOLUME UP, then press Return on your Mac (keep holding)...")
-        volup = read_register(*REGISTERS[0], args)
-        input("\nRelease all keys. Press Return to inspect read-only watchdog registers...")
-        for label, address in REGISTERS[1:]:
-            read_register(label, address, args)
-    except (OSError, EOFError, KeyboardInterrupt) as exc:
-        print(f"\nStopped: {exc}")
-        return 1
 
-    print("\n=== KEY OBSERVATIONS ===")
-    if released is not None and voldown is not None and volup is not None:
-        print(f"Released: 0x{released:08x}; Down: 0x{voldown:08x}; Up: 0x{volup:08x}")
-        delta = released ^ voldown
-        print(f"GPIO bit changes on Volume Down: 0x{delta:08x}")
-        if (released & 0x10) and not (voldown & 0x10) and (volup & 0x10):
-            print("OBSERVED: active-low bit 4 is consistent with Volume Down.")
-        else:
-            print("NOT VERIFIED: the Wi-Fi uniLoader's bit-4 assumption did not clearly match.")
-    else:
-        print("Exact key GPIO values could not be parsed; inspect the raw console responses.")
-    print("\nREAD-ONLY check complete. No watchdog reset was attempted.")
-    print("These observations alone do not authorize BOOT flashing.")
+    print("SM-T575 READ-ONLY REGISTER SNAPSHOT — NO BUTTON TEST")
+    print("No Volume Down hold, no watchdog reset, no flash, no device writes.")
+    print("Existing Download Mode must be exited manually before this can connect.\n")
+    for label, address in REGISTERS:
+        print(f"=== {label}: peek {address} ===", flush=True)
+        try:
+            data = ask_console(args.host, args.interface, args.port,
+                               f"peek {address}")
+        except OSError as exc:
+            print(f"Connection failed: {exc}")
+            return 1
+        lines = [line for line in data.splitlines()
+                 if not line.startswith("SM-T570 mainline")]
+        print("\n".join(lines[-12:]) or "(no response)")
+        print()
+    print("Snapshot complete; this does not verify watchdog/Volume Down fallback.")
     return 0
 
 
