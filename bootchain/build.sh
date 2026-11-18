@@ -191,11 +191,27 @@ make -s -C "$UB" O="$UBO" CROSS_COMPILE=$CC "$CFG_BOOTCHAIN_U_BOOT_DEFCONFIG"
 make -s -C "$UB" O="$UBO" CROSS_COMPILE=$CC -j"$JOBS"
 [ "$(dd if="$UBO/u-boot.bin" bs=1 skip=56 count=4 2>/dev/null)" = "$(printf 'ARM\x64')" ] ||
 	{ echo "u-boot.bin has no arm64 Image header" >&2; exit 1; }
+UBOOT_WIFI=$UBO/u-boot.bin
+UBOOT_LTE=
+
+# The Wi-Fi U-Boot defaults to the SM-T570 tree if S-Boot's original FDT is
+# missing. Never reuse that default in an experimental SM-T575 chainloader:
+# a separate U-Boot with an LTE default is needed for that recovery case.
+if [ "${BRINGUP_LTE_CHAIN_TEST:-0}" = 1 ]; then
+	log "experimental SM-T575 U-Boot (LTE-default DTB if S-Boot FDT is absent)"
+	UBO_LTE=$W/u-boot-out-lte
+	make -s -C "$UB" O="$UBO_LTE" CROSS_COMPILE=$CC gtactive3lte_defconfig
+	grep -qx 'CONFIG_DEFAULT_DEVICE_TREE="exynos/exynos9810-gtactive3"' "$UBO_LTE/.config" ||
+		{ echo "LTE U-Boot does not default to the LTE device tree" >&2; exit 1; }
+	make -s -C "$UB" O="$UBO_LTE" CROSS_COMPILE=$CC -j"$JOBS"
+	UBOOT_LTE=$UBO_LTE/u-boot.bin
+	[ "$(dd if="$UBOOT_LTE" bs=1 skip=56 count=4 2>/dev/null)" = "$(printf 'ARM\x64')" ] ||
+		{ echo "LTE U-Boot has no arm64 Image header" >&2; exit 1; }
+fi
 
 log "uniLoader ($CFG_BOOTCHAIN_UNILOADER_DEFCONFIG: chain, linux)"
 cp "$B/arch/arm64/boot/Image" "$UL/blob/Image"
 cp "$OUT/ramdisk.cpio.gz" "$UL/blob/ramdisk"
-cp "$UBO/u-boot.bin" "$UL/blob/u-boot.bin"
 PAYLOAD=()
 first=1
 while read -r cn dtb; do
@@ -204,6 +220,12 @@ while read -r cn dtb; do
 	[ "$first" = 1 ] && sfx=
 	first=0
 	cp "$B/arch/arm64/boot/dts/$dtb" "$UL/blob/dtb"
+	# These embedded ARM64 images must match the selected variant.
+	if [ "$cn" = gtactive3 ] && [ -n "$UBOOT_LTE" ]; then
+		cp "$UBOOT_LTE" "$UL/blob/u-boot.bin"
+	else
+		cp "$UBOOT_WIFI" "$UL/blob/u-boot.bin"
+	fi
 
 	case "$cn" in
 		gtactive3wifi)
@@ -268,6 +290,9 @@ tree_id() { git -C "$R" rev-parse "HEAD:$1" 2>/dev/null || echo unknown; }
 	echo "linux-config: $CFG_BOOTCHAIN_BRINGUP_CONFIG"
 	echo "init: initramfs/init.c"
 	echo "u-boot: bootchain/u-boot (tree $(tree_id bootchain/u-boot)), $CFG_BOOTCHAIN_U_BOOT_DEFCONFIG"
+	if [ -n "$UBOOT_LTE" ]; then
+		echo "u-boot-lte: gtactive3lte_defconfig; LTE-default DTB exynos/exynos9810-gtactive3; sha256 $(sha256sum "$UBOOT_LTE" | cut -c1-64)"
+	fi
 	echo "variants: $(awk '{ printf "%s%s=%s", NR > 1 ? " " : "", $1, $2 }' <<<"$VARIANTS")"
 	echo "uniloader: bootchain/uniLoader (tree $(tree_id bootchain/uniLoader)), $CFG_BOOTCHAIN_UNILOADER_DEFCONFIG"
 	echo "f2fs-tools: $F2FS_VER (https://dl-cdn.alpinelinux.org/alpine/v3.22/main, aarch64)"
