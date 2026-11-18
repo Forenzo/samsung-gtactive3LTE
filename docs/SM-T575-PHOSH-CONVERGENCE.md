@@ -94,6 +94,29 @@ standalone Linux GPU/Plasma boot does not verify these handovers.
 - The read-only Mac diagnostics script `tools/t575-touch-readonly-check.py`
   examines the running diagnostic console without writing to the tablet.
 
+## First LTE U-Boot hardware inspection (NO FLASH PERMISSION YET)
+
+The experimental LTE-specific U-Boot configuration now has:
+- an LTE-default device tree if the S-Boot handoff has no identifying FDT;
+- a dedicated `gtactive3lte.env` boot menu that never auto-boots Duranium
+  or writes to userdata, with no Fastboot flash, OEM run, or USB mass storage
+  transport enabled for the first inspection build;
+- an Actions gate proving that this LTE environment is actually embedded
+  inside the experimental LTE uniLoader chainloader.
+
+**The LTE uniLoader board still has no watchdog or Volume Down fallback
+hooks**. The USB diagnostic's `peek` commands can compare GPIO key state
+and watchdog registers via `tools/t575-lte-keys-watchdog-readonly.py`.
+These reads are necessary observations, NOT proof that a watchdog-driven
+recovery will work. The only presently established recovery is manual
+Samsung Download Mode + Heimdall restoration of a saved BOOT image.
+
+The original `T575-BOOT-review` images precede these LTE-specific
+changes and must be treated as superseded. No user-facing instructions
+for flashing should be issued until a fresh successful build, valid
+offline Android BOOT packaging, and an explicit recovery/rollback plan
+are in place. The real Phosh OS still has not been written to userdata.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
