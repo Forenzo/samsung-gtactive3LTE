@@ -208,6 +208,28 @@ menu build, validate actual ESP EFI path and backup GPT, plan vendor
 firmware and Android-data backup/consent. No userdata erase or flash
 authorization follows from this static admission.
 
+## Physical LTE U-Boot UFS inspection (2026-11-18)
+
+The owner selected `Show detected UFS partitions (READ ONLY)` from
+the physically tested LTE U-Boot menu. The display showed **"Partition
+Map for SCSI device 0"** and numbered GPT entries, establishing that
+U-Boot's UFS/SCSI scan reached a readable partition table. The printed
+table exceeded the framebuffer height and moved too quickly for reliable
+photography. Some apparent UFS controller errors/warnings also precede
+the table; their wording and severity have **not** yet been captured
+legibly. Do not classify full UFS reliability or a correct partition-31
+geometry as proven solely from these photographs.
+
+**Non-destructive next step:** once the boot menu's timeout returns to
+diagnostic Linux, send the read-only `ulog` command to the USB IPv6
+TCP port 23 console. The `initramfs/init.c` implementation reads
+U-Boot's RAM log header at `0x8ff100000` and streams the captured text.
+The LTE U-Boot build has `CONFIG_EXYNOS_MOBILE_RAMLOG=y`, so this is
+the preferred method to recover the full UFS printout without reflashing
+or modifying userdata. If the RAM log has not survived the reset,
+add a *bounded* single-screen UFS/partition summary to a future
+experimental menu build; don't assume an earlier image already has it.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
