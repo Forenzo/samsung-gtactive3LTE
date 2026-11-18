@@ -75,6 +75,9 @@ def source():
     # successfully probes or generates touch events on the physical tablet.
     kconfig = (ROOT / "pmos/aports/device/testing/linux-postmarketos-exynos9810"
                / "config-postmarketos-exynos9810.aarch64").read_text()
+    check("CONFIG_SPI=y" in kconfig and "CONFIG_SPI_S3C64XX=m" in kconfig and
+          "CONFIG_REGMAP_SPI=y" in kconfig,
+          "Samsung SPI controller and SPI register mapping for touchscreen are enabled")
     check("CONFIG_TOUCHSCREEN_HIMAX_HX83112B=m" in kconfig and
           "CONFIG_INPUT_EVDEV=y" in kconfig,
           "Himax HX83102E finger-touch module and evdev input are enabled")
