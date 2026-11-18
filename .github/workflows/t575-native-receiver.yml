@@ -1,0 +1,26 @@
+name: SM-T575 native installer transport (RAM-only)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'native-install/**'
+      - '.github/workflows/t575-native-receiver.yml'
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AArch64 cross-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build static ARM64 transport receiver
+        run: |
+          mkdir -p output
+          aarch64-linux-gnu-gcc -static -O2 -Wall -Wextra -Werror -o output/t575-receiver native-install/t575-receiver.c
+          file output/t575-receiver
+          sha256sum output/t575-receiver > output/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-native-receiver-ram-only
+          path: output/
