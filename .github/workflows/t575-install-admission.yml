@@ -1,0 +1,27 @@
+name: SM-T575 native installer v2 hardware admission (read-only)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'native-install/t575-install-admission.c'
+      - 'native-install/t575-gpt-plan.py'
+      - '.github/workflows/t575-install-admission.yml'
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM64 cross compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Compile static admission tool
+        run: |
+          mkdir -p output
+          aarch64-linux-gnu-gcc -static -O2 -Wall -Wextra -Werror -o output/t575-install-admission native-install/t575-install-admission.c
+          file output/t575-install-admission
+          (cd output && sha256sum t575-install-admission > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-install-admission-v2-read-only
+          path: output/
