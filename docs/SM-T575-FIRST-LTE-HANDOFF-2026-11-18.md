@@ -33,6 +33,45 @@ owner decision to accept a BOOT-only experimental test.
   Verification does not imply first boot, correct FDT handover, or functioning
   touch and pen.
 
+## First physical LTE U-Boot handoff: PASS (owner, 2026-11-18)
+
+The owner installed the offline-reviewed `t575-phosh-chain-BOOT-UNTESTED.img`
+from `~/Downloads/T575-BOOT-first-handoff/` through a BOOT-only Heimdall
+experiment and supplied a photograph of the running tablet's display.
+**This is the first confirmed physical S-Boot -> LTE uniLoader -> U-Boot
+execution on SM-T575.**
+
+The photograph shows the bespoke `*** U-Boot Boot Menu ***`, with:
+
+1. `Warm reset (attempt Linux fallback)`
+2. `Show U-Boot board and DRAM`
+3. `Show EFI memory map`
+4. `Show detected UFS partitions (READ ONLY)`
+5. `Re-enter inspection menu`
+0. `Exit`
+
+The menu is visibly rendered, with one row highlighted and on-screen
+instructions `Press UP/DOWN to move, ENTER to select, ESC to quit`.
+The owner independently reported the physical navigation buttons work.
+
+**Proved:** the installed first-handoff BOOT image reaches U-Boot on the
+physical LTE tablet; a readable framebuffer menu is active; navigation
+via hardware buttons works.
+
+**NOT YET PROVED:** the warm-reset fallback returns to embedded Linux;
+Linux diagnostic USB console reappears; EFIBoot/UKI or full Phosh boots;
+Himax finger touch or Wacom S Pen works in Phosh; the inspection menu's
+UFS probe works; automatic recovery from a hang; userdata installation.
+No userdata or protected-partition writes were requested for this test.
+
+Recommended next single-step observation: select the **read-only**
+`Show U-Boot board and DRAM` entry, photograph its output, then use
+`Warm reset (attempt Linux fallback)` to check that the physical tablet
+returns to the embedded Linux diagnostic USB console. The return path
+remains experimental; retain the verified diagnostic BOOT image and manual
+Download Mode / Heimdall rollback in case the reset reenters the menu
+or hangs. Avoid prolonged volume-key holds.
+
 ## Read-only PMU/watchdog snapshot (owner, 2026-11-18)
 
 Physical SM-T575, running the known-working diagnostic Linux, with
