@@ -315,6 +315,33 @@ A correct fix must record failing LUN/opcode and validate the response,
 (ideally known BOOT magic or other bounded verified read) before relying
 on U-Boot to load the Phosh EFI image. Do not erase userdata yet.
 
+## New one-sector read-only U-Boot gate (source committed, NOT yet hardware verified)
+
+Following the physically confirmed eight-LUN UFS retest (11 residual OCS 7
+errors, correct BOOT and userdata partition geometry), a new experimental
+menu item was added to `bootchain/u-boot/board/samsung/exynos-mobile/gtactive3lte.env`:
+
+`TEST one BOOT sector (4KiB READ ONLY)` (`bootmenu_7`,
+shown as item 8 on the 1-indexed menu).
+
+It runs `ufs init && scsi scan`; obtains **partition 12** BOOT start/size
+using `part start/size scsi 0`, and **refuses** to read unless the
+observed start LBA is `6c90` and sector count `3b00`, matching the
+physical T575's previously observed 4096-byte UFS GPT. It explicitly
+selects SCSI device 0, issues **one** `scsi read` of one 4096-byte sector
+at the BOOT start into the existing U-Boot EFI load RAM address
+`0x90000000`, then prints only 16 bytes with `md.b`. The expected
+Android BOOT magic is ASCII `ANDROID!` or bytes
+`41 4e 44 52 4f 49 44 21`. A valid header and `1 blocks read: OK`
+would support actual read-only UFS data I/O, beyond partition metadata.
+
+The timed Linux diagnostic reset and two original BOOT backups are kept;
+the new bootchain **must** pass CI and offline BOOT/AVB assembly before
+any separately authorized BOOT-only physical flash. No `userdata`
+partition is accessed by this test. Regardless of outcome, no Phosh EFI
+boot or userdata write is authorized. Success of a single read cannot
+establish repeated-read reliability or resolve the residual OCS errors.
+
 ## Phosh + lightweight desktop mode
 
 Start with native upstream Phosh/Phoc as the sole running compositor. Then
