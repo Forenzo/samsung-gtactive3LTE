@@ -102,8 +102,11 @@ def image(dirname):
     check(d.is_dir(), "mkosi output directory exists")
     files = sorted(p for p in d.iterdir() if p.is_file())
     compressed = [p for p in files if p.name.endswith(".raw.zst")]
-    check(compressed and all(p.stat().st_size > 100_000 for p in compressed),
-          "nonempty compressed Duranium image parts present")
+    check(compressed and all(p.stat().st_size > 0 for p in compressed),
+          "all compressed Duranium image parts are nonempty")
+    disk = d / f"{OUTPUT_STEM}_{VERSION}.raw.zst"
+    check(disk.is_file() and disk.stat().st_size > 100_000_000,
+          "full LTE disk image is present and plausibly sized")
     check((d / f"{OUTPUT_STEM}_{VERSION}.efi").is_file(),
           "versioned ARM64 EFI unified kernel image is present")
     check(not any("gtactive3wifi" in p.name or "_gnome_" in p.name
