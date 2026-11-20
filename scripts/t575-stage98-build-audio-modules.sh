@@ -47,12 +47,18 @@ cp "$cfg" "$build/.config"
 echo "=== PREPARE KERNEL MODULE ENVIRONMENT ==="
 
 make -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
+    ARCH=arm64 \
+    CROSS_COMPILE="${T575_CROSS_COMPILE-aarch64-linux-gnu-}" \
+    LOCALVERSION= \
+    KBUILD_BUILD_VERSION="${T575_BUILD_VERSION:-27-postmarketOS}" \
     olddefconfig modules_prepare
 
 echo "=== VERIFY PRODUCTION KERNEL RELEASE ==="
 release="$(make -s -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
+    ARCH=arm64 \
+    CROSS_COMPILE="${T575_CROSS_COMPILE-aarch64-linux-gnu-}" \
+    LOCALVERSION= \
+    KBUILD_BUILD_VERSION="${T575_BUILD_VERSION:-27-postmarketOS}" \
     kernelrelease)"
 
 echo "Kernel release: $release"
@@ -65,7 +71,10 @@ fi
 echo "=== BUILD KERNEL SYMBOL TABLE ==="
 
 make -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
+    ARCH=arm64 \
+    CROSS_COMPILE="${T575_CROSS_COMPILE-aarch64-linux-gnu-}" \
+    LOCALVERSION= \
+    KBUILD_BUILD_VERSION="${T575_BUILD_VERSION:-27-postmarketOS}" \
     -j2 Image modules
 
 test -s "$build/Module.symvers" || {
@@ -105,7 +114,10 @@ echo "=== BUILD EXPERIMENTAL AUDIO MODULES ==="
 # Allow inspection of unresolved symbols when the production
 # Module.symvers is unavailable. This does NOT certify loadability.
 make -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
+    ARCH=arm64 \
+    CROSS_COMPILE="${T575_CROSS_COMPILE-aarch64-linux-gnu-}" \
+    LOCALVERSION= \
+    KBUILD_BUILD_VERSION="${T575_BUILD_VERSION:-27-postmarketOS}" \
     M="$external" \
     -j2 modules
 
