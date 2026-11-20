@@ -76,7 +76,7 @@ def run(source_file):
             '/proc/device-tree/model': 'sys/model',
             '/sys/class/block/sda31/uevent': 'sys/uevent',
             '/sys/class/block/sda31/size': 'sys/size',
-            '/sys/class/block/sda31/queue/logical_block_size': 'sys/logical_block_size',
+            '/sys/block/sda/queue/logical_block_size': 'sys/logical_block_size',
             '/proc/mounts': 'sys/mounts',
             '/dev/sda31': 'disposable.img',
         }
