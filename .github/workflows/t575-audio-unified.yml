@@ -253,9 +253,9 @@ jobs:
           set -euo pipefail
           out="t575-audio-native-output"
           test -s "$out/build/Module.symvers"
-          cp "$out/build/Module.symvers" "$out/kernel-Module.symvers"
+          cp "$out/build/Module.symvers" kernel-Module.symvers
           echo "PASS: native kernel symbol table preserved"
-          wc -l "$out/kernel-Module.symvers"
+          wc -l kernel-Module.symvers
 
       - name: Upload native Alpine diagnostic artifacts
         uses: actions/upload-artifact@v4
@@ -264,5 +264,5 @@ jobs:
           path: |
             t575-audio-native-output/external/*.ko
             t575-audio-native-output/external/Module.symvers
-            t575-audio-native-output/kernel-Module.symvers
+            kernel-Module.symvers
           retention-days: 7
