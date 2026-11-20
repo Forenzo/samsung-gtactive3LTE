@@ -65,6 +65,21 @@ jobs:
           python3 -m py_compile scripts/t575-stage45-install-machine-source.py
           python3 scripts/t575-stage45-install-machine-source.py kernel
 
+      - name: Freeze patched kernel source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git -C kernel config user.name "T575 Audio CI"
+          git -C kernel config user.email "ci@localhost"
+          git -C kernel add -A
+          git -C kernel commit -qm "Prepare patched production audio sources"
+
+          test -z "$(git -C kernel status --porcelain)"
+
+          echo "PASS: patched kernel source clean"
+          echo "No changes pushed to kernel repository"
+
       - name: Build unified audio modules only
         shell: bash
         run: |
