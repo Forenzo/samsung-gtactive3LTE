@@ -49,7 +49,7 @@ static int authorize_device(void){
  if(readtext("/sys/class/block/sda31/uevent",b,sizeof b)||!strstr(b,"PARTNAME=userdata"))return -1;
  /* Linux sysfs size uses 512-byte sectors even when logical block size is 4096. */
  if(readtext("/sys/class/block/sda31/size",b,sizeof b)||strtoull(b,NULL,10)!=(TARGET/512ULL))return -1;
- if(readtext("/sys/class/block/sda31/queue/logical_block_size",b,sizeof b)||strtoul(b,NULL,10)!=SECTOR)return -1;
+ if(readtext("/sys/block/sda/queue/logical_block_size",b,sizeof b)||strtoul(b,NULL,10)!=SECTOR)return -1;
  if(readtext("/proc/mounts",b,sizeof b))return -1;
  if(strstr(b,"/dev/sda31 ")||strstr(b,"/dev/block/sda31 ")||strstr(b,"/dev/block/by-name/userdata "))return -1;
  return 0;
