@@ -40,10 +40,6 @@ mkdir -p "$build" "$external"
 
 cp "$cfg" "$build/.config"
 
-# The disposable CI source archive has synthetic Git history.
-# Prevent it from adding '+' to the production 7.3.0 release.
-: > "$kernel/.scmversion"
-
 "$kernel/scripts/config" --file "$build/.config" \
     -m SND_SOC_TAS2562 \
     -m SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562
@@ -51,12 +47,12 @@ cp "$cfg" "$build/.config"
 echo "=== PREPARE KERNEL MODULE ENVIRONMENT ==="
 
 make -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
     olddefconfig modules_prepare
 
 echo "=== VERIFY PRODUCTION KERNEL RELEASE ==="
 release="$(make -s -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
     kernelrelease)"
 
 echo "Kernel release: $release"
@@ -96,7 +92,7 @@ echo "=== BUILD EXPERIMENTAL AUDIO MODULES ==="
 # Allow inspection of unresolved symbols when the production
 # Module.symvers is unavailable. This does NOT certify loadability.
 make -C "$kernel" O="$build" \
-    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
     M="$external" \
     KBUILD_MODPOST_WARN=1 \
     -j2 modules
