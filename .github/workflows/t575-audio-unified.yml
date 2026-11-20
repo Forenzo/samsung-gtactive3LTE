@@ -1,0 +1,16 @@
+name: t575-audio-unified-experimental
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  registration-only:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Registration placeholder
+        run: |
+          echo "Dispatch work/t575-native-install for the real audio build."
+          echo "No kernel compilation on the default branch."
