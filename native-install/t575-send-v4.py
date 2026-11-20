@@ -46,12 +46,22 @@ def validate(image, patches):
     return data
 
 
+def recv_exact(sock, count):
+    """Read exactly count bytes or fail on disconnect."""
+    chunks = bytearray()
+    while len(chunks) < count:
+        part = sock.recv(count - len(chunks))
+        if not part:
+            raise RuntimeError(
+                f"tablet disconnected during reply "
+                f"({len(chunks)}/{count} bytes)"
+            )
+        chunks.extend(part)
+    return bytes(chunks)
+
+
 def response(sock, data):
-    reply = bytearray()
-    while len(reply) < 5:
-        part = sock.recv(5 - len(reply))
-        if not part: raise RuntimeError('tablet disconnected before write/readback confirmation')
-        reply.extend(part)
+    reply = recv_exact(sock, 5)
     expected = zlib.crc32(data) & 0xffffffff
     if reply[0] != ord('K') or struct.unpack('!I', reply[1:])[0] != expected:
         raise RuntimeError('DEVICE READ-BACK MISMATCH: stop; do not reboot')
@@ -117,7 +127,7 @@ def main():
             sock.settimeout(180)
             sock.connect((args.host,23457,0,scope))
             sock.sendall(b'T575WR4!' + args.token.encode('ascii') + struct.pack('!Q', IMAGE_SIZE))
-            if sock.recv(2) != b'GO': raise RuntimeError('tablet did not authorize target for writing')
+            if recv_exact(sock, 2) != b'GO': raise RuntimeError('tablet did not authorize target for writing')
             print('ARMED DEVICE AUTHORIZED. Streaming image...', flush=True)
             while written < IMAGE_SIZE:
                 block = proc.stdout.read(min(CHUNK,IMAGE_SIZE-written))
@@ -132,7 +142,7 @@ def main():
             print('Image payload written and read back; applying relocated GPT...',flush=True)
             for off, blob in patch_data: packet(sock,b'P',off,blob)
             sock.sendall(b'F'+struct.pack('!QI',0,0))
-            if sock.recv(4)!=b'DONE':raise RuntimeError('tablet did not report fsync completion')
+            if recv_exact(sock, 4)!=b'DONE':raise RuntimeError('tablet did not report fsync completion')
         print('PASS: image written, read back per chunk, GPT patched and synced')
         print('NOTE: EFI handoff and Phosh first boot have NOT been validated')
     finally:
