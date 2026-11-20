@@ -40,6 +40,10 @@ mkdir -p "$build" "$external"
 
 cp "$cfg" "$build/.config"
 
+# The disposable CI source archive has synthetic Git history.
+# Prevent it from adding '+' to the production 7.3.0 release.
+: > "$kernel/.scmversion"
+
 "$kernel/scripts/config" --file "$build/.config" \
     -m SND_SOC_TAS2562 \
     -m SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562
@@ -49,6 +53,18 @@ echo "=== PREPARE KERNEL MODULE ENVIRONMENT ==="
 make -C "$kernel" O="$build" \
     ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
     olddefconfig modules_prepare
+
+echo "=== VERIFY PRODUCTION KERNEL RELEASE ==="
+release="$(make -s -C "$kernel" O="$build" \
+    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+    kernelrelease)"
+
+echo "Kernel release: $release"
+
+if [[ "$release" != "7.3.0" ]]; then
+    echo "FAIL: expected 7.3.0; refusing mismatched modules" >&2
+    exit 1
+fi
 
 grep -qx 'CONFIG_SND_SOC_TAS2562=m' "$build/.config"
 grep -qx 'CONFIG_SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562=m' "$build/.config"
