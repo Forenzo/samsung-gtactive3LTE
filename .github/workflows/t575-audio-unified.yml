@@ -1,0 +1,98 @@
+name: t575-audio-unified-experimental
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-unified-audio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout LTE fork
+        uses: actions/checkout@v5
+      - name: Install kernel DT build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libssl-dev libelf-dev \
+            device-tree-compiler python3 git gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Retrieve exact upstream Linux base
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r origin sha < patches/linux/BASE
+          [[ "$origin" == "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git" ]] || {
+            echo "Unexpected kernel source: $origin" >&2; exit 1;
+          }
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          # A pinned source revision, not moving mainline.
+          curl -fL --retry 4 --retry-delay 5 \
+            "https://github.com/torvalds/linux/archive/${sha}.tar.gz" \
+            -o /tmp/t575-linux.tar.gz
+          mkdir -p kernel
+          tar -xzf /tmp/t575-linux.tar.gz -C kernel --strip-components=1
+          git -C kernel init -q
+          git -C kernel config user.name "LTE DTB CI"
+          git -C kernel config user.email "ci@localhost"
+          git -C kernel add -A
+          git -C kernel commit -qm "Import pinned kernel base"
+          echo "Base: $sha"
+      - name: Apply release-tested consolidated upstream patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          # APKBUILD uses this consolidated patch, which is not equivalent
+          # to replaying the independent patches/linux development series.
+          patchfile="pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3.patch"
+          test -s "$patchfile"
+          git -C kernel apply --check "../$patchfile"
+          git -C kernel apply "../$patchfile"
+          gpu_patch="pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch"
+          test -s "$gpu_patch"
+          git -C kernel apply --check "../$gpu_patch"
+          git -C kernel apply "../$gpu_patch"
+          test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
+          echo "Applied upstream's packaged postmarketOS kernel patch."
+      - name: Verify isolated LTE codec source and Kconfig wiring
+        run: |
+          python3 -m py_compile scripts/t575-stage43-audio-compile-config.py
+          python3 scripts/t575-stage43-audio-compile-config.py --kernel kernel
+      - name: Stage 45 — install LTE-only machine driver in CI kernel
+        run: |
+          python3 -m py_compile scripts/t575-stage45-install-machine-source.py
+          python3 scripts/t575-stage45-install-machine-source.py kernel
+
+      - name: Build unified audio modules only
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends kmod file
+
+          bash scripts/t575-stage98-build-audio-modules.sh \
+            "$PWD/kernel" "$PWD/t575-audio-output"
+
+          out="t575-audio-output/external"
+
+          test -s "$out/snd-soc-tas2562.ko"
+          test -s "$out/snd-soc-gtactive3lte-unified.ko"
+
+          for module in "$out"/*.ko; do
+            echo "=== $module ==="
+            file "$module"
+            modinfo "$module" | grep -E               '^(name|vermagic|depends|description):' || true
+          done
+
+          echo "PASS: experimental audio artifacts created"
+          echo "NOT APPROVED FOR LOADING"
+
+      - name: Upload diagnostic audio artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-unified-audio-NOT-FOR-LOADING
+          path: |
+            t575-audio-output/external/*.ko
+            t575-audio-output/external/Module.symvers
+          retention-days: 7
