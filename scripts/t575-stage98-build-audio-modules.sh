@@ -62,6 +62,19 @@ if [[ "$release" != "7.3.0" ]]; then
     exit 1
 fi
 
+echo "=== BUILD KERNEL SYMBOL TABLE ==="
+
+make -C "$kernel" O="$build" \
+    ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
+    -j2 Image modules
+
+test -s "$build/Module.symvers" || {
+    echo "FAIL: kernel Module.symvers missing" >&2
+    exit 1
+}
+
+echo "PASS: complete kernel build generated Module.symvers"
+
 grep -qx 'CONFIG_SND_SOC_TAS2562=m' "$build/.config"
 grep -qx 'CONFIG_SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562=m' "$build/.config"
 
@@ -94,7 +107,6 @@ echo "=== BUILD EXPERIMENTAL AUDIO MODULES ==="
 make -C "$kernel" O="$build" \
     ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= \
     M="$external" \
-    KBUILD_MODPOST_WARN=1 \
     -j2 modules
 
 echo "=== RESULT ==="

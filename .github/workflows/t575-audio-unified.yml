@@ -9,7 +9,7 @@ permissions:
 jobs:
   build-unified-audio:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - name: Checkout LTE fork
         uses: actions/checkout@v5
