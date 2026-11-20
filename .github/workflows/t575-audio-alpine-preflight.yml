@@ -1,0 +1,36 @@
+name: t575-audio-alpine-preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alpine-toolchain:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Inspect native Alpine ARM64 compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== HOST ARCHITECTURE ==="
+          uname -m
+
+          echo "=== ALPINE TOOLCHAIN ==="
+          docker run --rm --platform linux/arm64 alpine:edge sh -ec '
+            apk add --no-cache gcc binutils make musl-dev
+            echo "=== CONTAINER ARCHITECTURE ==="
+            uname -m
+            echo "=== COMPILER ==="
+            gcc --version | head -1
+            echo "=== COMPILER TARGET ==="
+            gcc -dumpmachine
+            echo "=== BINUTILS ==="
+            ld --version | head -1
+          '
+
+          echo "=== RUNNER DISK ==="
+          df -h .
