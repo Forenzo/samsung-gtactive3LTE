@@ -73,10 +73,14 @@ jobs:
           set -euo pipefail
           # APKBUILD uses this consolidated patch, which is not equivalent
           # to replaying the independent patches/linux development series.
-          patchfile="pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3wifi.patch"
+          patchfile="pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3.patch"
           test -s "$patchfile"
           git -C kernel apply --check "../$patchfile"
           git -C kernel apply "../$patchfile"
+          gpu_patch="pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch"
+          test -s "$gpu_patch"
+          git -C kernel apply --check "../$gpu_patch"
+          git -C kernel apply "../$gpu_patch"
           test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
           echo "Applied upstream's packaged postmarketOS kernel patch."
 
@@ -100,6 +104,30 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/t575-stage44-compile-tas2562.sh "$PWD/kernel" "$PWD/t575-audio-build"
+
+      - name: Stage 92 — configure experimental audio against production kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          cfg="pmos/aports/device/testing/linux-postmarketos-exynos9810/config-postmarketos-exynos9810.aarch64"
+          test -s "$cfg"
+          mkdir -p t575-production-audio
+          cp "$cfg" t575-production-audio/.config
+
+          kernel/scripts/config --file t575-production-audio/.config \
+            -m SND_SOC_TAS2562 \
+            -m SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562
+
+          make -C kernel O="$PWD/t575-production-audio" \
+            ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+
+          grep -qx 'CONFIG_SND_SOC_TAS2562=m' t575-production-audio/.config
+          grep -qx 'CONFIG_SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562=m' t575-production-audio/.config
+          grep -qx 'CONFIG_SND_SOC_SAMSUNG_EXYNOS9810_ABOX=m' t575-production-audio/.config
+          grep -qx '# CONFIG_MODVERSIONS is not set' t575-production-audio/.config
+
+          echo "PASS: both LTE audio modules enabled in isolated production-derived config"
+          echo "Configuration only; no modules loaded or device tree enabled"
 
       - name: Configure arm64 kernel and compile T575 DTB
         shell: bash
