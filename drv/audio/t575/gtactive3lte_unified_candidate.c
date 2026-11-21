@@ -58,6 +58,25 @@ static const struct snd_soc_ops gta3_headset_ops = {
 	.hw_params = gta3_headset_hw_params,
 };
 
+/*
+ * Stage C: reject speaker streams until amplifier
+ * protection and safe playback are validated.
+ */
+static int gta3_speaker_startup(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd =
+		snd_soc_substream_to_rtd(substream);
+
+	dev_warn(rtd->dev,
+		 "SM-T575 speaker playback locked: protection pending\n");
+
+	return -EPERM;
+}
+
+static const struct snd_soc_ops gta3_speaker_locked_ops = {
+	.startup = gta3_speaker_startup,
+};
+
 static struct snd_soc_jack gta3_headset_jack;
 
 static int gta3_headset_init(struct snd_soc_pcm_runtime *rtd)
@@ -91,7 +110,6 @@ static const struct snd_soc_dapm_widget gta3_widgets[] = {
 
 static const struct snd_kcontrol_new gta3_controls[] = {
 	SOC_DAPM_PIN_SWITCH("Headphones"),
-	SOC_DAPM_PIN_SWITCH("Speaker"),
 	SOC_DAPM_PIN_SWITCH("Headset Mic"),
 	SOC_DAPM_PIN_SWITCH("Main Mic"),
 	SOC_DAPM_PIN_SWITCH("Sub Mic"),
@@ -182,6 +200,7 @@ static int gta3_probe(struct platform_device *pdev)
 	links[GTA3_LINK_SPEAKER].name = "Speaker";
 	links[GTA3_LINK_SPEAKER].stream_name = "Speaker";
 	links[GTA3_LINK_SPEAKER].playback_only = 1;
+	links[GTA3_LINK_SPEAKER].ops = &gta3_speaker_locked_ops;
 	ret = gta3_parse_link(dev, np, "speaker-dai-link",
 			      &links[GTA3_LINK_SPEAKER]);
 	if (ret)
@@ -204,7 +223,6 @@ static struct platform_driver gta3_driver = {
 	.driver = {
 		.name = "gtactive3lte-unified-audio",
 		.of_match_table = gta3_of_match,
-		.pm = &snd_soc_pm_ops,
 	},
 	.probe = gta3_probe,
 };
