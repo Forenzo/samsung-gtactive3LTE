@@ -254,6 +254,15 @@ jobs:
           out="t575-audio-native-output"
           test -s "$out/build/Module.symvers"
           cp "$out/build/Module.symvers" kernel-Module.symvers
+          test -s "$out/build/vmlinux"
+          test -s "$out/build/.config"
+          cp "$out/build/.config" reconstructed-kernel.config
+          sudo apt-get update
+          sudo apt-get install -y binutils-aarch64-linux-gnu
+          aarch64-linux-gnu-objcopy --dump-section .BTF=reconstructed-kernel.btf "$out/build/vmlinux" /tmp/t575-vmlinux-review
+          test -s reconstructed-kernel.btf
+          rm -f /tmp/t575-vmlinux-review
+          echo "PASS: reconstructed kernel BTF preserved"
           echo "PASS: native kernel symbol table preserved"
           wc -l kernel-Module.symvers
 
@@ -265,4 +274,6 @@ jobs:
             t575-audio-native-output/external/*.ko
             t575-audio-native-output/external/Module.symvers
             kernel-Module.symvers
+            reconstructed-kernel.btf
+            reconstructed-kernel.config
           retention-days: 7

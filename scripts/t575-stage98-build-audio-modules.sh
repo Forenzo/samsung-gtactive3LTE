@@ -90,6 +90,7 @@ grep -qx 'CONFIG_SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562=m' "$build/.config"
 echo "=== PREPARE ONLY TWO AUDIO DRIVERS ==="
 
 cp "$kernel/sound/soc/codecs/tas2562.c" "$external/"
+python3 "$root/scripts/t575-stage100-harden-tas2562.py" "$external/tas2562.c"
 cp "$kernel/sound/soc/codecs/tas2562.h" "$external/"
 cp "$kernel/sound/soc/codecs/rt5665.h" "$external/"
 
