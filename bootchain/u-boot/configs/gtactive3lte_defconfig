@@ -1,4 +1,4 @@
-# EXPLICITLY EXPERIMENTAL: LTE first handoff uses a read-only bootmenu.
+# SM-T575 native Linux boot menu with read-only recovery tools.
 # No Wi-Fi startup, fastboot flashing, USB mass storage or OEM run.
 CONFIG_ARM=y
 CONFIG_SKIP_LOWLEVEL_INIT=y
@@ -24,7 +24,7 @@ CONFIG_MISC_INIT_R=y
 CONFIG_HUSH_PARSER=y
 CONFIG_BOOTDELAY=1
 CONFIG_USE_BOOTCOMMAND=y
-CONFIG_BOOTCOMMAND="echo SM-T575 LTE RESEARCH BOOTCHAIN; bootmenu -1"
+CONFIG_BOOTCOMMAND="run t575_menu_controller"
 CONFIG_CMD_BOOTMENU=y
 CONFIG_CMD_PART=y
 CONFIG_CMD_MEMORY=y
