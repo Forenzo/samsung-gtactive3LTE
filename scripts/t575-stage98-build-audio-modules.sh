@@ -92,6 +92,7 @@ echo "=== PREPARE ONLY TWO AUDIO DRIVERS ==="
 cp "$kernel/sound/soc/codecs/tas2562.c" "$external/"
 python3 "$root/scripts/t575-stage100-harden-tas2562.py" "$external/tas2562.c"
 cp "$kernel/sound/soc/codecs/tas2562.h" "$external/"
+cp "$root/drv/audio/t575/tas2562_detect.c" "$external/"
 cp "$kernel/sound/soc/codecs/rt5665.h" "$external/"
 
 # Adapt the include only in the disposable compilation copy.
@@ -103,6 +104,9 @@ grep -qx '#include "rt5665.h"' \
   "$external/gtactive3lte_unified_candidate.c"
 
 cat > "$external/Makefile" <<'EOF'
+obj-m += t575-tas2562-detect.o
+t575-tas2562-detect-y := tas2562_detect.o
+
 obj-m += snd-soc-tas2562.o
 snd-soc-tas2562-y := tas2562.o
 
