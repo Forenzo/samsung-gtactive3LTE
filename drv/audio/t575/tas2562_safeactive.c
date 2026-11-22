@@ -144,6 +144,7 @@ static int t575_configure_shutdown(struct i2c_client *client)
 #define TAS_INT_CLK     0x30
 #define E4D_TEST_MS     500
 #define E4D_WATCHDOG_MS 750
+#define E4D_WATCHDOG_LOW_TEST_MS 100
 
 struct e4d_watchdog {
     struct hrtimer timer;
@@ -168,6 +169,52 @@ static enum hrtimer_restart e4d_watchdog_stop(struct hrtimer *timer)
     atomic_set(&wd->expired, 1);
 
     return HRTIMER_NORESTART;
+}
+
+
+/*
+ * Non-activating watchdog/GPIO callback self-test.
+ *
+ * SDZ is deliberately held LOW for the entire operation. This checks
+ * that the hrtimer callback executes and that the output reads LOW;
+ * it does NOT prove a physical high-to-low edge or hard deadline.
+ * No I2C transfer or TAS_POWER active-mode write is performed.
+ */
+static int e4d_watchdog_low_test(struct device *dev,
+                                 struct gpio_desc *sdz)
+{
+    struct e4d_watchdog wd;
+    int level;
+
+    if (gpiod_cansleep(sdz))
+        return -EOPNOTSUPP;
+
+    gpiod_set_value(sdz, 0);
+    level = gpiod_get_value(sdz);
+    if (level != 0)
+        return level < 0 ? level : -EIO;
+
+    wd.sdz = sdz;
+    atomic_set(&wd.expired, 0);
+
+    hrtimer_setup(&wd.timer, e4d_watchdog_stop,
+                  CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    hrtimer_start(&wd.timer,
+                  ms_to_ktime(E4D_WATCHDOG_LOW_TEST_MS),
+                  HRTIMER_MODE_REL);
+
+    msleep(E4D_WATCHDOG_LOW_TEST_MS + 100);
+    hrtimer_cancel(&wd.timer);
+
+    level = gpiod_get_value(sdz);
+    if (level != 0)
+        return level < 0 ? level : -EIO;
+    if (!atomic_read(&wd.expired))
+        return -ETIMEDOUT;
+
+    dev_info(dev,
+        "E4D: watchdog-low PASS; callback fired, SDZ low; no I2C or amplifier activation\n");
+    return 0;
 }
 
 static int e4d_update_verified(
@@ -386,17 +433,18 @@ static ssize_t safeactive_store(
     int ret, value, i;
     int det, live0, live1, latch0, latch1;
     int matches = 0;
-    bool activate;
+    bool activate, watchdog_low;
 
     if (!sdz)
         return -ENODEV;
 
     activate = sysfs_streq(buf, "play-test");
+    watchdog_low = sysfs_streq(buf, "watchdog-low");
 
     if (activate && !allow_activation)
         return -EPERM;
 
-    if (!activate && !sysfs_streq(buf, "check"))
+    if (!activate && !watchdog_low && !sysfs_streq(buf, "check"))
         return -EINVAL;
 
     if (activate && gpiod_cansleep(sdz))
@@ -408,6 +456,14 @@ static ssize_t safeactive_store(
         e4d_activation_used) {
         mutex_unlock(&safeactive_lock);
         return -EBUSY;
+    }
+
+    /* This branch never releases SDZ or performs any I2C transaction. */
+    if (watchdog_low) {
+        ret = e4d_watchdog_low_test(dev, sdz);
+        if (!ret)
+            ret = count;
+        goto out;
     }
 
     gpiod_set_value_cansleep(sdz, 0);
