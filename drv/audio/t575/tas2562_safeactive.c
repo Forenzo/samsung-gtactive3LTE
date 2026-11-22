@@ -313,9 +313,17 @@ static int e4d_play_test(
     ret = samples ? 0 : -ETIMEDOUT;
 
 stop:
-    gpiod_set_value_cansleep(sdz, 0);
+    /* Hardware shutdown first, regardless of I2C state. */
+    gpiod_set_value(sdz, 0);
 
     hrtimer_cancel(&wd.timer);
+
+    /*
+     * Restore software shutdown with hardware shutdown held.
+     * Do not raise SDZ again after an activation attempt.
+     */
+    if (i2c_smbus_write_byte_data(client, TAS_POWER, 0x0e) < 0)
+        ret = -EIO;
 
     if (atomic_read(&wd.expired))
         ret = -ETIMEDOUT;
@@ -358,7 +366,7 @@ static ssize_t safeactive_store(
     mutex_lock(&safeactive_lock);
 
     if (safeactive_suspended ||
-        (activate && e4d_activation_used)) {
+        e4d_activation_used) {
         mutex_unlock(&safeactive_lock);
         return -EBUSY;
     }
