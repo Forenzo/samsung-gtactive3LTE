@@ -12,7 +12,8 @@
 #include <linux/mutex.h>
 #include <linux/sysfs.h>
 #include <linux/pm.h>
-#include <linux/workqueue.h>
+#include <linux/hrtimer.h>
+#include <linux/ktime.h>
 #include <linux/jiffies.h>
 #include <linux/atomic.h>
 #include <sound/soc.h>
@@ -143,7 +144,7 @@ static int t575_configure_shutdown(struct i2c_client *client)
 #define E4D_WATCHDOG_MS 750
 
 struct e4d_watchdog {
-    struct delayed_work work;
+    struct hrtimer timer;
     struct gpio_desc *sdz;
     atomic_t expired;
 };
@@ -156,14 +157,15 @@ MODULE_PARM_DESC(allow_activation,
     "Permit restricted E4D activation diagnostics (default: false)");
 
 
-static void e4d_watchdog_stop(struct work_struct *work)
+static enum hrtimer_restart e4d_watchdog_stop(struct hrtimer *timer)
 {
     struct e4d_watchdog *wd =
-        container_of(to_delayed_work(work),
-                     struct e4d_watchdog, work);
+        container_of(timer, struct e4d_watchdog, timer);
 
+    gpiod_set_value(wd->sdz, 0);
     atomic_set(&wd->expired, 1);
-    gpiod_set_value_cansleep(wd->sdz, 0);
+
+    return HRTIMER_NORESTART;
 }
 
 static int e4d_update_verified(
@@ -253,10 +255,15 @@ static int e4d_play_test(
     wd.sdz = sdz;
     atomic_set(&wd.expired, 0);
 
-    INIT_DELAYED_WORK_ONSTACK(&wd.work, e4d_watchdog_stop);
+    if (gpiod_cansleep(sdz))
+        return -EOPNOTSUPP;
 
-    schedule_delayed_work(&wd.work,
-                          msecs_to_jiffies(E4D_WATCHDOG_MS));
+    hrtimer_init(&wd.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    wd.timer.function = e4d_watchdog_stop;
+
+    hrtimer_start(&wd.timer,
+                  ms_to_ktime(E4D_WATCHDOG_MS),
+                  HRTIMER_MODE_REL);
 
     deadline = jiffies + msecs_to_jiffies(E4D_TEST_MS);
 
@@ -264,6 +271,12 @@ static int e4d_play_test(
      * Preserve disabled current and voltage sense paths.
      * Only change MODE from software shutdown to active.
      */
+    if (atomic_read(&wd.expired) ||
+        !hrtimer_active(&wd.timer)) {
+        ret = -ETIMEDOUT;
+        goto stop;
+    }
+
     ret = i2c_smbus_write_byte_data(client, TAS_POWER, 0x0c);
     if (ret < 0)
         goto stop;
@@ -302,12 +315,10 @@ static int e4d_play_test(
 stop:
     gpiod_set_value_cansleep(sdz, 0);
 
-    cancel_delayed_work_sync(&wd.work);
+    hrtimer_cancel(&wd.timer);
 
     if (atomic_read(&wd.expired))
         ret = -ETIMEDOUT;
-
-    destroy_delayed_work_on_stack(&wd.work);
 
     if (ret)
         dev_err(dev, "E4D: activation aborted: %d\n", ret);
