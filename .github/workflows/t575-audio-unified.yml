@@ -99,6 +99,7 @@ jobs:
           test -s "$out/t575-tas2562-transport64.ko"
           test -s "$out/t575-tas2562-clockcheck.ko"
           test -s "$out/t575-tas2562-protectcheck.ko"
+          test -s "$out/t575-tas2562-safeactive.ko"
           test -s "$out/snd-soc-gtactive3lte-transport64.ko"
           test -s "$out/snd-soc-gtactive3lte-unified.ko"
 
@@ -269,6 +270,7 @@ jobs:
               test -s t575-audio-native-output/external/t575-tas2562-transport64.ko
               test -s t575-audio-native-output/external/t575-tas2562-clockcheck.ko
               test -s t575-audio-native-output/external/t575-tas2562-protectcheck.ko
+              test -s t575-audio-native-output/external/t575-tas2562-safeactive.ko
               test -s t575-audio-native-output/external/snd-soc-gtactive3lte-transport64.ko
               test -s t575-audio-native-output/external/snd-soc-gtactive3lte-unified.ko
 

@@ -105,6 +105,7 @@ cp "$root/drv/audio/t575/tas2562_transport.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_transport64.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_clockcheck.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_protectcheck.c" "$external/"
+cp "$root/drv/audio/t575/tas2562_safeactive.c" "$external/"
 cp "$kernel/sound/soc/codecs/rt5665.h" "$external/"
 
 # Adapt the include only in the disposable compilation copy.
@@ -149,6 +150,9 @@ t575-tas2562-clockcheck-y := tas2562_clockcheck.o
 
 obj-m += t575-tas2562-protectcheck.o
 t575-tas2562-protectcheck-y := tas2562_protectcheck.o
+
+obj-m += t575-tas2562-safeactive.o
+t575-tas2562-safeactive-y := tas2562_safeactive.o
 
 obj-m += snd-soc-gtactive3lte-transport64.o
 snd-soc-gtactive3lte-transport64-y := gtactive3lte_transport64.o
