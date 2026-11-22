@@ -95,6 +95,7 @@ cp "$kernel/sound/soc/codecs/tas2562.h" "$external/"
 cp "$root/drv/audio/t575/tas2562_detect.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_locked.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_safeinit.c" "$external/"
+cp "$root/drv/audio/t575/tas2562_safeconfig.c" "$external/"
 cp "$kernel/sound/soc/codecs/rt5665.h" "$external/"
 
 # Adapt the include only in the disposable compilation copy.
@@ -108,6 +109,9 @@ grep -qx '#include "rt5665.h"' \
 cat > "$external/Makefile" <<'EOF'
 obj-m += t575-tas2562-safeinit.o
 t575-tas2562-safeinit-y := tas2562_safeinit.o
+
+obj-m += t575-tas2562-safeconfig.o
+t575-tas2562-safeconfig-y := tas2562_safeconfig.o
 
 obj-m += t575-tas2562-locked.o
 t575-tas2562-locked-y := tas2562_locked.o
