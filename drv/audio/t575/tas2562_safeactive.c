@@ -258,8 +258,8 @@ static int e4d_play_test(
     if (gpiod_cansleep(sdz))
         return -EOPNOTSUPP;
 
-    hrtimer_init(&wd.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    wd.timer.function = e4d_watchdog_stop;
+    hrtimer_setup(&wd.timer, e4d_watchdog_stop,
+                  CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 
     hrtimer_start(&wd.timer,
                   ms_to_ktime(E4D_WATCHDOG_MS),
