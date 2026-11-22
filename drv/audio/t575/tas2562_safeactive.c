@@ -45,7 +45,7 @@ static int t575_configure_shutdown(struct i2c_client *client)
 {
     struct device *dev = &client->dev;
     static const u8 attenuation[] = {
-        0x00, 0x10, 0x62, 0x4e
+        0x00, 0x5c, 0x22, 0x4e
     };
     int ret, value, target, i;
 
@@ -132,7 +132,7 @@ static int t575_configure_shutdown(struct i2c_client *client)
     if (value != 0x0e)
         return -EIO;
 
-    dev_info(dev, "PASS: -60 dB coefficient verified\n");
+    dev_info(dev, "PASS: -45 dB coefficient verified\n");
     dev_info(dev, "PASS: software shutdown preserved\n");
 
     return 0;
