@@ -30,7 +30,7 @@ jobs:
           path: |
             kernel
             e4d-output/build
-          key: t575-e4d-kernel-v1-${{ hashFiles('patches/linux/BASE', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3.patch', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/config-postmarketos-exynos9810.aarch64', 'scripts/t575-stage45-install-machine-source.py') }}
+          key: t575-e4d-kernel-v1-${{ hashFiles('patches/linux/BASE', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3.patch', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/config-postmarketos-exynos9810.aarch64') }}
 
       - name: Obtain matching patched kernel
         if: steps.kernel-cache.outputs.cache-hit != 'true'
@@ -57,7 +57,7 @@ jobs:
           git -C kernel apply \
             ../pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch
 
-          python3 scripts/t575-stage45-install-machine-source.py kernel
+          # E4D is built externally; Stage 45 machine-driver Kconfig is unnecessary.
 
       - name: Prepare and compile only E4D
         shell: bash
