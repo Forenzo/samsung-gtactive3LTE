@@ -92,6 +92,10 @@ jobs:
           out="t575-audio-output/external"
 
           test -s "$out/snd-soc-tas2562.ko"
+          test -s "$out/t575-tas2562-safeinit.ko"
+          test -s "$out/t575-tas2562-safeconfig.ko"
+          test -s "$out/t575-tas2562-transport.ko"
+          test -s "$out/snd-soc-gtactive3lte-transport.ko"
           test -s "$out/snd-soc-gtactive3lte-unified.ko"
 
           for module in "$out"/*.ko; do
@@ -209,6 +213,14 @@ jobs:
           echo "PASS: patched kernel source clean"
           echo "No changes pushed to kernel repository"
 
+      - name: Restore native ARM64 compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .t575-ccache
+          key: t575-alpine-arm64-ccache-v1-${{ github.sha }}
+          restore-keys: |
+            t575-alpine-arm64-ccache-v1-
+
       - name: Build audio modules with native Alpine ARM64 GCC
         shell: bash
         run: |
@@ -218,19 +230,26 @@ jobs:
             -v "$PWD:/workspace" \
             -w /workspace \
             -e T575_CROSS_COMPILE="" \
+            -e CCACHE_DIR=/workspace/.t575-ccache \
             -e T575_BUILD_VERSION="27-postmarketOS" \
             alpine:edge sh -ec '
               apk add --no-cache \
                 bash build-base bc bison flex \
                 openssl-dev elfutils-dev linux-headers \
                 perl python3 findutils pahole zstd \
-                kmod file git
+                kmod file git ccache
 
               echo "=== NATIVE ALPINE TOOLCHAIN ==="
               uname -m
               gcc --version | head -1
               gcc -dumpmachine
               ld --version | head -1
+
+              mkdir -p "$CCACHE_DIR"
+              ccache --max-size=2G
+              export PATH="/usr/lib/ccache/bin:$PATH"
+              export T575_USE_CCACHE=1
+              ccache --show-stats
 
               echo "=== BUILD AUDIO ==="
               bash scripts/t575-stage98-build-audio-modules.sh \
@@ -239,10 +258,17 @@ jobs:
 
               echo "=== VERIFY MODULES ==="
               test -s t575-audio-native-output/external/snd-soc-tas2562.ko
+              test -s t575-audio-native-output/external/t575-tas2562-safeinit.ko
+              test -s t575-audio-native-output/external/t575-tas2562-safeconfig.ko
+              test -s t575-audio-native-output/external/t575-tas2562-transport.ko
+              test -s t575-audio-native-output/external/snd-soc-gtactive3lte-transport.ko
               test -s t575-audio-native-output/external/snd-soc-gtactive3lte-unified.ko
 
               modinfo t575-audio-native-output/external/*.ko \
                 | grep -E "^(name|vermagic|depends):" || true
+
+              ccache --show-stats
+              chmod -R a+rX "$CCACHE_DIR"
 
               echo "PASS: native Alpine experimental audio build"
             '
@@ -265,6 +291,18 @@ jobs:
           echo "PASS: reconstructed kernel BTF preserved"
           echo "PASS: native kernel symbol table preserved"
           wc -l kernel-Module.symvers
+
+      - name: Generate deterministic audio test assets
+        run: |
+          python3 scripts/audio/t575-generate-test-audio.py \
+            t575-audio-test-assets
+
+      - name: Upload audio test assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-audio-test-assets
+          path: t575-audio-test-assets/*.wav
+          retention-days: 7
 
       - name: Upload native Alpine diagnostic artifacts
         uses: actions/upload-artifact@v4

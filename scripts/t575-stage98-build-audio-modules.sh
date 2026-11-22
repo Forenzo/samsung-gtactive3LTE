@@ -34,6 +34,11 @@ cfg="$root/pmos/aports/device/testing/linux-postmarketos-exynos9810/config-postm
 mkdir -p "$output"
 output="$(cd "$output" && pwd)"
 
+if [[ "${T575_USE_CCACHE:-0}" == "1" ]]; then
+    command -v ccache >/dev/null
+    export CC="ccache ${T575_CROSS_COMPILE-aarch64-linux-gnu-}gcc"
+fi
+
 build="$output/build"
 external="$output/external"
 mkdir -p "$build" "$external"
@@ -96,6 +101,7 @@ cp "$root/drv/audio/t575/tas2562_detect.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_locked.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_safeinit.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_safeconfig.c" "$external/"
+cp "$root/drv/audio/t575/tas2562_transport.c" "$external/"
 cp "$kernel/sound/soc/codecs/rt5665.h" "$external/"
 
 # Adapt the include only in the disposable compilation copy.
@@ -106,12 +112,24 @@ sed 's|#include "../codecs/rt5665.h"|#include "rt5665.h"|' \
 grep -qx '#include "rt5665.h"' \
   "$external/gtactive3lte_unified_candidate.c"
 
+
+sed 's|#include "../codecs/rt5665.h"|#include "rt5665.h"|' \
+    "$root/drv/audio/t575/gtactive3lte_transport.c" \
+    > "$external/gtactive3lte_transport.c"
+
 cat > "$external/Makefile" <<'EOF'
 obj-m += t575-tas2562-safeinit.o
 t575-tas2562-safeinit-y := tas2562_safeinit.o
 
 obj-m += t575-tas2562-safeconfig.o
 t575-tas2562-safeconfig-y := tas2562_safeconfig.o
+
+obj-m += t575-tas2562-transport.o
+t575-tas2562-transport-y := tas2562_transport.o
+
+obj-m += snd-soc-gtactive3lte-transport.o
+snd-soc-gtactive3lte-transport-y := gtactive3lte_transport.o
+
 
 obj-m += t575-tas2562-locked.o
 t575-tas2562-locked-y := tas2562_locked.o
