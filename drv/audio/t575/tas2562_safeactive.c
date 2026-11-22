@@ -33,8 +33,8 @@
 
 #define TAS_GAIN       0x03
 #define TAS_GAIN_MASK  0x3e
-/* PB_CFG1 AMP_LEVEL=0x01: lowest documented level, raw bits [5:1]. */
-#define TAS_GAIN_MIN   0x02
+/* PB_CFG1 AMP_LEVEL=0x00: lowest documented level, 8 dBV at full-scale. */
+#define TAS_GAIN_MIN   0x00
 #define TAS_DVC_PAGE   0x02
 #define TAS_DVC_FIRST  0x0c
 #define TAS_MISC       0x04
