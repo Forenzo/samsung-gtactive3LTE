@@ -33,6 +33,8 @@
 
 #define TAS_GAIN       0x03
 #define TAS_GAIN_MASK  0x3e
+/* PB_CFG1 AMP_LEVEL=0x01: lowest documented level, raw bits [5:1]. */
+#define TAS_GAIN_MIN   0x02
 #define TAS_DVC_PAGE   0x02
 #define TAS_DVC_FIRST  0x0c
 #define TAS_MISC       0x04
@@ -60,7 +62,7 @@ static int t575_configure_shutdown(struct i2c_client *client)
     if (value < 0)
         return value;
 
-    target = value & ~TAS_GAIN_MASK;
+    target = (value & ~TAS_GAIN_MASK) | TAS_GAIN_MIN;
 
     dev_info(dev, "GAIN before=0x%02x target=0x%02x\n",
              value, target);
@@ -252,6 +254,19 @@ static int e4d_play_test(
     if (value != 0x0e)
         return value < 0 ? value : -EIO;
 
+    /* Check the documented low playback level and no fault retries. */
+    value = i2c_smbus_read_byte_data(client, TAS_GAIN);
+    if (value < 0)
+        return value;
+    if ((value & TAS_GAIN_MASK) != TAS_GAIN_MIN)
+        return -EIO;
+
+    value = i2c_smbus_read_byte_data(client, TAS_MISC);
+    if (value < 0)
+        return value;
+    if (value & TAS_RETRY_MASK)
+        return -EIO;
+
     wd.sdz = sdz;
     atomic_set(&wd.expired, 0);
 
@@ -281,9 +296,25 @@ static int e4d_play_test(
     if (ret < 0)
         goto stop;
 
+    /*
+     * I2C can sleep past the watchdog cutoff. If that happened,
+     * SDZ was driven low: do not perform more active-mode I2C.
+     */
+    if (atomic_read(&wd.expired) ||
+        !hrtimer_active(&wd.timer)) {
+        ret = -ETIMEDOUT;
+        goto stop;
+    }
+
     value = i2c_smbus_read_byte_data(client, TAS_POWER);
     if (value != 0x0c) {
         ret = value < 0 ? value : -EIO;
+        goto stop;
+    }
+
+    if (atomic_read(&wd.expired) ||
+        !hrtimer_active(&wd.timer)) {
+        ret = -ETIMEDOUT;
         goto stop;
     }
 
@@ -298,6 +329,12 @@ static int e4d_play_test(
         ret = e4d_monitor(client);
         if (ret)
             goto stop;
+
+        if (atomic_read(&wd.expired) ||
+            !hrtimer_active(&wd.timer)) {
+            ret = -ETIMEDOUT;
+            goto stop;
+        }
 
         value = i2c_smbus_read_byte_data(client, TAS_POWER);
 
@@ -319,11 +356,10 @@ stop:
     hrtimer_cancel(&wd.timer);
 
     /*
-     * Restore software shutdown with hardware shutdown held.
-     * Do not raise SDZ again after an activation attempt.
+     * SDZ low disables I2C and clears register state. Never issue
+     * an I2C write while SDZ is low. On the next SDZ release the
+     * TAS2562 initializes into software shutdown by specification.
      */
-    if (i2c_smbus_write_byte_data(client, TAS_POWER, 0x0e) < 0)
-        ret = -EIO;
 
     if (atomic_read(&wd.expired))
         ret = -ETIMEDOUT;
@@ -362,6 +398,9 @@ static ssize_t safeactive_store(
 
     if (!activate && !sysfs_streq(buf, "check"))
         return -EINVAL;
+
+    if (activate && gpiod_cansleep(sdz))
+        return -EOPNOTSUPP;
 
     mutex_lock(&safeactive_lock);
 

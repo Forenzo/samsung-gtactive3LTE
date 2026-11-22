@@ -2,6 +2,12 @@ name: T575 E4D Fast Module Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - work/t575-native-install
+    paths:
+      - drv/audio/t575/tas2562_safeactive.c
+      - .github/workflows/t575-audio-e4d-fast.yml
 
 permissions:
   contents: read
