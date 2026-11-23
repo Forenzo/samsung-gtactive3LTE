@@ -117,6 +117,12 @@ cp "$root/drv/audio/t575/tas2562_protectcheck.c" "$external/"
 cp "$root/drv/audio/t575/tas2562_safeactive.c" "$external/"
 cp "$kernel/sound/soc/codecs/rt5665.h" "$external/"
 
+if grep -q 'Calibration recovery sync failed' "$kernel/sound/soc/codecs/rt5665.c"; then
+    cp "$kernel/sound/soc/codecs/rt5665.c" "$external/"
+    cp "$kernel/sound/soc/codecs/rl6231.h" "$external/"
+    echo "PASS: patched RT5665 codec selected"
+fi
+
 # Adapt the include only in the disposable compilation copy.
 sed 's|#include "../codecs/rt5665.h"|#include "rt5665.h"|' \
   "$root/drv/audio/t575/gtactive3lte_unified_candidate.c" \
@@ -180,6 +186,13 @@ snd-soc-tas2562-y := tas2562.o
 obj-m += snd-soc-gtactive3lte-unified.o
 snd-soc-gtactive3lte-unified-y := gtactive3lte_unified_candidate.o
 EOF
+
+if [[ -f "$external/rt5665.c" ]]; then
+    cat >> "$external/Makefile" <<'CODEC_MAKEFILE'
+obj-m += snd-soc-rt5665.o
+snd-soc-rt5665-y := rt5665.o
+CODEC_MAKEFILE
+fi
 
 echo "=== BUILD EXPERIMENTAL AUDIO MODULES ==="
 

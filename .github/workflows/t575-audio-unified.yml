@@ -57,6 +57,17 @@ jobs:
           git -C kernel apply "../$gpu_patch"
           test -s kernel/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dts
           echo "Applied upstream's packaged postmarketOS kernel patch."
+      - name: Apply RT5665 calibration recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          p=patches/audio/t575/rt5665-calibration-recovery.patch
+          test -s "$p"
+          git -C kernel apply --check "../$p"
+          git -C kernel apply "../$p"
+          grep -q 'Calibration recovery sync failed' kernel/sound/soc/codecs/rt5665.c
+          echo "PASS: RT5665 recovery patch applied"
+
       - name: Verify isolated LTE codec source and Kconfig wiring
         run: |
           python3 -m py_compile scripts/t575-stage43-audio-compile-config.py
@@ -129,6 +140,7 @@ jobs:
               bash scripts/t575-stage98-build-audio-modules.sh \
                 /workspace/kernel /workspace/t575-audio-output
               test -s /workspace/t575-audio-output/external/snd-soc-gtactive3lte-transport64.ko
+              test -s /workspace/t575-audio-output/external/snd-soc-rt5665.ko
               echo "PASS: audio module compiled with Alpine ARM64 compiler"
             '
           echo "IMPORTANT: still requires ABI validation against running E4D module before loading"

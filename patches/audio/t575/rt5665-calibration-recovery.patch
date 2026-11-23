@@ -1,0 +1,35 @@
+--- a/sound/soc/codecs/rt5665.c
++++ b/sound/soc/codecs/rt5665.c
+@@ -4561,7 +4561,7 @@
+ 
+ static void rt5665_calibrate(struct rt5665_priv *rt5665)
+ {
+-	int value, count;
++	int value, count, ret;
+ 
+ 	guard(mutex)(&rt5665->calibrate_mutex);
+ 
+@@ -4600,6 +4600,11 @@
+ 			pr_err("HP Calibration Failure\n");
+ 			regmap_write(rt5665->regmap, RT5665_RESET, 0);
+ 			regcache_cache_bypass(rt5665->regmap, false);
++			regcache_mark_dirty(rt5665->regmap);
++			ret = regcache_sync(rt5665->regmap);
++			if (ret)
++				dev_err(rt5665->component->dev,
++					"Calibration recovery sync failed: %d\n", ret);
+ 			rt5665->calibration_done = true;
+ 			return;
+ 		}
+@@ -4620,6 +4625,11 @@
+ 			pr_err("MONO Calibration Failure\n");
+ 			regmap_write(rt5665->regmap, RT5665_RESET, 0);
+ 			regcache_cache_bypass(rt5665->regmap, false);
++			regcache_mark_dirty(rt5665->regmap);
++			ret = regcache_sync(rt5665->regmap);
++			if (ret)
++				dev_err(rt5665->component->dev,
++					"Calibration recovery sync failed: %d\n", ret);
+ 			rt5665->calibration_done = true;
+ 			return;
+ 		}
