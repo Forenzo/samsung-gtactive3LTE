@@ -12,6 +12,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 
@@ -27,35 +28,87 @@ enum {
 	GTA3_NUM_LINKS,
 };
 
+/*
+ * Samsung's stock Active3 machine driver explicitly ungates UAIF0 BCLK
+ * before asking RT5665 to lock PLL1. Track both directions so the clock
+ * stays enabled while either headphones or microphone is active.
+ *
+ * This affects UAIF0 only. TAS2562 / UAIF1 safety is unchanged.
+ */
+struct gta3_headset_clock_state {
+	struct mutex lock;
+	bool active[2];
+};
+
 static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 				  struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
 	struct snd_soc_dai *codec_dai = snd_soc_rtd_to_codec(rtd, 0);
+	struct gta3_headset_clock_state *state = snd_soc_card_get_drvdata(rtd->card);
 	unsigned int rate = params_rate(params);
-	unsigned int bclk = rate * params_width(params) *
-			    params_channels(params);
+	unsigned int bclk = rate * params_width(params) * params_channels(params);
 	unsigned int sysclk = rate * 512;
 	int ret;
 
-	ret = snd_soc_dai_set_pll(codec_dai, 0, RT5665_PLL1_S_BCLK1, bclk,
-				  sysclk);
+	mutex_lock(&state->lock);
+	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
+	    !state->active[SNDRV_PCM_STREAM_CAPTURE]) {
+		ret = snd_soc_dai_set_tristate(rtd->cpu_dai, 0);
+		if (ret) {
+			dev_err(rtd->dev, "Active3 UAIF0 BCLK enable failed: %d\n", ret);
+			goto out;
+		}
+	}
+
+	ret = snd_soc_dai_set_pll(codec_dai, 0, RT5665_PLL1_S_BCLK1,
+				  bclk, sysclk);
 	if (ret) {
 		dev_err(rtd->dev, "RT5665 PLL1 (BCLK1 %u -> %u): %d\n",
 			bclk, sysclk, ret);
-		return ret;
+		goto rollback;
 	}
 
 	ret = snd_soc_dai_set_sysclk(codec_dai, RT5665_SCLK_S_PLL1, sysclk,
 				     SND_SOC_CLOCK_IN);
-	if (ret)
+	if (ret) {
 		dev_err(rtd->dev, "RT5665 sysclk: %d\n", ret);
+		goto rollback;
+	}
 
+	state->active[substream->stream] = true;
+	goto out;
+
+rollback:
+	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
+	    !state->active[SNDRV_PCM_STREAM_CAPTURE])
+		snd_soc_dai_set_tristate(rtd->cpu_dai, 1);
+out:
+	mutex_unlock(&state->lock);
+	return ret;
+}
+
+static int gta3_headset_hw_free(struct snd_pcm_substream *substream)
+{
+	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
+	struct gta3_headset_clock_state *state = snd_soc_card_get_drvdata(rtd->card);
+	int ret = 0;
+
+	mutex_lock(&state->lock);
+	state->active[substream->stream] = false;
+	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
+	    !state->active[SNDRV_PCM_STREAM_CAPTURE])
+		ret = snd_soc_dai_set_tristate(rtd->cpu_dai, 1);
+	mutex_unlock(&state->lock);
+
+	if (ret)
+		dev_warn(rtd->dev, "Active3 UAIF0 BCLK disable failed: %d\n", ret);
 	return ret;
 }
 
 static const struct snd_soc_ops gta3_headset_ops = {
 	.hw_params = gta3_headset_hw_params,
+	.hw_free = gta3_headset_hw_free,
 };
 
 /*
@@ -176,7 +229,15 @@ static int gta3_probe(struct platform_device *pdev)
 	if (!card || !links)
 		return -ENOMEM;
 
+	struct gta3_headset_clock_state *headset_clocks;
+
+	headset_clocks = devm_kzalloc(dev, sizeof(*headset_clocks), GFP_KERNEL);
+	if (!headset_clocks)
+		return -ENOMEM;
+	mutex_init(&headset_clocks->lock);
+
 	card->dev = dev;
+	snd_soc_card_set_drvdata(card, headset_clocks);
 	card->owner = THIS_MODULE;
 	card->dai_link = links;
 	card->num_links = GTA3_NUM_LINKS;
