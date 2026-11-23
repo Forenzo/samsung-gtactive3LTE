@@ -27,8 +27,8 @@ cp "$P" "$BASE/share/t575-audio/e11/90-t575-speaker.conf"
 sha256sum "$BASE/share/t575-audio/e11/"*.conf > "$BASE/share/t575-audio/e11/manifest.sha256"
 echo '=== AUDIO ROUTES ==='
 "$BASE/bin/t575-audio-route" status
-echo '=== SELECT HEADSET (KNOWN-GOOD PATH) ==='
-"$BASE/bin/t575-audio-route" headphones
+echo '=== PRESERVE CURRENT DEFAULT SINK ==='
+echo 'Use t575-audio-route headphones to switch manually; no automatic route change during installation'
 echo '=== INSTALL RESULT ==='
 echo 'PASS: E11 user-level route installed; RT5665 preserved, E4E unchanged'
 echo 'NOTE: speaker intentionally remains locked pending continuously-safe TAS2562 runtime'
