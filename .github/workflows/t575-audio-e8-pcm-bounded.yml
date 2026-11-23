@@ -1,0 +1,138 @@
+name: T575 E8 PCM-Triggered Bounded Activation Compile Only
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-native-install
+    paths:
+      - drv/audio/t575/tas2562_e8_pcm_bounded.c
+      - .github/workflows/t575-audio-e8-pcm-bounded.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-e8:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout LTE repository
+        uses: actions/checkout@v4
+
+      - name: Verify preserved kernel symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s ci/t575-audio/Module.symvers
+          test "$(wc -l < ci/t575-audio/Module.symvers)" -eq 14024
+          echo "PASS: preserved kernel symbol table"
+
+      - name: Cache prepared kernel environment
+        id: kernel-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            kernel
+            e4d-output/build
+          key: t575-e4d-kernel-v1-${{ hashFiles('patches/linux/BASE', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3.patch', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch', 'pmos/aports/device/testing/linux-postmarketos-exynos9810/config-postmarketos-exynos9810.aarch64') }}
+
+      - name: Obtain matching patched kernel
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          read -r origin sha < patches/linux/BASE
+
+          test "$origin" = \
+            "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+
+          curl -fL --retry 4 \
+            "https://github.com/torvalds/linux/archive/${sha}.tar.gz" \
+            -o /tmp/t575-linux.tar.gz
+
+          mkdir -p kernel
+          tar -xzf /tmp/t575-linux.tar.gz \
+            -C kernel --strip-components=1
+
+          git -C kernel apply \
+            ../pmos/aports/device/testing/linux-postmarketos-exynos9810/gtactive3.patch
+
+          git -C kernel apply \
+            ../pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-gpu-first-desktop.patch
+
+          # E4D is built externally; Stage 45 machine-driver Kconfig is unnecessary.
+
+      - name: Prepare and compile only E4D
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            alpine:edge sh -ec '
+              apk add --no-cache \
+                bash build-base bc bison flex \
+                openssl-dev elfutils-dev linux-headers \
+                perl python3 findutils pahole zstd \
+                kmod file git
+
+              export ARCH=arm64
+              export CROSS_COMPILE=
+              export KBUILD_BUILD_VERSION=27-postmarketOS
+              export LOCALVERSION=
+
+              mkdir -p e4d-output/build e8-output/external
+
+              BUILD="$PWD/e4d-output/build"
+              EXTERNAL="$PWD/e8-output/external"
+
+              if [ ! -f "$BUILD/include/generated/autoconf.h" ]; then
+                cp \
+                  pmos/aports/device/testing/linux-postmarketos-exynos9810/config-postmarketos-exynos9810.aarch64 \
+                  "$BUILD/.config"
+
+                kernel/scripts/config --file "$BUILD/.config" \
+                  -m SND_SOC_TAS2562 \
+                  -m SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562
+
+                make -C kernel O="$BUILD" \
+                  olddefconfig modules_prepare
+              fi
+
+              RELEASE=$(make -s -C kernel O="$BUILD" kernelrelease)
+              test "$RELEASE" = 7.3.0
+
+              cp ci/t575-audio/Module.symvers \
+                "$BUILD/Module.symvers"
+
+              cp drv/audio/t575/tas2562_e8_pcm_bounded.c \
+                "$EXTERNAL/tas2562_safeactive.c"
+
+              printf "%s\n" \
+                "obj-m += t575-tas2562-safeactive.o" \
+                "t575-tas2562-safeactive-y := tas2562_safeactive.o" \
+                > "$EXTERNAL/Makefile"
+
+              make -C kernel O="$BUILD" \
+                M="$EXTERNAL" \
+                -j2 modules
+
+              test -s "$EXTERNAL/t575-tas2562-safeactive.ko"
+
+              modinfo "$EXTERNAL/t575-tas2562-safeactive.ko" \
+                | grep -E "^(name|vermagic|depends):"
+
+              echo "PASS: E8 PCM-triggered opt-in activation candidate module compiled"
+              echo "NOT APPROVED FOR INSTALLATION OR ACTIVE SPEAKER TESTING"
+            '
+
+      - name: Upload E8 PCM-triggered opt-in activation candidate module
+        uses: actions/upload-artifact@v4
+        with:
+          name: t575-e8-pcm-bounded-COMPILE-ONLY
+          path: e8-output/external/t575-tas2562-safeactive.ko
+          retention-days: 7
