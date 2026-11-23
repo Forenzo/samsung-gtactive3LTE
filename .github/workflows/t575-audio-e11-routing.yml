@@ -1,0 +1,36 @@
+name: T575 E11 User Audio Routing Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-native-install
+    paths:
+      - scripts/t575-e11-*.sh
+      - .github/workflows/t575-audio-e11-routing.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate-routing:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify shell syntax and safety invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in scripts/t575-e11-*.sh; do
+            case "$f" in
+              *-macos.sh) bash -n "$f" ;;
+              *) sh -n "$f" ;;
+            esac
+            echo "PASS syntax: $f"
+          done
+          ! grep -E -n '(^|[[:space:]])(insmod|rmmod|modprobe|gpiodset|i2cset|amixer|alsactl|mount|dd)[[:space:]]' scripts/t575-e11-*.sh
+          ! grep -E -n '(^|[[:space:]])sudo[[:space:]]' scripts/t575-e11-*.sh
+          ! grep -E -n '[[:space:]](write|tee)[[:space:]]/sys/' scripts/t575-e11-*.sh
+          grep -Fq 'E4E has amplifier disabled' scripts/t575-e11-audio-route.sh
+          grep -Fq 'speaker intentionally remains locked' scripts/t575-e11-install.sh
+          echo 'PASS E11 user-level scripts: no amplifier controls or root writes'
