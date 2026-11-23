@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build-unified-audio:
@@ -80,6 +81,37 @@ jobs:
           echo "PASS: patched kernel source clean"
           echo "No changes pushed to kernel repository"
 
+      - name: Reuse a prior complete ARM64 kernel symbol table
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t575-prior-symbols
+          found=0
+          while read -r run; do
+            [[ -n "$run" ]] || continue
+            [[ "$run" != "${{ github.run_id }}" ]] || continue
+            rm -f /tmp/t575-prior-symbols/kernel-Module.symvers
+            if gh run download "$run" \
+                -R "$GITHUB_REPOSITORY" \
+                -n t575-alpine-audio-NOT-FOR-LOADING \
+                -D /tmp/t575-prior-symbols >/dev/null 2>&1 && \
+                test -s /tmp/t575-prior-symbols/kernel-Module.symvers; then
+              echo "Reusing kernel symbols from earlier run $run"
+              found=1
+              break
+            fi
+          done < <(gh run list -R "$GITHUB_REPOSITORY" \
+                      --workflow t575-audio-unified.yml \
+                      --limit 50 --json databaseId \
+                      --jq ".[].databaseId")
+          if [[ "$found" != 1 ]]; then
+            echo "No earlier complete kernel symbol artifact available; refusing full rebuild" >&2
+            exit 1
+          fi
+          echo "T575_KERNEL_SYMVERS=/tmp/t575-prior-symbols/kernel-Module.symvers" >> "$GITHUB_ENV"
+          echo "PASS: no full kernel compilation required"
       - name: Build unified audio modules only
         shell: bash
         run: |
@@ -122,6 +154,7 @@ jobs:
           retention-days: 7
 
   alpine-toolchain:
+    if: ${{ false }} # Fast audio rebuild: no redundant Alpine kernel rebuild
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
@@ -151,6 +184,7 @@ jobs:
 
 
   build-alpine-audio:
+    if: ${{ false }} # Fast audio rebuild: reuse prior native kernel symbols
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
