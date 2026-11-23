@@ -86,8 +86,11 @@ printf 'sound' > "$TRANSPORT/bind"
 [ -L "$CARD/driver" ]
 pin_low
 
-echo '=== START 2-SECOND QUIET PCM (E10 PREVIEW ACTIVATES ON START) ==='
-aplay -q -D hw:0,1 -t raw -f S32_LE -r 48000 -c 2 "$TONE" \
+echo '=== PREPARE 4-SECOND PCM CLOCK (2-SECOND AMPLIFIER SESSION) ==='
+CLOCK=/home/Xnopish/t575-audio-stage-e10/quiet-440-4s-s32le.raw
+cat "$TONE" "$TONE" > "$CLOCK"
+echo '=== START 4-SECOND QUIET PCM (E10 PREVIEW ACTIVATES ON START) ==='
+aplay -q -D hw:0,1 -t raw -f S32_LE -r 48000 -c 2 "$CLOCK" \
     >/home/Xnopish/t575-audio-stage-e10/aplay.log 2>&1 &
 PCM_PID=$!
 wait "$PCM_PID"
@@ -96,7 +99,7 @@ pin_low
 grep -x closed /proc/asound/card0/pcm1p/sub0/status
 
 echo '=== E10 DRIVER RESULT ==='
-dmesg | grep -E 'E10: (one-shot PCM-triggered|pulse |PCM closed)|E4D: bounded active test' | tail -15
+dmesg | grep -E 'E10: (one-shot PCM-triggered|bounded speaker session|session |PCM closed)' | tail -15
 dmesg | grep -q 'E10: one-shot PCM-triggered 2s speaker session BEGIN'
 dmesg | grep -q 'E10: bounded speaker session started'
 dmesg | grep -q 'E10: bounded speaker session completed'
