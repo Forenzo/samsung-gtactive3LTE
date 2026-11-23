@@ -35,9 +35,17 @@ enum {
  *
  * This affects UAIF0 only. TAS2562 / UAIF1 safety is unchanged.
  */
+/*
+ * Current Exynos9810 ABOX CPU DAI returns -EINVAL to set_tristate().
+ * This is not a usable BCLK-gating interface on this kernel.
+ * Continue with RT5665 PLL configuration in that case; only undo
+ * tristate when a previous enable call actually succeeded.
+ */
 struct gta3_headset_clock_state {
 	struct mutex lock;
 	bool active[2];
+	bool tristate_unsupported;
+	bool clock_ungated;
 };
 
 static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
@@ -53,18 +61,26 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 
 	mutex_lock(&state->lock);
 	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
-	    !state->active[SNDRV_PCM_STREAM_CAPTURE]) {
+	    !state->active[SNDRV_PCM_STREAM_CAPTURE] &&
+	    !state->tristate_unsupported) {
 		ret = snd_soc_dai_set_tristate(snd_soc_rtd_to_cpu(rtd, 0), 0);
-		if (ret) {
-			dev_warn(rtd->dev, "Active3 UAIF0 BCLK enable unsupported/failed: %d\n", ret);
+		if (ret == -EINVAL || ret == -ENOTSUPP) {
+			state->tristate_unsupported = true;
+			dev_warn_once(rtd->dev,
+				      "ABOX UAIF0 has no tristate operation (%d); continuing with codec PLL setup\\n",
+				      ret);
+		} else if (ret) {
+			dev_err(rtd->dev, "UAIF0 tristate enable failed: %d\\n", ret);
 			goto out;
+		} else {
+			state->clock_ungated = true;
 		}
 	}
 
 	ret = snd_soc_dai_set_pll(codec_dai, 0, RT5665_PLL1_S_BCLK1,
 				  bclk, sysclk);
 	if (ret) {
-		dev_err(rtd->dev, "RT5665 PLL1 (BCLK1 %u -> %u): %d\n",
+		dev_err(rtd->dev, "RT5665 PLL1 (BCLK1 %u -> %u): %d\\n",
 			bclk, sysclk, ret);
 		goto rollback;
 	}
@@ -72,7 +88,7 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 	ret = snd_soc_dai_set_sysclk(codec_dai, RT5665_SCLK_S_PLL1, sysclk,
 				     SND_SOC_CLOCK_IN);
 	if (ret) {
-		dev_err(rtd->dev, "RT5665 sysclk: %d\n", ret);
+		dev_err(rtd->dev, "RT5665 sysclk: %d\\n", ret);
 		goto rollback;
 	}
 
@@ -80,9 +96,12 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 	goto out;
 
 rollback:
-	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
-	    !state->active[SNDRV_PCM_STREAM_CAPTURE])
+	if (state->clock_ungated &&
+	    !state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
+	    !state->active[SNDRV_PCM_STREAM_CAPTURE]) {
 		snd_soc_dai_set_tristate(snd_soc_rtd_to_cpu(rtd, 0), 1);
+		state->clock_ungated = false;
+	}
 out:
 	mutex_unlock(&state->lock);
 	return ret;
@@ -96,13 +115,17 @@ static int gta3_headset_hw_free(struct snd_pcm_substream *substream)
 
 	mutex_lock(&state->lock);
 	state->active[substream->stream] = false;
-	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
-	    !state->active[SNDRV_PCM_STREAM_CAPTURE])
+	if (state->clock_ungated &&
+	    !state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
+	    !state->active[SNDRV_PCM_STREAM_CAPTURE]) {
 		ret = snd_soc_dai_set_tristate(snd_soc_rtd_to_cpu(rtd, 0), 1);
+		if (!ret)
+			state->clock_ungated = false;
+	}
 	mutex_unlock(&state->lock);
 
 	if (ret)
-		dev_warn(rtd->dev, "Active3 UAIF0 BCLK disable failed: %d\n", ret);
+		dev_warn(rtd->dev, "Active3 UAIF0 BCLK disable failed: %d\\n", ret);
 	return ret;
 }
 
