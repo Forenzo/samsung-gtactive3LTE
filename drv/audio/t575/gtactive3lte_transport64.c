@@ -54,7 +54,7 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 	mutex_lock(&state->lock);
 	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
 	    !state->active[SNDRV_PCM_STREAM_CAPTURE]) {
-		ret = snd_soc_dai_set_tristate(rtd->cpu_dai, 0);
+		ret = snd_soc_dai_set_tristate(snd_soc_rtd_to_cpu(rtd, 0), 0);
 		if (ret) {
 			dev_warn(rtd->dev, "Active3 UAIF0 BCLK enable unsupported/failed: %d\n", ret);
 			goto out;
@@ -82,7 +82,7 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 rollback:
 	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
 	    !state->active[SNDRV_PCM_STREAM_CAPTURE])
-		snd_soc_dai_set_tristate(rtd->cpu_dai, 1);
+		snd_soc_dai_set_tristate(snd_soc_rtd_to_cpu(rtd, 0), 1);
 out:
 	mutex_unlock(&state->lock);
 	return ret;
@@ -98,7 +98,7 @@ static int gta3_headset_hw_free(struct snd_pcm_substream *substream)
 	state->active[substream->stream] = false;
 	if (!state->active[SNDRV_PCM_STREAM_PLAYBACK] &&
 	    !state->active[SNDRV_PCM_STREAM_CAPTURE])
-		ret = snd_soc_dai_set_tristate(rtd->cpu_dai, 1);
+		ret = snd_soc_dai_set_tristate(snd_soc_rtd_to_cpu(rtd, 0), 1);
 	mutex_unlock(&state->lock);
 
 	if (ret)
