@@ -73,21 +73,30 @@ if [[ "$release" != "7.3.0" ]]; then
     exit 1
 fi
 
-echo "=== BUILD KERNEL SYMBOL TABLE ==="
+echo "=== REUSE VERIFIED KERNEL SYMBOL TABLE ==="
 
-make -C "$kernel" O="$build" \
-    ARCH=arm64 \
-    CROSS_COMPILE="${T575_CROSS_COMPILE-aarch64-linux-gnu-}" \
-    LOCALVERSION= \
-    KBUILD_BUILD_VERSION="${T575_BUILD_VERSION:-27-postmarketOS}" \
-    -j2 Image modules
+if [[ -n "${T575_KERNEL_SYMVERS:-}" ]]; then
+    [[ -s "$T575_KERNEL_SYMVERS" ]] || {
+        echo "FAIL: existing kernel symbol table missing" >&2
+        exit 1
+    }
+    cp "$T575_KERNEL_SYMVERS" "$build/Module.symvers"
+    echo "PASS: existing kernel Module.symvers reused; no Image/modules rebuild"
+else
+    echo "=== BUILD KERNEL SYMBOL TABLE (SLOW PATH) ==="
+    make -C "$kernel" O="$build" \
+        ARCH=arm64 \
+        CROSS_COMPILE="${T575_CROSS_COMPILE-aarch64-linux-gnu-}" \
+        LOCALVERSION= \
+        KBUILD_BUILD_VERSION="${T575_BUILD_VERSION:-27-postmarketOS}" \
+        -j2 Image modules
+fi
 
 test -s "$build/Module.symvers" || {
     echo "FAIL: kernel Module.symvers missing" >&2
     exit 1
 }
-
-echo "PASS: complete kernel build generated Module.symvers"
+echo "PASS: kernel symbol table available"
 
 grep -qx 'CONFIG_SND_SOC_TAS2562=m' "$build/.config"
 grep -qx 'CONFIG_SND_SOC_SAMSUNG_GTACTIVE3LTE_TAS2562=m' "$build/.config"
