@@ -77,6 +77,13 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 		}
 	}
 
+	dev_info(rtd->dev,
+		 "RT5665 clock probe BEFORE: rate=%u width=%u channels=%u BCLK=%u SYSCLK=%u reg80=%04x reg81=%04x reg82=%04x\n",
+		 rate, params_width(params), params_channels(params), bclk, sysclk,
+		 snd_soc_component_read(codec_dai->component, 0x80),
+		 snd_soc_component_read(codec_dai->component, 0x81),
+		 snd_soc_component_read(codec_dai->component, 0x82));
+
 	ret = snd_soc_dai_set_pll(codec_dai, 0, RT5665_PLL1_S_BCLK1,
 				  bclk, sysclk);
 	if (ret) {
@@ -85,12 +92,24 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 		goto rollback;
 	}
 
+	dev_info(rtd->dev,
+		 "RT5665 clock probe AFTER PLL: reg80=%04x reg81=%04x reg82=%04x\n",
+		 snd_soc_component_read(codec_dai->component, 0x80),
+		 snd_soc_component_read(codec_dai->component, 0x81),
+		 snd_soc_component_read(codec_dai->component, 0x82));
+
 	ret = snd_soc_dai_set_sysclk(codec_dai, RT5665_SCLK_S_PLL1, sysclk,
 				     SND_SOC_CLOCK_IN);
 	if (ret) {
 		dev_err(rtd->dev, "RT5665 sysclk: %d\n", ret);
 		goto rollback;
 	}
+
+	dev_info(rtd->dev,
+		 "RT5665 clock probe AFTER SYSCLK: reg80=%04x reg81=%04x reg82=%04x\n",
+		 snd_soc_component_read(codec_dai->component, 0x80),
+		 snd_soc_component_read(codec_dai->component, 0x81),
+		 snd_soc_component_read(codec_dai->component, 0x82));
 
 	state->active[substream->stream] = true;
 	goto out;
