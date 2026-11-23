@@ -56,7 +56,7 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 	    !state->active[SNDRV_PCM_STREAM_CAPTURE]) {
 		ret = snd_soc_dai_set_tristate(rtd->cpu_dai, 0);
 		if (ret) {
-			dev_err(rtd->dev, "Active3 UAIF0 BCLK enable failed: %d\n", ret);
+			dev_warn(rtd->dev, "Active3 UAIF0 BCLK enable unsupported/failed: %d\n", ret);
 			goto out;
 		}
 	}
@@ -222,14 +222,13 @@ static int gta3_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct snd_soc_dai_link *links;
 	struct snd_soc_card *card;
+	struct gta3_headset_clock_state *headset_clocks;
 	int ret;
 
 	card = devm_kzalloc(dev, sizeof(*card), GFP_KERNEL);
 	links = devm_kcalloc(dev, GTA3_NUM_LINKS, sizeof(*links), GFP_KERNEL);
 	if (!card || !links)
 		return -ENOMEM;
-
-	struct gta3_headset_clock_state *headset_clocks;
 
 	headset_clocks = devm_kzalloc(dev, sizeof(*headset_clocks), GFP_KERNEL);
 	if (!headset_clocks)
