@@ -67,10 +67,10 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 		if (ret == -EINVAL || ret == -ENOTSUPP) {
 			state->tristate_unsupported = true;
 			dev_warn_once(rtd->dev,
-				      "ABOX UAIF0 has no tristate operation (%d); continuing with codec PLL setup\\n",
+				      "ABOX UAIF0 has no tristate operation (%d); continuing with codec PLL setup\n",
 				      ret);
 		} else if (ret) {
-			dev_err(rtd->dev, "UAIF0 tristate enable failed: %d\\n", ret);
+			dev_err(rtd->dev, "UAIF0 tristate enable failed: %d\n", ret);
 			goto out;
 		} else {
 			state->clock_ungated = true;
@@ -80,7 +80,7 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 	ret = snd_soc_dai_set_pll(codec_dai, 0, RT5665_PLL1_S_BCLK1,
 				  bclk, sysclk);
 	if (ret) {
-		dev_err(rtd->dev, "RT5665 PLL1 (BCLK1 %u -> %u): %d\\n",
+		dev_err(rtd->dev, "RT5665 PLL1 (BCLK1 %u -> %u): %d\n",
 			bclk, sysclk, ret);
 		goto rollback;
 	}
@@ -88,7 +88,7 @@ static int gta3_headset_hw_params(struct snd_pcm_substream *substream,
 	ret = snd_soc_dai_set_sysclk(codec_dai, RT5665_SCLK_S_PLL1, sysclk,
 				     SND_SOC_CLOCK_IN);
 	if (ret) {
-		dev_err(rtd->dev, "RT5665 sysclk: %d\\n", ret);
+		dev_err(rtd->dev, "RT5665 sysclk: %d\n", ret);
 		goto rollback;
 	}
 
@@ -125,7 +125,7 @@ static int gta3_headset_hw_free(struct snd_pcm_substream *substream)
 	mutex_unlock(&state->lock);
 
 	if (ret)
-		dev_warn(rtd->dev, "Active3 UAIF0 BCLK disable failed: %d\\n", ret);
+		dev_warn(rtd->dev, "Active3 UAIF0 BCLK disable failed: %d\n", ret);
 	return ret;
 }
 
