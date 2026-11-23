@@ -660,6 +660,7 @@ static int t575_safeactive_startup(
  * compile-only candidate: no code here can release SDZ or write TAS_POWER.
  * Deferred work confirms we can cross the atomic ALSA trigger boundary.
  */
+static void e6_transition_worker(struct work_struct *work);
 static DECLARE_WORK(e6_transition_work, e6_transition_worker);
 static atomic_t e6_stream_running = ATOMIC_INIT(0);
 static struct gpio_desc *e6_shutdown_gpio;
