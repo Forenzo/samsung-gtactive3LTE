@@ -2,7 +2,7 @@
 
 **Scope:** Samsung Galaxy Tab Active3 LTE SM-T575, with the opt-in
 NFS-enabled diagnostic Linux 7.3.0 BOOT image on the device and USB
-NCM debug console on IPv6 link-local `fe80::57:aff:fe00:1%en7`.
+NCM debug console on IPv6 link-local `<USB_CONSOLE_IP>%<USB_IFACE>`.
 This is a manual end-of-session power-off, not a repair/flash recipe.
 
 The owner requested that the exact procedure be saved for subsequent
@@ -19,7 +19,7 @@ import socket
 
 with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as s:
     s.settimeout(10)
-    s.connect(("fe80::57:aff:fe00:1", 23, 0,
+    s.connect(("<USB_CONSOLE_IP>", 23, 0,
                socket.if_nametoindex("en7")))
     s.recv(4096)
     s.sendall(b"write /proc/sysrq-trigger o\n")
