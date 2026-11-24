@@ -1,3 +1,4 @@
+PRIVACY NOTE: Numeric USB network addresses have been redacted from this historical log.
 SM-T575 LTE - FIRST MAINLINE LINUX BOOT AND HARDWARE DIAGNOSTIC LOG
 Date: 2026-11-13
 Project: Galaxy Tab Active3 LTE mainline Linux bring-up
@@ -131,7 +132,7 @@ should remain available.
 Host: macOS, Apple Silicon, USB attached
 Mac's interface: USB NCM network adapter (en7 in this test)
 Mac interface: status active; media 100baseTX full-duplex
-Tablet console IPv6: fe80::57:aff:fe00:1%en7
+Tablet console IPv6: <USB_CONSOLE_IP>%<USB_IFACE>
 TCP console port: 23
 
 Command connection output:
