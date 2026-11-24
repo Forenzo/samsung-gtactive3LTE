@@ -1,0 +1,21 @@
+diff --git a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
+--- a/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
++++ b/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
+@@ -86,3 +86,17 @@
+ &{/sound} {
+ 	status = "disabled";
+ };
++
++/*
++ * Experimental SM-T575 GPU bring-up ONLY.
++ * S-Boot left EMBEDDED_G3D_STATUS = 0x0010000f on real SM-T575.
++ * The tiny NFS diagnostic kernel has no active genpd provider and the
++ * GPU is indefinitely deferred on supplier 14064040.power-domain.
++ * Match the established Wi-Fi stage-one workaround: rely on the
++ * already-powered hardware, without requesting PMU power transitions.
++ * Never use as a production power-management design; re-enable genpd
++ * only after Exynos9810 regulator and clock sequencing are audited.
++ */
++&gpu {
++	/delete-property/ power-domains;
++};

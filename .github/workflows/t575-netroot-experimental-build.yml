@@ -6,10 +6,12 @@ on:
   push:
     branches:
       - integration/upstream-active3-family-firstboot
+      - work/t575-gpu-genpd-config-review # temporary opt-in GPU review branch
     paths:
       - '.github/workflows/t575-netroot-experimental-build.yml'
       - 'configs/t575-plasma-netroot.config'
       - 'bootchain/build.sh'
+      - 'patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch'
 
 permissions:
   contents: read
@@ -53,10 +55,28 @@ jobs:
           NO_F2FS: '1'
           JOBS: '4'
           BRINGUP_EXTRA_CONFIG: ${{ github.workspace }}/configs/t575-plasma-netroot.config
+          BRINGUP_EXTRA_DTS_PATCH: ${{ github.workspace }}/patches/experimental/t575-lte-gpu-bootloader-on-no-genpd.patch
         run: |
           set -euo pipefail
           mkdir -p out
           ci/bootchain/build out "t575-netroot-experimental-${GITHUB_RUN_NUMBER}"
+
+      - name: Audit LTE-only GPU DT staged change (NO DEVICE ACCESS)
+        run: |
+          set -euo pipefail
+          LTE=build/bootchain/bringup/arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dtb
+          WIFI=build/bootchain/bringup/arch/arm64/boot/dts/exynos/exynos9810-gtactive3wifi.dtb
+          test -s "$LTE" && test -s "$WIFI"
+          fdtget -t s "$LTE" / model | grep -Fqx 'Samsung Galaxy Tab Active3 LTE (SM-T575)'
+          fdtget -t s "$LTE" /soc@0/gpu@17500000 status | grep -qx okay
+          if fdtget -t x "$LTE" /soc@0/gpu@17500000 power-domains >/dev/null 2>&1; then
+            echo 'FAIL: LTE gpu still has deferred power-domains supplier'
+            exit 1
+          fi
+          fdtget -t s "$LTE" /soc@0/power-domain@14064040 compatible | grep -qx 'samsung,exynos9810-g3d-pd'
+          echo 'PASS: LTE GPU enabled, deferred genpd link removed in experimental DT'
+          echo 'Only the LTE DT was patched; Wi-Fi DTS remained unchanged by optional patch'
+          echo 'This is compilation evidence, NOT GPU probe or rendering evidence'
 
       - name: Audit kernel configuration and bootchain archive
         run: |

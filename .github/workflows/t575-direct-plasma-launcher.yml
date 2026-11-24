@@ -1,0 +1,50 @@
+name: t575-direct-plasma-launcher
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work/t575-gpu-genpd-config-review
+    paths:
+      - 'first-gui/t575-plasma-direct.c'
+      - 'first-gui/launch-t575-plasma.py'
+      - '.github/workflows/t575-direct-plasma-launcher.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-loader:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AArch64 cross-compiler
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Build static AArch64 desktop launcher
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          aarch64-linux-gnu-gcc -std=c11 -O2 -static -Wall -Wextra -Werror \
+            -o out/t575-plasma-launch-aarch64 first-gui/t575-plasma-direct.c
+          test "$(od -An -tu2 -j18 -N2 out/t575-plasma-launch-aarch64 | tr -d ' ')" = 183
+          aarch64-linux-gnu-readelf -l out/t575-plasma-launch-aarch64 | tee out/readelf.txt
+          if grep -q INTERP out/readelf.txt; then
+            echo 'FAIL: launcher depends on an unavailable dynamic loader' >&2
+            exit 1
+          fi
+          sha256sum out/t575-plasma-launch-aarch64 | tee out/SHA256SUMS
+          test -s out/t575-plasma-launch-aarch64
+          echo 'PASS: standalone AArch64 launcher; no tablet writes'
+      - name: Python syntax
+        run: python3 -m py_compile first-gui/launch-t575-plasma.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t575-plasma-desktop-direct-ARM64-UNTESTED
+          path: |
+            out/t575-plasma-launch-aarch64
+            out/SHA256SUMS
+            first-gui/launch-t575-plasma.py
+          retention-days: 14
+          if-no-files-found: error
