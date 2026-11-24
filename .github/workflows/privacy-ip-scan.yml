@@ -1,0 +1,36 @@
+name: Privacy scan of tracked network literals
+
+on:
+  push:
+    branches:
+      - privacy/device-console-endpoints-20261124
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check host scripts and Python client
+        shell: bash
+        run: |
+          set -euo pipefail
+          for p in scripts/tab scripts/devloop.sh scripts/tab-get scripts/tab-put \
+            scripts/tab-shot scripts/keyscan scripts/duranium-update \
+            scripts/firmware-to-tablet scripts/checks/containers.sh scripts/wifi-test; do
+            bash -n "$p"
+          done
+          python3 -m py_compile scripts/installer/py/console.py
+          for p in pmos/duranium-build/0002-*.patch \
+            pmos/duranium-build/0004-*.patch \
+            pmos/duranium-build/0006-*.patch \
+            pmos/duranium-build/0020-*.patch; do
+            git apply --numstat "$p" >/dev/null
+          done
+          echo "PASS: shell, Python, and patch-format validation"
+      - name: Scan all tracked sources, including U-Boot, without logging IP values
+        run: python3 scripts/audit-network-literals.py
