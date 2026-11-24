@@ -146,7 +146,7 @@ index 0000000..b2df01b
 +## USB debug layer
 +
 +`duranium-usb-debug` brings up the fixed-MAC NCM interface
-+(`fe80::57:aff:fe00:1`), an unauthenticated root console on TCP 23, an sshd on
++(using a locally configured USB link-local address), an unauthenticated root console on TCP 23, an sshd on
 +22, and a kernel-log stream on 24 — all on the USB link-local address only,
 +present in both the initrd and the booted system, enabled by default and
 +disable-able (`systemctl disable --now duranium-usb-debug.target`, or ship

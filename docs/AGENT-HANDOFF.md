@@ -374,7 +374,7 @@ bring-up image (ca1898aec3d8); boot-mainline.img is currently that same image.
 Console tools (host): `scripts/tab wait N`, `scripts/tab "<cmd>"`,
 `scripts/tab-get REMOTE LOCAL [BYTES]`, `scripts/tab-put LOCAL REMOTE`. Wrap in
 `flock build/tab.lock …` if anything else might use the console. Tablet =
-IPv6 link-local fe80::57:aff:fe00:1 on the cdc_ncm interface (enp0s20f0u5).
+USB console host is configured locally via GTA3_CONSOLE_ADDR (include cdc_ncm interface scope for link-local IPv6).
 Console commands: dmesg, peek, dump, poke, cat (raw stream), write, put, run
 PATH [ARGS], insmod, rmmod, ls, i2cw/i2cr (/dev/i2c-0), ulog (U-Boot RAM log at
 0x8ff100000, survives resets), evread, discard (Android partitions only),
@@ -508,7 +508,7 @@ image 14 (kernel r2). Issues found and fixed on the way:
 - in the booted system only sshd listened (no key) -> sockets IgnoreOnIsolate
   + duranium-debug-sockets.service; dev key: build/secrets/duranium-dev-ed25519
   (public half via local extra tree build/duranium-extra, never committed),
-  `ssh -i build/secrets/duranium-dev-ed25519 root@fe80::57:aff:fe00:1%enp0s20f0u5`
+  `ssh -i build/secrets/duranium-dev-ed25519 root@$GTA3_CONSOLE_ADDR`
 - Wi-Fi profile baked as /usr/lib/NetworkManager/system-connections/wifi-dev.nmconnection
   (local extra tree only). Build with:
   `MKOSI_CONTAINER_ARGS="-v $X:$X:ro" SKIP_APKS=1 UI=gnome sh contrib/samsung-gtactive3wifi/build-image.sh --extra-tree=$X`

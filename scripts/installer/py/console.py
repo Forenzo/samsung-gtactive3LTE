@@ -18,7 +18,7 @@ usage:
   console.py key DEV SECS                waits for a key press: prints its code,
                                          "timeout", or exits 3 if the console went away
 
-Address: $GTA3_CONSOLE_ADDR, else fe80::57:aff:fe00:1%<the cdc_ncm interface>;
+Address: $GTA3_CONSOLE_ADDR (required; include interface scope for USB IPv6);
 port $GTA3_CONSOLE_PORT (default 23).
 """
 import hashlib
@@ -27,7 +27,6 @@ import socket
 import sys
 import time
 
-LL = "fe80::57:aff:fe00:1"
 PORT = int(os.environ.get("GTA3_CONSOLE_PORT", "23"))
 
 
@@ -47,10 +46,7 @@ def address():
     a = os.environ.get("GTA3_CONSOLE_ADDR")
     if a:
         return a
-    i = ncm_iface()
-    if not i:
-        sys.exit("no tablet USB network (cdc_ncm) interface")
-    return f"{LL}%{i}"
+    sys.exit("GTA3_CONSOLE_ADDR required; set to scoped USB debug address locally")
 
 
 def connect(timeout=10):

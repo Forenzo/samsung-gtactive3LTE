@@ -2,7 +2,7 @@
 # Bring up the Duranium USB debug NCM network interface. Matches the SM-T570
 # bring-up init (gtactive3-mainline initramfs/init.c, setup_gadget/ifup): same
 # VID/PID and fixed MAC addresses, so the device keeps the IPv6 link-local
-# fe80::57:aff:fe00:1 and the host keeps fe80::57:aff:fe00:2 across reboots,
+# stable USB link-local addresses derived automatically across reboots,
 # and the existing host tools (scripts/tab, tab-get, tab-put) keep working.
 #
 # Device-specific preparation (e.g. clock gates or a USB data switch that
@@ -62,7 +62,7 @@ if ! echo "$udc" > "$GADGET/UDC"; then
 fi
 
 # Wait for the interface, then bring it up. The fixed MAC gives the stable
-# fe80:: link-local address that matches the bring-up console.
+# automatically assigned link-local address that matches the bring-up console.
 iface=""
 for _ in $(seq 1 20); do
     iface=$(cat "$GADGET/functions/ncm.usb0/ifname" 2>/dev/null || true)
@@ -75,4 +75,4 @@ if [ -z "$iface" ]; then
 fi
 ip link set "$iface" up
 echo "$iface" > /run/duranium-usb-debug.iface
-echo "duranium-usb-debug: up on $iface (fe80::57:aff:fe00:1)"
+echo "duranium-usb-debug: USB interface up on $iface"

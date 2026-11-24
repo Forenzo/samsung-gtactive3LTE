@@ -50,7 +50,7 @@ Clean-boot counter (B5):
 
 | id | block | how | PASS |
 |---|---|---|---|
-| C1 | Wi-Fi | `nmcli -t device`, `ping -c3 1.1.1.1` over wlan0 | connected, 0% loss |
+| C1 | Wi-Fi | `nmcli -t device`, `ping -c3 one.one.one.one` over wlan0 | connected, 0% loss |
 | C2 | Bluetooth | `bluetoothctl show`, `bluetoothctl --timeout 15 scan on` | powered, devices found |
 | C3 | Touch 👆 | evtest on the Himax device while the user drags | ≥100 events, no bad frames in dmesg |
 | C4 | S Pen 👆 | evtest on "Wacom W9019 Digitizer", hover + press | BTN_TOOL_PEN, pressure changes |

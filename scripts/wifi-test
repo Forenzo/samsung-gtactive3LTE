@@ -63,7 +63,7 @@ connect() {
 	t "run /sbin/ip addr show wlan0"
 	gw=$(t "run /sbin/ip route" | awk '/^default/{print $3; exit}')
 	[ -n "$gw" ] && t "run /bin/busybox ping -c 4 $gw"
-	t "run /bin/busybox ping -c 3 1.1.1.1"
+	t "run /bin/busybox ping -c 3 one.one.one.one"
 }
 
 case $step in

@@ -614,7 +614,7 @@ static void ifup(const char *ifname)
 	strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
 	ioctl(s, SIOCGIFFLAGS, &ifr);
 	ifr.ifr_flags |= IFF_UP;
-	out(ioctl(s, SIOCSIFFLAGS, &ifr) ? "  ifup failed\n" : "  usb0 up (fe80::57:aff:fe00:1)\n");
+	out(ioctl(s, SIOCSIFFLAGS, &ifr) ? "  ifup failed\n" : "  usb0 up (link-local address auto-configured)\n");
 	close(s);
 }
 

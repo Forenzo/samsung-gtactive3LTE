@@ -40,7 +40,7 @@ index 98181b2..8a55d7a 100644
 -# raw stream) commands over USB. This script uses the repo's tab/tab-put/
 -# tab-get helpers, so the USB network must be up ("tab wait").
 +# (S-Boot -> uniLoader -> mainline Linux + nolibc init, initramfs/init.c),
-+# which serves TCP 23 on fe80::57:aff:fe00:1 over the USB NCM link with:
++# which serves TCP 23 on the USB link-local address over the USB NCM link with:
 +#   "put PATH LEN" + LEN raw bytes  -> opens PATH O_WRONLY|O_CREAT|O_TRUNC and
 +#                                       writes them, replies "ok <received>"
 +#   "cat PATH"                       -> streams PATH until EOF, then "> "
@@ -69,7 +69,7 @@ index 98181b2..8a55d7a 100644
 -TAB_GET=$ROOT/scripts/tab-get
 -DEV=/dev/sda31          # Android userdata, confirmed in HARDWARE.md
 +LOCK=$ROOT/build/tab.lock
-+LL=fe80::57:aff:fe00:1
++LL=${GTA3_CONSOLE_ADDR:?Configure tablet USB debug address with interface scope}
 +PART=sda31              # Android userdata (HARDWARE.md "Partitions")
 +DEV=/dev/$PART
 +WANT_PARTNAME=userdata  # GPT name read on the device: sda31 uevent PARTNAME
@@ -154,7 +154,7 @@ index 98181b2..8a55d7a 100644
 -# offset 0, which is where the nested GPT begins.
 -"$TAB_PUT" "$RAW" "$DEV"
 -"$TAB" "write /proc/sys/vm/drop_caches 3" >/dev/null 2>&1 || true
-+flock "$LOCK" python3 -I - "$LL%$IFC" "$RAW" "$DEV" "$LEN" <<'PY'
++flock "$LOCK" python3 -I - "$LL" "$RAW" "$DEV" "$LEN" <<'PY'
 +import socket, sys, time
 +addr, local, remote, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 +s = socket.create_connection((addr, 23), timeout=30)
@@ -199,7 +199,7 @@ index 98181b2..8a55d7a 100644
 -	# tab-get reads exactly LEN bytes from the device node.
 -	"$TAB_GET" "$DEV" "$BACK" "$LEN"
 -	GOT=$(sha256sum "$BACK" | cut -d' ' -f1)
-+	GOT=$(flock "$LOCK" python3 -I - "$LL%$IFC" "$DEV" "$LEN" <<'PY'
++	GOT=$(flock "$LOCK" python3 -I - "$LL" "$DEV" "$LEN" <<'PY'
 +import hashlib, socket, sys
 +addr, remote, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
 +s = socket.create_connection((addr, 23), timeout=30)

@@ -3,7 +3,7 @@
 #   tab wait            wait until the tablet's USB network is up
 #   tab dmesg | peek ADDR | poke ADDR VAL | cat PATH | reboot [download]
 P=$(cd "$(dirname "$0")/.." && pwd)
-LL=fe80::57:aff:fe00:1
+LL=${GTA3_CONSOLE_ADDR:?Set GTA3_CONSOLE_ADDR to tablet USB debug host with interface scope}
 iface() {
 	for d in /sys/class/net/*; do
 		[ "$(basename "$(readlink -f "$d/device/driver" 2>/dev/null)")" = cdc_ncm ] && { basename "$d"; return 0; }
@@ -12,13 +12,13 @@ iface() {
 }
 if [ "${1:-}" = wait ]; then
 	for i in $(seq 1 ${2:-120}); do
-		ifc=$(iface) && ping -6 -c1 -W1 "$LL%$ifc" >/dev/null 2>&1 && { echo "up on $ifc"; exit 0; }
+		ifc=$(iface) && ping -6 -c1 -W1 "$LL" >/dev/null 2>&1 && { echo "up on $ifc"; exit 0; }
 		sleep 1
 	done
 	echo "timeout"; exit 1
 fi
 ifc=$(iface) || { echo "tablet USB network not present" >&2; exit 1; }
-python3 -I - "$LL%$ifc" "$*" <<'PY'
+python3 -I - "$LL" "$*" <<'PY'
 import socket, sys
 s = socket.create_connection((sys.argv[1], 23), timeout=10)
 s.settimeout(30)
