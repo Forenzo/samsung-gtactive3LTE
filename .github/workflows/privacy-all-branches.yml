@@ -1,0 +1,23 @@
+name: Audit current branch heads (address names redacted)
+
+on:
+  push:
+    branches:
+      - audit/ip-literals-20261124
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  branch-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch all current remote branch heads
+        run: git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+      - name: Enumerate files containing endpoint literals (no values printed)
+        run: python3 scripts/audit-current-branches.py
