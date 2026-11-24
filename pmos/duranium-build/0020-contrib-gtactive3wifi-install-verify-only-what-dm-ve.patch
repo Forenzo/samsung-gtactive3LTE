@@ -32,7 +32,7 @@ index 8a55d7a..4524506
  set -euo pipefail
  
  ROOT=${GTA3_ROOT:-/home/borysthebear/Projects/gtactive3-mainline}
-@@ -32,9 +37,10 @@ LL=fe80::57:aff:fe00:1
+@@ -32,9 +37,10 @@ LL=${GTA3_CONSOLE_ADDR:?Configure tablet USB debug address with interface scope}
  PART=sda31              # Android userdata (HARDWARE.md "Partitions")
  DEV=/dev/$PART
  WANT_PARTNAME=userdata  # GPT name read on the device: sda31 uevent PARTNAME
@@ -74,9 +74,9 @@ index 8a55d7a..4524506
  	tab "write /proc/sys/vm/drop_caches 3" | grep -q '^ok' ||
  		{ echo "ERROR: drop_caches failed, read-back would not prove the write" >&2; exit 1; }
 -	echo "Verifying (reading $LEN bytes back and comparing sha256)..."
--	GOT=$(flock "$LOCK" python3 -I - "$LL%$IFC" "$DEV" "$LEN" <<'PY'
+-	GOT=$(flock "$LOCK" python3 -I - "$LL" "$DEV" "$LEN" <<'PY'
 +	echo "Verifying (reading $VLEN of $LEN bytes back and comparing sha256)..."
-+	GOT=$(flock "$LOCK" python3 -I - "$LL%$IFC" "$DEV" "$VLEN" <<'PY'
++	GOT=$(flock "$LOCK" python3 -I - "$LL" "$DEV" "$VLEN" <<'PY'
  import hashlib, socket, sys
  addr, remote, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
  s = socket.create_connection((addr, 23), timeout=30)
