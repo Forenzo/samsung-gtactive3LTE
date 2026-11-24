@@ -1,0 +1,4 @@
+# SHA256 for sanitized files only; original private files intentionally not published.
+3cecd7227ebdfa6fd1e923f7a1908f13fc40cccd9348942833108b69ba502531  headphones-managed.sh
+1a9ffb7a3b02af8858fcf2e12edd9ea45ad4f2274943bc96b6c2b2780acf8a1d  rollback-v2.sh
+de6769d40f9d9d938fdc313f2ea58722889121f26460fc8e13df0edf926f185d  t575-headphones.service
