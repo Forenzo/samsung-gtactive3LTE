@@ -1,0 +1,20 @@
+[Unit]
+Description=SM-T575 experimental continuous RT5665 headphones
+After=systemd-sysext.service systemd-user-sessions.service
+Wants=systemd-sysext.service
+ConditionPathExists=/usr/share/alsa/ucm2/conf.d/Galaxy_Tab_Acti/HiFi.conf
+
+[Service]
+Type=simple
+User=root
+Environment=XDG_RUNTIME_DIR=/run/user/__AUDIO_UID__
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/__AUDIO_UID__/bus
+ExecStartPre=/bin/sh /etc/t575-headphones/headphones-managed.sh --check
+ExecStart=/bin/sh /etc/t575-headphones/headphones-managed.sh --run
+ExecStopPost=/bin/sh /etc/t575-headphones/rollback-v2.sh
+Restart=no
+KillMode=control-group
+TimeoutStopSec=90s
+
+[Install]
+WantedBy=multi-user.target
