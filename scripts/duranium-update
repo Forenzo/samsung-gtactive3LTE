@@ -35,7 +35,7 @@ P=$(cd "$(dirname "$0")/.." && pwd)
 UI=${UI:-gnome}
 NAME=samsung-gtactive3wifi_${UI}_edge
 OUT=${OUT:-$P/build/wt/duranium/mkosi.output/$NAME}
-LL=fe80::57:aff:fe00:1
+LL=${GTA3_CONSOLE_ADDR:-}
 W=$P/build/.upd
 mkdir -p "$W"
 # Transport: the bring-up console over USB (default), or ssh when there is
@@ -171,7 +171,7 @@ else
 IFC=$(for d in /sys/class/net/*; do [ "$(basename "$(readlink -f "$d/device/driver" 2>/dev/null)")" = cdc_ncm ] && basename "$d"; done | head -1 || true)
 [ -n "$IFC" ] || die "tablet USB network not present"
 send() { # local remote len
-	flock "$P/build/tab.lock" python3 -I - "$LL%$IFC" "$1" "$2" "$3" <<'PY'
+	flock "$P/build/tab.lock" python3 -I - "${LL:?Set GTA3_CONSOLE_ADDR to tablet USB debug host with interface scope}" "$1" "$2" "$3" <<'PY'
 import socket, sys, time
 addr, local, remote, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 s = socket.create_connection((addr, 23), timeout=30)
