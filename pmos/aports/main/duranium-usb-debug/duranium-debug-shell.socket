@@ -20,7 +20,7 @@ IgnoreOnIsolate=yes
 [Socket]
 # A plain root shell (telnet). TCP 23 belongs to the SM-T570 register console
 # (gta3-debug-console.socket in the device package). Formerly mirrored the bring-up console in gtactive3-mainline initramfs/init.c (TCP 23
-# on fe80::57:aff:fe00:1). Bound to the wildcard address but restricted to the
+# on the USB link-local interface). Bound to the wildcard address but restricted to the
 # gadget interface with SO_BINDTODEVICE: binding the link-local address itself
 # fails until the NCM link has carrier and IPv6 DAD finished. BindToDevice=
 # also orders the socket after sys-subsystem-net-devices-usb0.device.
