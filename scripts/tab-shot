@@ -15,7 +15,7 @@ set -euo pipefail
 P=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$P/build/shots/shot-$(date +%Y%m%d-%H%M%S).png}
 mkdir -p "$(dirname "$OUT")"
-LL=fe80::57:aff:fe00:1
+LL=${GTA3_CONSOLE_ADDR:?Set GTA3_CONSOLE_ADDR to tablet USB debug host with interface scope}
 ifc=$(for d in /sys/class/net/*; do [ "$(basename "$(readlink -f "$d/device/driver" 2>/dev/null)")" = cdc_ncm ] && basename "$d"; done | head -1 || true)
 [ -n "$ifc" ] || { echo "tablet USB network not present" >&2; exit 1; }
 SRC=${SRC:-/sys/kernel/debug/dri/0/scanout}
@@ -23,7 +23,7 @@ BASE=${BASE:-}
 if [ "$BASE" = live ]; then
 	BASE=$(flock "$P/build/tab.lock" "$P/scripts/tab" "peek 0x16071040" | tr -d '\r\n')
 fi
-flock "$P/build/tab.lock" python3 -I - "$LL%$ifc" "$OUT" "$BASE" "$SRC" <<'PY'
+flock "$P/build/tab.lock" python3 -I - "$LL" "$OUT" "$BASE" "$SRC" <<'PY'
 import socket, struct, sys, zlib
 addr, out, base, src = sys.argv[1:5]
 W, H = 1200, 1920
