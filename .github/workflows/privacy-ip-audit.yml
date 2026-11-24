@@ -1,0 +1,22 @@
+name: Audit network address literals (read-only)
+
+on:
+  push:
+    branches:
+      - audit/ip-literals-20261124
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan all tracked text sources without printing addresses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/audit-network-literals.py
