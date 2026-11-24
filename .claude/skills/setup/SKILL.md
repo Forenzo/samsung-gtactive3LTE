@@ -168,7 +168,7 @@ for the device or a sibling) and plan it as phase 1 of docs/PLAN.md:
   `downstreamkernel_package`); deviceinfo flags from `pmbootstrap
   bootimg_analyze` on the stock `boot.img` (step 4); a classic
   postmarketOS image, flashed to BOOT only, with the debug-shell
-  initramfs hook (telnet, then ssh on 172.16.42.1 over USB).
+  initramfs hook (telnet, then ssh over USB using its locally configured debug endpoint).
 - What it is for: dumping the running hardware into
   `<firmware.dir>/downstream/` (gitignored, through `scripts/firmware-tool
   redact`): `/proc/device-tree`, `dmesg`, `/proc/iomem`,
