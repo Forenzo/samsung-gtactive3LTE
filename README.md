@@ -77,6 +77,25 @@ undo` brings it back), then offers a full Android backup and the install.
 Step by step, requirements and the way back to Android:
 [docs/INSTALL.md](docs/INSTALL.md).
 
+## USB debug-console host configuration
+
+Host scripts for the bring-up/firmware debug console use the **locally set**
+`GTA3_CONSOLE_ADDR` environment variable. Set it to the device's reachable
+USB console address, **including interface scope when required for IPv6**.
+Keep the value in your local shell or a gitignored host configuration file;
+do not commit it, logs containing it, or personal network details.
+
+Example (read the endpoint from a private local file; substitute your own path):
+
+```sh
+export GTA3_CONSOLE_ADDR="$(cat "$HOME/.config/gtactive3/usb-debug-host")"
+scripts/tab wait
+```
+
+Leaving this variable unset deliberately stops host-side console helpers
+rather than assuming a network address. The live firmware itself continues
+to auto-configure USB link-local connectivity from the fixed gadget MACs.
+
 ## Downloads and updates
 
 Images (Phosh, GNOME) are in the
