@@ -14,7 +14,7 @@ set -u
 P=$(cd "$(dirname "$0")/.." && pwd)
 IMG=$P/build/images/boot-mainline.img
 LOGS=$P/logs
-TABLET_LL=fe80::57:aff:fe00:1
+TABLET_LL=${GTA3_CONSOLE_ADDR:?Set GTA3_CONSOLE_ADDR to tablet USB debug host with interface scope}
 mkdir -p "$LOGS"
 
 log() { echo "[$(date +%T)] $*"; }
@@ -44,7 +44,7 @@ gadget_iface() {
 
 console() {	# console IFACE "cmd1" "cmd2" ... -> prints replies
 	local ifc=$1; shift
-	python3 -I - "$TABLET_LL%$ifc" "$@" <<'EOF'
+	python3 -I - "$TABLET_LL" "$@" <<'EOF'
 import socket, sys, time
 addr, cmds = sys.argv[1], sys.argv[2:]
 s = socket.create_connection((addr, 23), timeout=10)
@@ -82,7 +82,7 @@ cycle() {
 	fi
 	log "gadget up on $ifc"
 	for i in $(seq 1 20); do
-		ping -6 -c1 -W1 "$TABLET_LL%$ifc" >/dev/null 2>&1 && break
+		ping -6 -c1 -W1 "$TABLET_LL" >/dev/null 2>&1 && break
 		sleep 1
 	done
 	local f=$LOGS/dmesg-$(date +%Y%m%d-%H%M%S).txt
