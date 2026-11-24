@@ -93,7 +93,7 @@ firmware is not included. [docs/RELEASES.md](docs/RELEASES.md) explains it all.
 scripts/build.sh            # init + kernel + modules → build/images/boot-mainline.img
 scripts/devd.sh &           # flashes BOOT whenever the tablet is in Download mode
 scripts/tab reboot download # tablet reboots, gets flashed, boots, USB is back in ~35 s
-scripts/tab dmesg           # debug console over IPv6 link-local (fe80::57:aff:fe00:1)
+scripts/tab dmesg           # debug console (address configured locally)
 ```
 
 Stock firmware, keys and decrypted images are never committed.
