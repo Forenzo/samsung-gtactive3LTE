@@ -56,7 +56,7 @@ changing hardware:
 - [x] Package preflight locates kwin_wayland and startplasma-wayland.
 - [ ] Rootfs startup prerequisites audited (system services, udev, permissions).
 - [x] Experimental *compiled* kernel NFSv3 client enabled in CI run 43616388593; current tablet boot still lacks NFS.\n- [ ] Experimental NFS kernel boot and module/runtime support verified on physical tablet.
-- [x] Mac-side export advertised via showmount and USB IPv4 ping tested: 10.77.57.1 <-> 10.77.57.2, 3/3 packets, no loss (2026-11-15).\n- [x] Tablet-side MOUNTv3 MNT and NFSv3 GETATTR RPCs succeeded from diagnostic Linux, with root file handle length 28 and NFS object type 2 (directory), 2026-11-15.\n- [ ] Actual kernel NFS filesystem mount and file reads tested (NOT YET: running diagnostic kernel lacks NFS).
+- [x] Mac-side export advertised via showmount and USB IPv4 ping tested: <USB_HOST_IP> <-> <USB_TABLET_IP>, 3/3 packets, no loss (2026-11-15).\n- [x] Tablet-side MOUNTv3 MNT and NFSv3 GETATTR RPCs succeeded from diagnostic Linux, with root file handle length 28 and NFS object type 2 (directory), 2026-11-15.\n- [ ] Actual kernel NFS filesystem mount and file reads tested (NOT YET: running diagnostic kernel lacks NFS).
 - [ ] Safe handoff and recovery code compiled and inspected.
 - [ ] GPU / DRM initialization and KWin startup logs captured.
 - [ ] Owner approves any new BOOT-only image; no other partition writes.
@@ -68,16 +68,16 @@ The owner-selected final environment remains **Plasma Mobile**, not Phosh.
 
 ## Host network checkpoint (2026-11-15)
 
-Owner reported macOS USB interface en7 with alias 10.77.57.1/30 and tablet usb0
-10.77.57.2/30. Ping reached tablet (3/3, average ~1.14 ms). macOS nfsd
+Owner reported macOS USB interface en7 with alias <USB_HOST_IP>/30 and tablet usb0
+<USB_TABLET_IP>/30. Ping reached tablet (3/3, average ~1.14 ms). macOS nfsd
 reported running (eight threads). The owner's `/etc/exports` reads:
 
 ```
-/Volumes/T575-Plasma/rootfs -ro -maproot=root 10.77.57.2
+/Volumes/T575-Plasma/rootfs -ro -maproot=root <USB_TABLET_IP>
 ```
 
 `showmount -e localhost` advertised the expected rootfs to client
-10.77.57.2. These are **host-side successes only**. No actual NFS mount,
+<USB_TABLET_IP>. These are **host-side successes only**. No actual NFS mount,
 NFS RPC reachability from the tablet, or display/session launch has been
 verified. NFSv3 is not encrypted and the client restriction alone does not
 restrict the service listening interfaces. Stop nfsd when not testing.
@@ -89,8 +89,8 @@ must be assembled and reviewed first.
 ## Tablet-side NFSv3 RPC checkpoint (2026-11-15)
 
 The owner ran `first-gui/nfs-rpc-probe-transfer.py` via the existing IPv6
-TCP/23 console, with the USB gadget's IPv4 address `10.77.57.2/30` and
-macOS NFS host at `10.77.57.1`. Artifact checksum:
+TCP/23 console, with the USB gadget's IPv4 address `<USB_TABLET_IP>/30` and
+macOS NFS host at `<USB_HOST_IP>`. Artifact checksum:
 `54046c9fd755f62b2e4d991e19ba4436ff6ac17c14d64f24bdf931a7cb98fa0b`.
 
 Observed on physical SM-T575:
