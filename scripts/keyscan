@@ -10,7 +10,7 @@ set -uo pipefail
 P=$(cd "$(dirname "$0")/.." && pwd)
 MODE=${1:-held}; NAME=${2:-key}; SECS=${3:-10}
 ifc=$(for d in /sys/class/net/*; do [ "$(basename "$(readlink -f "$d/device/driver" 2>/dev/null)")" = cdc_ncm ] && basename "$d"; done | head -1 || true)
-flock "$P/build/tab.lock" python3 -I - "fe80::57:aff:fe00:1%$ifc" "$MODE" "$NAME" "$SECS" "$P/build/keyscan-base.json" <<'PY'
+flock "$P/build/tab.lock" python3 -I - "${GTA3_CONSOLE_ADDR:?Set GTA3_CONSOLE_ADDR to tablet USB debug host with interface scope}" "$MODE" "$NAME" "$SECS" "$P/build/keyscan-base.json" <<'PY'
 import socket, sys, time, re, json
 addr, mode, name, secs, basefile = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
 BANKS = """etc1 0x14050004 gpa0 0x14050024 gpa1 0x14050044 gpa2 0x14050064 gpa3 0x14050084 gpq0 0x140500a4 gpa4 0x140500c4 gpb0 0x17c60004 gpb1 0x17c60024 gpb2 0x17c60044 gph0 0x13a80004 gph1 0x13a80024 gpm0 0x14220004 gpm1 0x14220024 gpm2 0x14220044 gpm3 0x14220064 gpm4 0x14220084 gpm5 0x142200a4 gpm6 0x142200c4 gpm7 0x142200e4 gpm10 0x14220104 gpm11 0x14220124 gpm12 0x14220144 gpm13 0x14220164 gpm14 0x14220184 gpm15 0x142201a4 gpm16 0x142201c4 gpm17 0x142201e4 gpm40 0x14220204 gpm41 0x14220224 gpm42 0x14220244 gpm43 0x14220264 gpf0 0x11050004 gpf1 0x11430004 gpf2 0x11430024 gpp0 0x10430004 gpp1 0x10430024 gpp2 0x10430044 gpp3 0x10430064 gpg0 0x10430084 gpg1 0x104300a4 gpg2 0x104300c4 gpp4 0x10830004 gpp5 0x10830024 gpp6 0x10830044 gpc0 0x10830064 gpc1 0x10830084 gpd0 0x108300a4 gpg3 0x108300c4""".split()
