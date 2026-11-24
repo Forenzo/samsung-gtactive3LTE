@@ -11,13 +11,13 @@ if [ -z "$N" ]; then
 	s=$("$P/scripts/tab" "cat /sys/class/block/$(basename "$R")/size" | tr -dc 0-9)
 	N=$((s * 512))
 fi
-LL=fe80::57:aff:fe00:1
+LL=${GTA3_CONSOLE_ADDR:?Set GTA3_CONSOLE_ADDR to tablet USB debug host with interface scope}
 ifc=
 for d in /sys/class/net/*; do
 	[ "$(basename "$(readlink -f "$d/device/driver" 2>/dev/null)")" = cdc_ncm ] && ifc=$(basename "$d")
 done
 [ -n "$ifc" ] || { echo "tablet USB network not present" >&2; exit 1; }
-python3 -I - "$LL%$ifc" "$R" "$L" "$N" <<'PY'
+python3 -I - "$LL" "$R" "$L" "$N" <<'PY'
 import hashlib, socket, sys, time
 addr, remote, local, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 s = socket.create_connection((addr, 23), timeout=10)
