@@ -104,13 +104,13 @@ index b2df01b..ec26385 100644
  ## USB debug layer
  
  `duranium-usb-debug` brings up the fixed-MAC NCM interface
--(`fe80::57:aff:fe00:1`), an unauthenticated root console on TCP 23, an sshd on
+-(using a locally configured USB link-local address), an unauthenticated root console on TCP 23, an sshd on
 -22, and a kernel-log stream on 24 — all on the USB link-local address only,
 -present in both the initrd and the booted system, enabled by default and
 -disable-able (`systemctl disable --now duranium-usb-debug.target`, or ship
 -without the package). Security notes in
 -`build/wt/pmaports-duranium/main/duranium-usb-debug/README`.
-+(`fe80::57:aff:fe00:1`, VID:PID 1d6b:0104, same as the bring-up console), and
++(using the locally configured USB debug host, VID:PID 1d6b:0104), and
 +socket-activated services bound to the gadget interface only: a root shell on
 +TCP 23 (busybox `telnetd -i -l /bin/sh`), sshd on 22 (inetd mode, own host
 +key, booted system only) and the kernel log on 24. The gadget, the shell and
@@ -173,14 +173,14 @@ index b2df01b..ec26385 100644
 +5. DEVICE, first Duranium boot: flash the chainload BOOT image (lead's normal
 +   flow), let it boot. Expected: U-Boot screen messages "userdata as a disk",
 +   systemd-boot, then the kernel. On the host: `ip -6 neigh`/`ping -6
-+   fe80::57:aff:fe00:1%<ncm-if>` answers within ~60 s of the kernel start
++   ${GTA3_CONSOLE_ADDR}` answers within ~60 s of the kernel start
 +   (initrd gadget). Recovery is automatic (table above): U-Boot failure ->
 +   bring-up console; kernel/initrd failure -> Download mode within
 +   max(120 s, 600 s) -> auto-reflash.
 +6. DEVICE, initrd checks over USB (while the initrd waits, i.e. before
 +   switch-root; if it already switched root, run the same commands in the
 +   booted system, where they show the same loop device):
-+   `nc fe80::57:aff:fe00:1%<ncm-if> 24 > duranium-klog.txt` (kernel log,
++   `nc ${GTA3_CONSOLE_ADDR} 24 > duranium-klog.txt` (kernel log,
 +   keep it running), and in `nc ... 23`:
 +   `cat /proc/cmdline; cat /proc/partitions; ls /dev/loop*;
 +   udevadm info /dev/sda31 | grep -E 'ID_PART_GPT|NEEDS_LOOP';
@@ -206,7 +206,7 @@ index b2df01b..ec26385 100644
 +10. DEVICE, USB debug layer: from the host, (a) `nc ... 24 | head` shows the
 +    kernel log; (b) `nc ... 23` gives a root shell; (c) after adding a key
 +    (`mkdir -p /root/.ssh; echo '<pubkey>' >> /root/.ssh/authorized_keys`
-+    over port 23), `ssh root@fe80::57:aff:fe00:1%<ncm-if> true`. Disable test,
++    over port 23), `ssh root@${GTA3_CONSOLE_ADDR} true`. Disable test,
 +    with an automatic way back (never reboot with the layer disabled: the
 +    booted system would keep the gadget but answer on no port):
 +    `systemd-run --on-active=120 systemctl enable --now duranium-usb-debug.target`,
