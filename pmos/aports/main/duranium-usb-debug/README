@@ -18,14 +18,14 @@ Fixed addressing (matches the bring-up console so the host tooling in
 gtactive3-mainline/scripts works unchanged):
 
   * gadget VID:PID 0x1d6b:0x0104
-  * device MAC 02:57:0a:00:00:01  -> device link-local  fe80::57:aff:fe00:1
-  * host   MAC 02:57:0a:00:00:02  -> host link-local     fe80::57:aff:fe00:2
+  * device MAC 02:57:0a:00:00:01  -> link-local address derived automatically
+  * host   MAC 02:57:0a:00:00:02  -> link-local address derived automatically
 
-Host usage (replace usb0 with the host's cdc_ncm interface):
+Host usage (set GTA3_CONSOLE_ADDR locally to the tablet's scoped USB address; do not commit it):
 
-  nc  fe80::57:aff:fe00:1%usb0 23          # raw root shell (telnetd -l /bin/sh)
-  nc  fe80::57:aff:fe00:1%usb0 24 | less   # kernel log
-  ssh root@fe80::57:aff:fe00:1%usb0        # needs a root key or password first
+  nc  $GTA3_CONSOLE_ADDR 23          # raw root shell (telnetd -l /bin/sh)
+  nc  $GTA3_CONSOLE_ADDR 24 | less   # kernel log
+  ssh root@$GTA3_CONSOLE_ADDR        # needs a root key or password first
 
 All three are socket-activated (systemd .socket units with Accept=yes),
 listening on the wildcard address but bound to the gadget interface with
