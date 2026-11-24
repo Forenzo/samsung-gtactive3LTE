@@ -9,6 +9,12 @@ kernel and drivers are ours; the rest of the OS is unmodified postmarketOS.
 | Wi-Fi (`gtactive3wifi`) | SM-T570 | in daily use: the table below |
 | LTE (`gtactive3`) | SM-T575, SM-T575N | bring-up: device tree, boot chain and packages ready, not booted yet; the modem has a driver plan ([docs/re/modem.md](docs/re/modem.md)) |
 
+**SM-T575 LTE audio field note (2026-11-24):** RT5665 wired-headphone playback
+is verified with a patched codec, HiFi UCM, PipeWire, and a manually started
+protected service. Speaker activation and boot-time autostart remain unverified.
+See [the reproducible headphone bring-up and recovery record](docs/audio/t575-headphones-live-2026-11-24.md)
+and [headphone-only UCM extension](packaging/t575-headphones/sysext/).
+
 One repository for the family: what the variants share and what differs is
 in [docs/VARIANTS.md](docs/VARIANTS.md). The US SM-T577U is not supported
 (no confirmed bootloader unlock).
