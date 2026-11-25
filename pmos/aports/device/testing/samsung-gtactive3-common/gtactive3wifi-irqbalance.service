@@ -1,0 +1,31 @@
+[Unit]
+Description=Spread device interrupts over the A55 cores (Galaxy Tab Active3)
+Documentation=man:irqbalance(1)
+# Without it every device interrupt stays on CPU0, where the GICv3 driver
+# routes an interrupt whose affinity is "all CPUs" (docs/STATUS.md, CPU
+# idle: "all IRQs on CPU0" in the 2026-10-24 C2 boot), so every driver's
+# interrupt work queues behind one little core.
+# Alpine's irqbalance comes without a unit; this one is named after the
+# device so a distribution unit never runs a second daemon.
+Conflicts=irqbalance.service
+ConditionCPUs=>1
+
+[Service]
+# The M3 cores take no interrupts: they cost more energy per cycle, and
+# keeping them free leaves them to the foreground tasks EAS moves there.
+Environment=IRQBALANCE_BANNED_CPULIST=4-7
+# every interrupt balanced per core (the script says why)
+ExecStart=/usr/sbin/irqbalance --foreground --policyscript=/usr/libexec/gtactive3wifi/irqbalance-policy
+Restart=on-failure
+RestartSec=5
+# upstream's unit (misc/irqbalance.service), its file system part
+RuntimeDirectory=irqbalance
+ProtectSystem=strict
+ReadWritePaths=/proc/irq
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
