@@ -10,6 +10,13 @@ on:
         required: true
         type: string
 
+  push:
+    branches:
+      - work/t575-upstream-sync-20261125
+    paths:
+      - ci/t575-image-retry-run-id
+
+
 permissions:
   contents: read
   actions: read
@@ -24,6 +31,22 @@ jobs:
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve requested compiled package run
+        id: source
+        env:
+          REQUESTED_RUN: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            RUN_ID=$(cat ci/t575-image-retry-run-id)
+          else
+            RUN_ID="$REQUESTED_RUN"
+          fi
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Reusing compiled packages from run $RUN_ID"
+
 
       - name: Prepare ARM64 image assembler (no kernel rebuild)
         run: |
@@ -44,7 +67,7 @@ jobs:
         with:
           name: t575-lte-phosh-compiled-apks-UNTESTED
           path: pkgs
-          run-id: ${{ inputs.source_run_id }}
+          run-id: ${{ steps.source.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify APK contents, signatures manifest, and upstream source consistency
