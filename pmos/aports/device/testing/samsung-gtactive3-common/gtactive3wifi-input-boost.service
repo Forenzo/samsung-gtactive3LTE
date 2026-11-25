@@ -1,0 +1,16 @@
+[Unit]
+Description=Touch boost: CPU frequency floors while the screen is touched (Galaxy Tab Active3)
+
+[Service]
+# Samsung's stock values (docs/BATTERY.md): resting floors A55 455 MHz and
+# M3 650 MHz (stock never goes lower); on touch A55 832 MHz and M3 1066 MHz,
+# held until 500 ms after the last touch or pen event (stock: 130 ms head,
+# 500 ms tail). All four are levels of the DT OPP tables.
+ExecStart=/usr/libexec/gtactive3wifi/input-boost -t 500 \
+	/sys/devices/system/cpu/cpufreq/policy0:455000:832000 \
+	/sys/devices/system/cpu/cpufreq/policy4:650000:1066000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
