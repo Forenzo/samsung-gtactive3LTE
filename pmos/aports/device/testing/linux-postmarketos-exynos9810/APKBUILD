@@ -27,7 +27,7 @@
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=linux-postmarketos-exynos9810
 pkgver=7.3.0_git20261021
-pkgrel=33
+pkgrel=34
 _commit="7ebdcc3552362021d011753f1061ede9695302c7"
 # torvalds/linux commit that gtactive3.patch applies to; base + patch
 # is the tree of _commit in the gtactive3-mainline kernel (scripts/pmos-export)
@@ -99,6 +99,7 @@ source="
 	0156-rtc-s5m-S2MPS18-RTC-over-ACPM-Exynos-9810.patch
 	t575-gpu-first-desktop.patch
 	t575-rt5665-calibration-recovery.patch
+	t575-s2idle-wfi.patch
 	$_config
 	"
 builddir="$srcdir/linux-$_base"
@@ -162,6 +163,7 @@ _dtb() {
 }
 
 sha512sums="
+163c77861909ffda0f1cc0dd735e8a3304e0e38001d6549d16bdbcf0ecbd6737977c4b8a68ee934fa428ba87e3f658efd5a730f9066cb74a6c17f658e1864333  t575-s2idle-wfi.patch
 25b063f48183c0fe7a9f17409a59e1d6c74911a182a9746933b354b738413d4793150a8901a2233383164204ec21a931b733acb7c69412e5522d6c99b05564f9  gtactive3lte_transport64.c
 30c3179b339133bf309fc98c27288730d6538d3a1b52a13ce286824464019fbd7b5ac917a7ecdf4f815e28312314f0b8e612537438dcb9558372f18bec7fb3e5  t575_tas2562_locked.c
 ef5fa9d02914b6a4bdda562006f259b803d2aba09b3c0620090adce3c3254d18db931049621fa24b5f811fd7bba540cb3902ce43b93d1b46624cc06140b6c7bb  t575-headphones.dtsi

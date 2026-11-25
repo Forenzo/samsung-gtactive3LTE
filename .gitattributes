@@ -1,2 +1,3 @@
 
 pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-rt5665-calibration-recovery.patch whitespace=-blank-at-eol,-space-before-tab
+pmos/aports/device/testing/linux-postmarketos-exynos9810/t575-s2idle-wfi.patch whitespace=-blank-at-eol,-space-before-tab
