@@ -1,0 +1,21 @@
+From 8a98c0762a41968a49d4808ec7436216cea304f0 Mon Sep 17 00:00:00 2001
+From: T575 Integration <ci@invalid>
+Date: Wed, 25 Nov 2026 12:29:53 +0100
+Subject: [PATCH] contrib: remove trailing blank line from kernel fragment
+
+---
+ contrib/samsung-gtactive3/kernel/pmos-fragment.config | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/contrib/samsung-gtactive3/kernel/pmos-fragment.config b/contrib/samsung-gtactive3/kernel/pmos-fragment.config
+index ad0c79a..a56a176 100644
+--- a/contrib/samsung-gtactive3/kernel/pmos-fragment.config
++++ b/contrib/samsung-gtactive3/kernel/pmos-fragment.config
+@@ -489,4 +489,3 @@ CONFIG_DM_VERITY=m
+ 
+ # wine
+ CONFIG_NTSYNC=m
+-
+-- 
+2.54.0 (Apple Git-157)
+
