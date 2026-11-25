@@ -1,4 +1,5 @@
-# Upstream r31 charger fixes; LTE GPU override retained.
+# LTE integration: retain both RTC drivers and GPU override.
+# RTC synchronization must select the PMIC by hardware identity.
 # Kernel config: the gtactive3-mainline bring-up config the device runs
 # (configs/gtactive3-bringup.config), plus the pmbootstrap kconfigcheck
 # categories below and the device fragment for systemd, Duranium (UKI,
@@ -10,13 +11,23 @@
 # (091acc188, kernel r25), linearised (its merge commits replayed in order),
 # plus patches/linux/0153 (the board DT split into a common file and one
 # file per Galaxy Tab Active3 variant) and 0154 (the Shannon CP remoteproc
-# sketch, not enabled); the patched tree is _commit. The additional
-# t575-gpu-first-desktop.patch is an experimental LTE-only DTS override
-# (not part of _commit), for an unpublished Phosh first-desktop trial.
+# sketch, not enabled) and the MAX77705 charge limit (drv/battcare: charge
+# control thresholds and charge_behaviour on the battery, kernel r27); the
+# patched tree is _commit. r28: CONFIG_FS_VERITY=y (ext4 fs-verity, for
+# composefs: overlayfs verity=require over the image files). r29: battery
+# care stops the current (the CNFG_00 CHG bit, not CNFG_09 bit 7). r30: the
+# S2MPS18 PMIC's RTC over ACPM (0156-rtc-s5m-S2MPS18-RTC-over-ACPM-Exynos-9810.patch, applied after gtactive3.patch;
+# not part of _commit) as rtc0 with CONFIG_RTC_DRV_S5M=m; the SoC RTC
+# (RTC_DRV_S3C), which forgets the time when the tablet is off, is off as in
+# Samsung's own Exynos 9810 config; RTC_SYSTOHC keeps the PMIC clock set from
+# NTP. The system clock is set from it by samsung-gtactive3-common-hardware.
+# r30 also installs the config as /usr/lib/modules/<release>/config.
+# r32: battery care's r31 (charge_types Standard/Fast on max77705-charger,
+# _commit 7ebdcc355, made in the old GitHub checkout) together with r30.
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=linux-postmarketos-exynos9810
 pkgver=7.3.0_git20261021
-pkgrel=31
+pkgrel=32
 _commit="7ebdcc3552362021d011753f1061ede9695302c7"
 # torvalds/linux commit that gtactive3.patch applies to; base + patch
 # is the tree of _commit in the gtactive3-mainline kernel (scripts/pmos-export)
@@ -82,6 +93,7 @@ subpackages="
 source="
 	linux-$_base.tar.gz::https://github.com/torvalds/linux/archive/$_base.tar.gz
 	gtactive3.patch
+	0156-rtc-s5m-S2MPS18-RTC-over-ACPM-Exynos-9810.patch
 	t575-gpu-first-desktop.patch
 	$_config
 	"
@@ -115,6 +127,10 @@ package() {
 
 	install -D "$builddir"/include/config/kernel.release \
 		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+	# the config next to the modules (r30): Cairn OS checks its required
+	# options at image build, and out-of-tree modules need it
+	install -Dm644 "$builddir"/.config \
+		"$pkgdir"/usr/lib/modules/"$(cat "$builddir"/include/config/kernel.release)"/config
 }
 
 _dtb() {
@@ -126,8 +142,9 @@ _dtb() {
 }
 
 sha512sums="
-4cc471f94509680acb6f55e5c14babab5bf2a60edf014bcc48b55da8cb96dbd262645a82c81e9e2108d01d2eda59dae1844c797475a9691c7e43a43d53ff0917  linux-f47d223627f80cb7a1eb14c585fe6cb35de5e984.tar.gz
-aefbb50e39257dc701ac48853bf301310bc8a822ad816c28489d633e333612ec9dd5a934f75cfb3c9f17c21635ca1aef3633a0edf168acd3784229dee7ab1304  gtactive3.patch
 006c2489f0371f1c94096f85233de414e7454fa6f878c06b237338cddf5fe67c094778ae70c70cfb4421006960c229167f500c042867259dd5cdba96fd8fce3f  t575-gpu-first-desktop.patch
-bae048a5b87bb32c9d74d0d29afb495fbee440d34f0438fbae9786a6e326ed814bdcff5d8c1874da702ceffc56e7ff1b489657b6358e11a437cf574ce3de99b3  config-postmarketos-exynos9810.aarch64
+a7490df85efe523200c304259e154aa9cc2be22bfd9612f397dde142d20eced1c8b27cbe45ffa7d043ce12d84992536c4bc58ab14080b50a518f953e83ab5608  linux-f47d223627f80cb7a1eb14c585fe6cb35de5e984.tar.gz
+aefbb50e39257dc701ac48853bf301310bc8a822ad816c28489d633e333612ec9dd5a934f75cfb3c9f17c21635ca1aef3633a0edf168acd3784229dee7ab1304  gtactive3.patch
+ff58a2b0b01152cb2f1f8c27ccc8fb46ebbb1d2de257ab338351d7823b39dac9fb28b7ee57f640aba0461635eb6143c5a4ca2ef470c17f0ac2da26acdb97d7c0  0156-rtc-s5m-S2MPS18-RTC-over-ACPM-Exynos-9810.patch
+df0a04b5964f09001732576dad68e55664bbf20a74ed2c2b60c4917caf1303e10369ff68f5f7a9a2f3a6c25b8baf158a4ae57c909311508d7c8494d5cc084e0a  config-postmarketos-exynos9810.aarch64
 "

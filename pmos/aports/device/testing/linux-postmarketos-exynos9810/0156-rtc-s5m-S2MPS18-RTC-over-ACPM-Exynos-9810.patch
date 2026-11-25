@@ -1,0 +1,390 @@
+From 433d877e4d1c20c55e15bbd2f537402beff14a1e Mon Sep 17 00:00:00 2001
+From: RatRad Works <ratrad@cairn-os.invalid>
+Date: Sun, 22 Nov 2026 18:23:53 +1100
+Subject: [PATCH] rtc: s5m: S2MPS18 RTC over ACPM (Exynos 9810)
+
+The Galaxy Tab Active3 keeps time in its S2MPS18 PMIC, which the AP reaches
+only through the ACPM firmware (sec-acpm). Without this, nothing reads that
+RTC: the system starts at the image's build time after every power-off.
+
+- mfd: sec-acpm: an "rtc" regmap for ACPM access type 0x02 (Samsung's
+  s2mps18_core.c I2C_ADDR_RTC). Writes are limited to the control and update
+  registers, the time and alarm 0: never the WTSR/SMPL timers, the oscillator
+  (CAP_SEL, OSC_CTRL) or alarm 1, Samsung's power-on alarm. Nothing cached.
+- mfd: sec-common: the s2mps18-rtc cell (no alarm IRQ: sec-irq has no S2MPS18
+  interrupts yet, so the RTC registers without the alarm feature).
+- rtc: s5m: the S2MPS18 register map (layout from Samsung's GPL Exynos 9810
+  kernel, include/linux/mfd/samsung/rtc-s2mp.h, the branch its rtc-s2mps18.c
+  uses: MSEC before SEC as on the S2MPG10, UPDATE at 0x02; RUDR bit 0, WUDR
+  bit 1, AUDR bit 4). Like Samsung's driver, each update writes exactly one
+  UDR bit over a cleared base (forced, so a repeated read latches again) and
+  sleeps 1-2 ms instead of polling bits that are not auto-cleared; RTC_CTRL
+  is written only when the RTC lost its 24 h mode (a reset), so a running
+  clock is left as it is.
+
+Source: LineageOS/android_kernel_samsung_universal9810 (lineage-17.1),
+drivers/rtc/rtc-s2mps18.c, drivers/mfd/s2mps18_core.c,
+include/linux/mfd/samsung/rtc-s2mp.h (Samsung Electronics, GPL-2.0).
+Not yet tested on hardware.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/mfd/sec-acpm.c          | 37 ++++++++++++++
+ drivers/mfd/sec-common.c        |  1 +
+ drivers/rtc/Kconfig             |  3 +-
+ drivers/rtc/rtc-s5m.c           | 88 ++++++++++++++++++++++++++++++---
+ include/linux/mfd/samsung/rtc.h | 39 +++++++++++++++
+ 5 files changed, 161 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/mfd/sec-acpm.c b/drivers/mfd/sec-acpm.c
+index f89a406..b6fcda2 100644
+--- a/drivers/mfd/sec-acpm.c
++++ b/drivers/mfd/sec-acpm.c
+@@ -443,6 +443,42 @@ static const struct regmap_config s2mps18_regmap_config_common = {
+ 	.cache_type = REGCACHE_NONE,
+ };
+ 
++/*
++ * The RTC block (ACPM type 0x02; Samsung's s2mps18_core.c I2C_ADDR_RTC). Writes
++ * only to the control and update registers, the time and alarm 0: never the
++ * watchdog/SMPL timers, the oscillator (CAP_SEL, OSC_CTRL) or alarm 1, which
++ * Samsung's bootloader and driver use to power the board on. Nothing cached.
++ */
++static const struct regmap_range s2mps18_rtc_registers[] = {
++	regmap_reg_range(S2MPS18_RTC_CTRL, S2MPS18_RTC_OSC_CTRL),
++};
++
++static const struct regmap_access_table s2mps18_rtc_rd_table = {
++	.yes_ranges = s2mps18_rtc_registers,
++	.n_yes_ranges = ARRAY_SIZE(s2mps18_rtc_registers),
++};
++
++static const struct regmap_range s2mps18_rtc_wr_registers[] = {
++	regmap_reg_range(S2MPS18_RTC_CTRL, S2MPS18_RTC_CTRL),
++	regmap_reg_range(S2MPS18_RTC_UPDATE, S2MPS18_RTC_UPDATE),
++	regmap_reg_range(S2MPS18_RTC_SEC, S2MPS18_RTC_A0YEAR),
++};
++
++static const struct regmap_access_table s2mps18_rtc_wr_table = {
++	.yes_ranges = s2mps18_rtc_wr_registers,
++	.n_yes_ranges = ARRAY_SIZE(s2mps18_rtc_wr_registers),
++};
++
++static const struct regmap_config s2mps18_regmap_config_rtc = {
++	.name = "rtc",
++	.reg_bits = ACPM_ADDR_BITS,
++	.val_bits = 8,
++	.max_register = S2MPS18_RTC_OSC_CTRL,
++	.wr_table = &s2mps18_rtc_wr_table,
++	.rd_table = &s2mps18_rtc_rd_table,
++	.cache_type = REGCACHE_NONE,
++};
++
+ static const struct regmap_range s2mps18_pmic_registers[] = {
+ 	regmap_reg_range(0x00, 0x16), /* INTx, INTxM, STATUSx, CTRLx */
+ 	regmap_reg_range(0x1c, 0x48), /* BUCKs, ramp, DVS */
+@@ -753,6 +789,7 @@ static const struct sec_pmic_acpm_platform_data s2mps18_data = {
+ 	.id_reg = S2MPS18_TOP_REG_PMICID,
+ 	.regmap_cfg_common = &s2mps18_regmap_config_common,
+ 	.regmap_cfg_pmic = &s2mps18_regmap_config_pmic,
++	.regmap_cfg_rtc = &s2mps18_regmap_config_rtc,
+ };
+ 
+ static const struct of_device_id sec_pmic_acpm_of_match[] = {
+diff --git a/drivers/mfd/sec-common.c b/drivers/mfd/sec-common.c
+index 68a3439..120d946 100644
+--- a/drivers/mfd/sec-common.c
++++ b/drivers/mfd/sec-common.c
+@@ -91,6 +91,7 @@ static const struct mfd_cell s2mps15_devs[] = {
+ /* The RTC and IRQs need register writes and are not wired up yet */
+ static const struct mfd_cell s2mps18_devs[] = {
+ 	MFD_CELL_NAME("s2mps18-regulator"),
++	MFD_CELL_NAME("s2mps18-rtc"),
+ };
+ 
+ static const struct mfd_cell s2mpa01_devs[] = {
+diff --git a/drivers/rtc/Kconfig b/drivers/rtc/Kconfig
+index 05b9233..38d4876 100644
+--- a/drivers/rtc/Kconfig
++++ b/drivers/rtc/Kconfig
+@@ -771,7 +771,8 @@ config RTC_DRV_S5M
+ 	select REGMAP_I2C
+ 	help
+ 	  If you say yes here you will get support for the
+-	  RTC of Samsung S2MPS14 and S5M PMIC series.
++	  RTC of Samsung S2MPS14 and S5M PMIC series, and of the S2MPS18
++	  (Exynos 9810) reached through ACPM.
+ 
+ 	  This driver can also be built as a module. If so, the module
+ 	  will be called rtc-s5m.
+diff --git a/drivers/rtc/rtc-s5m.c b/drivers/rtc/rtc-s5m.c
+index aa70607..1335aee 100644
+--- a/drivers/rtc/rtc-s5m.c
++++ b/drivers/rtc/rtc-s5m.c
+@@ -75,6 +75,13 @@ struct s5m_rtc_reg_config {
+ 	 * auto-cleared after successful update.
+ 	 */
+ 	unsigned int udr_update;
++	/*
++	 * Where the PMIC does not clear its UDR bits itself (S2MPS18): every
++	 * update writes exactly one of these bits (the others cleared), so a
++	 * read and a write latch never run together, and then waits settle_us.
++	 */
++	unsigned int udr_single_mask;
++	unsigned int settle_us;
+ 	/* Auto-cleared mask in UDR field for writing time and alarm */
+ 	unsigned int autoclear_udr_mask;
+ 	/*
+@@ -114,6 +121,27 @@ static const struct s5m_rtc_reg_config s2mpg10_rtc_regs = {
+ 	.write_alarm_udr_mask	= S2MPS15_RTC_AUDR_MASK,
+ };
+ 
++/*
++ * Register map for S2MPS18 (Samsung's Exynos 9810 rtc-s2mps18.c: RUDR bit 0,
++ * WUDR bit 1, AUDR bit 4; the bits are written one at a time over a cleared
++ * base and the driver sleeps 1-2 ms after each, never polling them)
++ */
++static const struct s5m_rtc_reg_config s2mps18_rtc_regs = {
++	.regs_count		= 7,
++	.time			= S2MPS18_RTC_SEC,
++	.ctrl			= S2MPS18_RTC_CTRL,
++	.alarm0			= S2MPS18_RTC_A0SEC,
++	.alarm1			= S2MPS18_RTC_A1SEC,
++	.udr_update		= S2MPS18_RTC_UPDATE,
++	.autoclear_udr_mask	= 0,
++	.read_time_udr_mask	= S2MPS_RTC_RUDR_MASK,
++	.write_time_udr_mask	= S2MPS15_RTC_WUDR_MASK,
++	.write_alarm_udr_mask	= S2MPS15_RTC_AUDR_MASK,
++	.udr_single_mask	= S2MPS_RTC_RUDR_MASK | S2MPS15_RTC_WUDR_MASK |
++				  S2MPS18_RTC_FREEZE_MASK | S2MPS15_RTC_AUDR_MASK,
++	.settle_us		= 1000,
++};
++
+ /* Register map for S2MPS13 */
+ static const struct s5m_rtc_reg_config s2mps13_rtc_regs = {
+ 	.regs_count		= 7,
+@@ -223,6 +251,16 @@ static int s5m8767_tm_to_data(struct rtc_time *tm, u8 *data)
+ 	return 0;
+ }
+ 
++/* Start one UDR operation: set its bit, or write it alone where udr_single_mask says so */
++static int s5m_rtc_udr_latch(struct s5m_rtc_info *info, unsigned int mask)
++{
++	/* forced: the same bit again must latch again (nothing is cached) */
++	if (info->regs->udr_single_mask)
++		return regmap_write_bits(info->regmap, info->regs->udr_update,
++					 info->regs->udr_single_mask, mask);
++	return regmap_set_bits(info->regmap, info->regs->udr_update, mask);
++}
++
+ /*
+  * Read RTC_UDR_CON register and wait till UDR field is cleared.
+  * This indicates that time/alarm update ended.
+@@ -232,6 +270,11 @@ static int s5m8767_wait_for_udr_update(struct s5m_rtc_info *info)
+ 	int ret, retry = UDR_READ_RETRY_CNT;
+ 	unsigned int data;
+ 
++	if (info->regs->settle_us) {
++		fsleep(info->regs->settle_us);
++		return 0;
++	}
++
+ 	do {
+ 		ret = regmap_read(info->regmap, info->regs->udr_update, &data);
+ 	} while (--retry && (data & info->regs->autoclear_udr_mask) && !ret);
+@@ -253,6 +296,10 @@ static int s5m_check_pending_alarm_interrupt(struct s5m_rtc_info *info,
+ 		ret = regmap_read(info->regmap, S5M_RTC_STATUS, &val);
+ 		val &= S5M_ALARM0_STATUS;
+ 		break;
++	case S2MPS18X:
++		/* sec-irq has no S2MPS18 interrupts yet: no alarm can be pending */
++		alarm->pending = 0;
++		return 0;
+ 	case S2MPG10:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+@@ -279,8 +326,7 @@ static int s5m8767_rtc_set_time_reg(struct s5m_rtc_info *info)
+ {
+ 	int ret;
+ 
+-	ret = regmap_set_bits(info->regmap, info->regs->udr_update,
+-			      info->regs->write_time_udr_mask);
++	ret = s5m_rtc_udr_latch(info, info->regs->write_time_udr_mask);
+ 	if (ret < 0) {
+ 		dev_err(info->dev, "failed to write update reg(%d)\n", ret);
+ 		return ret;
+@@ -302,6 +348,7 @@ static int s5m8767_rtc_set_alarm_reg(struct s5m_rtc_info *info)
+ 		udr_mask |= S5M_RTC_TIME_EN_MASK;
+ 		break;
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -311,8 +358,11 @@ static int s5m8767_rtc_set_alarm_reg(struct s5m_rtc_info *info)
+ 		return -EINVAL;
+ 	}
+ 
+-	ret = regmap_update_bits(info->regmap, info->regs->udr_update,
+-				 udr_mask, info->regs->write_alarm_udr_mask);
++	if (info->regs->udr_single_mask)
++		ret = s5m_rtc_udr_latch(info, info->regs->write_alarm_udr_mask);
++	else
++		ret = regmap_update_bits(info->regmap, info->regs->udr_update,
++					 udr_mask, info->regs->write_alarm_udr_mask);
+ 	if (ret < 0) {
+ 		dev_err(info->dev, "%s: fail to write update reg(%d)\n",
+ 			__func__, ret);
+@@ -336,8 +386,9 @@ static int s5m_rtc_read_time(struct device *dev, struct rtc_time *tm)
+ 	int ret;
+ 
+ 	if (info->regs->read_time_udr_mask) {
+-		ret = regmap_set_bits(info->regmap, info->regs->udr_update,
+-				      info->regs->read_time_udr_mask);
++		ret = s5m_rtc_udr_latch(info, info->regs->read_time_udr_mask);
++		if (!ret && info->regs->settle_us)
++			fsleep(info->regs->settle_us);
+ 		if (ret) {
+ 			dev_err(dev,
+ 				"Failed to prepare registers for time reading: %d\n",
+@@ -353,6 +404,7 @@ static int s5m_rtc_read_time(struct device *dev, struct rtc_time *tm)
+ 	switch (info->device_type) {
+ 	case S5M8767X:
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -377,6 +429,7 @@ static int s5m_rtc_set_time(struct device *dev, struct rtc_time *tm)
+ 	switch (info->device_type) {
+ 	case S5M8767X:
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -415,6 +468,7 @@ static int s5m_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
+ 	switch (info->device_type) {
+ 	case S5M8767X:
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -454,6 +508,7 @@ static int s5m_rtc_stop_alarm(struct s5m_rtc_info *info)
+ 	switch (info->device_type) {
+ 	case S5M8767X:
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -493,6 +548,7 @@ static int s5m_rtc_start_alarm(struct s5m_rtc_info *info)
+ 	switch (info->device_type) {
+ 	case S5M8767X:
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -531,6 +587,7 @@ static int s5m_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
+ 	switch (info->device_type) {
+ 	case S5M8767X:
+ 	case S2MPG10:
++	case S2MPS18X:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+ 	case S2MPS13X:
+@@ -611,6 +668,22 @@ static int s5m8767_rtc_init_reg(struct s5m_rtc_info *info)
+ 		ret = regmap_raw_write(info->regmap, S5M_ALARM0_CONF, data, 2);
+ 		break;
+ 
++	case S2MPS18X: {
++		unsigned int ctrl;
++
++		/*
++		 * Samsung's driver writes RTC_CTRL only when the RTC was reset
++		 * (24 h mode gone): a running clock stays untouched.
++		 */
++		ret = regmap_read(info->regmap, info->regs->ctrl, &ctrl);
++		if (ret < 0 || (ctrl & (1 << MODEL24_SHIFT)))
++			break;
++		ret = regmap_write(info->regmap, info->regs->ctrl, 1 << MODEL24_SHIFT);
++		if (ret < 0)
++			break;
++		ret = s5m8767_rtc_set_alarm_reg(info);
++		break;
++	}
+ 	case S2MPG10:
+ 	case S2MPS15X:
+ 	case S2MPS14X:
+@@ -714,6 +787,8 @@ static int s5m_rtc_probe(struct platform_device *pdev)
+ 					     "Failed to allocate regmap\n");
+ 	} else if (device_type == S2MPG10) {
+ 		info->regs = &s2mpg10_rtc_regs;
++	} else if (device_type == S2MPS18X) {
++		info->regs = &s2mps18_rtc_regs;
+ 	} else {
+ 		return dev_err_probe(&pdev->dev, -ENODEV,
+ 				     "Unsupported device type %d\n",
+@@ -812,6 +887,7 @@ static const struct platform_device_id s5m_rtc_id[] = {
+ 	{ .name = "s2mps13-rtc", .driver_data = S2MPS13X },
+ 	{ .name = "s2mps14-rtc", .driver_data = S2MPS14X },
+ 	{ .name = "s2mps15-rtc", .driver_data = S2MPS15X },
++	{ .name = "s2mps18-rtc", .driver_data = S2MPS18X },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(platform, s5m_rtc_id);
+diff --git a/include/linux/mfd/samsung/rtc.h b/include/linux/mfd/samsung/rtc.h
+index 51c4239..287292f 100644
+--- a/include/linux/mfd/samsung/rtc.h
++++ b/include/linux/mfd/samsung/rtc.h
+@@ -103,6 +103,45 @@ enum s2mpg10_rtc_reg {
+ 	S2MPG10_RTC_OSC_CTRL,
+ };
+ 
++/*
++ * S2MPS18 (Exynos 9810), reached through ACPM as access type 0x02. Layout from
++ * Samsung's GPL kernel for the Exynos 9810 (include/linux/mfd/samsung/rtc-s2mp.h,
++ * the !CONFIG_RTC_DRV_S2MP branch that the S2MPS18 driver uses): milliseconds
++ * before seconds like the S2MPG10, but UPDATE after WTSR_SMPL.
++ */
++enum s2mps18_rtc_reg {
++	S2MPS18_RTC_CTRL,
++	S2MPS18_RTC_WTSR_SMPL,
++	S2MPS18_RTC_UPDATE,
++	S2MPS18_RTC_CAP_SEL,
++	S2MPS18_RTC_MSEC,
++	S2MPS18_RTC_SEC,
++	S2MPS18_RTC_MIN,
++	S2MPS18_RTC_HOUR,
++	S2MPS18_RTC_WEEK,
++	S2MPS18_RTC_DAY,
++	S2MPS18_RTC_MON,
++	S2MPS18_RTC_YEAR,
++	S2MPS18_RTC_A0SEC,
++	S2MPS18_RTC_A0MIN,
++	S2MPS18_RTC_A0HOUR,
++	S2MPS18_RTC_A0WEEK,
++	S2MPS18_RTC_A0DAY,
++	S2MPS18_RTC_A0MON,
++	S2MPS18_RTC_A0YEAR,
++	S2MPS18_RTC_A1SEC,
++	S2MPS18_RTC_A1MIN,
++	S2MPS18_RTC_A1HOUR,
++	S2MPS18_RTC_A1WEEK,
++	S2MPS18_RTC_A1DAY,
++	S2MPS18_RTC_A1MON,
++	S2MPS18_RTC_A1YEAR,
++	S2MPS18_RTC_OSC_CTRL,
++};
++
++/* S2MPS18 RTC_UPDATE: RUDR bit 0, WUDR bit 1, FREEZE bit 2, AUDR bit 4 */
++#define S2MPS18_RTC_FREEZE_MASK	(1 << 2)
++
+ #define RTC_I2C_ADDR		(0x0C >> 1)
+ 
+ #define HOUR_12			(1 << 7)
+-- 
+2.53.0
+
