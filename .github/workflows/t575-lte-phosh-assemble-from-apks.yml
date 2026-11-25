@@ -59,9 +59,11 @@ jobs:
           python3 ci/t575-phosh-preflight.py source
           python3 ci/t575-phosh-preflight.py packages pkgs
           (cd pkgs && sha256sum -c SHA256SUMS)
-          printf 'DURANIUM_UPSTREAM=%s\nPMAPORTS_UPSTREAM=%s\n' \
-            "$(git -C work/duranium-build rev-parse origin/main)" \
-            "$(git -C work/pmaports rev-parse HEAD)" > expected-upstream-revisions
+          printf 'DURANIUM_UPSTREAM=%s\nPMAPORTS_UPSTREAM=%s\nDURANIUM_PATCHED_TREE=%s\nLOCAL_APORTS_TREE=%s\n' \
+            "$(cat pmos/duranium-build/BASE)" \
+            "$(git -C work/pmaports rev-parse HEAD)" \
+            "$(git -C work/duranium-build rev-parse HEAD^{tree})" \
+            "$(git rev-parse HEAD:pmos/aports)" > expected-upstream-revisions
           cmp pkgs/UPSTREAM-REVISIONS expected-upstream-revisions
           echo "PASS: no upstream revision drift between compiled packages and image assembly"
 
@@ -100,7 +102,7 @@ jobs:
           # Keep source checked out and output directory writable.
           chmod u+rwx work/duranium-build
           ln -sfn "$PWD/work/pmaports" work/duranium-build/pmaports
-          echo '26111790' > work/duranium-build/mkosi.version
+          cp pmos/duranium-build/LTE_CANDIDATE_VERSION work/duranium-build/mkosi.version
           GTA3_ROOT="$PWD/ci-root" PMAPORTS="$PWD/work/pmaports" PKGS="$PWD/pkgs" \
             SKIP_APKS=1 FRESH=1 \
             GTA3_UPDATE_BASE="$(GITHUB_REPOSITORY="$GITHUB_REPOSITORY" scripts/config get update.base)" \
@@ -126,7 +128,7 @@ jobs:
           OUT=work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge
           TAG=samsung-gtactive3-lte_phosh_edge-dev
           python3 ci/t575-phosh-preflight.py image "$OUT"
-          ci/check-image "$OUT" 26111790 dev "$TAG" gtactive3
+          PACKAGE_MANIFEST="$PWD/$OUT/BASE-PACKAGES.txt" ci/check-image "$OUT" "$(cat pmos/duranium-build/LTE_CANDIDATE_VERSION)" dev "$TAG" gtactive3
           (
             cd "$OUT"
             for file in *.raw.zst; do
@@ -151,6 +153,7 @@ jobs:
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.efi
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.sha256
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/SHA256SUMS
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/BASE-PACKAGES.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

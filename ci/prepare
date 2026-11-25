@@ -2,11 +2,11 @@
 # Set up the build trees in $WORK (default ./work) from upstream plus what
 # we maintain:
 #
-#   $WORK/duranium-build   upstream duranium-build main + pmos/duranium-build/*.patch
-#                          (falls back to the BASE they were made on if
-#                          upstream moved in a way that conflicts)
-#   $WORK/pmaports         upstream pmaports main + pmos/aports/ (only new
-#                          aports: upstream ones are never replaced)
+#   $WORK/duranium-build   pinned Nura Duranium base + local patches
+#   $WORK/pmaports         pinned Nura pmaports + local device packages
+#
+# A failed fetch or patch application stops the build.
+# No automatic upstream advancement or fallback.
 #
 # Everything else (the whole userspace, the UIs) comes from the
 # postmarketOS binary repositories at image build time.
@@ -15,28 +15,56 @@ cd "$(dirname "$0")/.."
 P=$PWD
 WORK=${WORK:-$P/work}
 mkdir -p "$WORK"
+WORK=$(cd "$WORK" && pwd)
 note() { echo "::notice::$*"; }
 warn() { echo "::warning::$*"; }
 
 git_id() { git -C "$1" -c user.name="gtactive3-mainline CI" -c user.email=ci@invalid "${@:2}"; }
 
+DBASE=$(cat "$P/pmos/duranium-build/BASE")
+ABASE=$(cat "$P/pmos/duranium-build/PMAPORTS_BASE")
+
+[[ "$DBASE" =~ ^[0-9a-f]{40}$ ]]
+[[ "$ABASE" =~ ^[0-9a-f]{40}$ ]]
+
+fetch_pinned() {
+    local dest=$1 url=$2 revision=$3
+
+    rm -rf "$dest"
+    git init -q "$dest"
+    git -C "$dest" remote add origin "$url"
+
+    git -C "$dest" fetch -q --depth=1 \
+        origin "$revision"
+
+    git -C "$dest" checkout -q --detach FETCH_HEAD
+
+    [ "$(git -C "$dest" rev-parse HEAD)" = "$revision" ]
+}
+
 D=$WORK/duranium-build
-rm -rf "$D"
-git clone -q https://gitlab.postmarketos.org/postmarketOS/duranium-build.git "$D"
-if git_id "$D" am -q --3way "$P"/pmos/duranium-build/*.patch; then
-	note "duranium-build: our $(ls "$P"/pmos/duranium-build/*.patch | wc -l) patches on upstream $(git -C "$D" rev-parse --short origin/main)"
-else
-	git_id "$D" am --abort || true
-	base=$(cat "$P/pmos/duranium-build/BASE")
-	warn "duranium-build: our patches do not apply on upstream $(git -C "$D" rev-parse --short origin/main); building on $base. Rebase build/wt/duranium and run scripts/pmos-export."
-	git -C "$D" checkout -q "$base"
-	git_id "$D" am -q "$P"/pmos/duranium-build/*.patch
-fi
+
+fetch_pinned "$D" \
+    https://gitlab.nura.eco/nura/duranium-build.git \
+    "$DBASE"
+
+git_id "$D" am -q --committer-date-is-author-date \
+    "$P"/pmos/duranium-build/*.patch
+
+git -C "$D" diff --check "$DBASE" HEAD
+
+note "Duranium pinned base: $DBASE"
+note "Duranium patched tree: $(git -C "$D" rev-parse HEAD^{tree})"
 
 A=$WORK/pmaports
-rm -rf "$A"
-git clone -q --depth 1 https://gitlab.postmarketos.org/postmarketOS/pmaports.git "$A"
-(cd "$P/pmos/aports" && find . -name APKBUILD -printf '%h\n') | sort | while read -r d; do
+
+fetch_pinned "$A" \
+    https://gitlab.nura.eco/nura/pmaports.git \
+    "$ABASE"
+
+note "Nura pmaports pinned base: $ABASE"
+
+(cd "$P/pmos/aports" && find . -name APKBUILD -exec dirname {} \;) | sort | while read -r d; do
 	d=${d#./}
 	[ ! -e "$A/$d" ] || { echo "upstream pmaports now has $d: drop ours or rename it" >&2; exit 1; }
 	mkdir -p "$A/$(dirname "$d")"
@@ -48,6 +76,7 @@ note "pmaports: upstream $(git -C "$A" rev-parse --short HEAD) + $(find "$P/pmos
 ln -sfn "$A" "$D/pmaports"
 
 {
+	echo "duranium_base=$DBASE"
 	echo "duranium_build=$(git -C "$D" rev-parse HEAD)"
 	echo "pmaports=$(git -C "$A" rev-parse HEAD)"
 } >> "${GITHUB_OUTPUT:-/dev/null}"

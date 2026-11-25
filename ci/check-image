@@ -149,4 +149,8 @@ dev)
 *) fail "CHANNEL must be release or dev" ;;
 esac
 [ "$bad" = 0 ] || exit 1
+
+if [ -n "${PACKAGE_MANIFEST:-}" ]; then
+    cp "$pkgs" "$PACKAGE_MANIFEST"
+fi
 echo "checked $TAG $VERSION: key $FPR, $n transfers -> $TAG, $CHANNEL contents ok"

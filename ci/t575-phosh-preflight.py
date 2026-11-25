@@ -21,7 +21,7 @@ CODENAME = "gtactive3"
 IMAGE_ID = "samsung-gtactive3-lte"
 FLAVOR = "phosh"
 RELEASE = "edge"
-VERSION = "26111790"
+VERSION = (ROOT / "pmos/duranium-build/LTE_CANDIDATE_VERSION").read_text().strip()
 OUTPUT_STEM = f"{IMAGE_ID}_{FLAVOR}_{RELEASE}"
 CHANNEL = f"{OUTPUT_STEM}-dev"
 
