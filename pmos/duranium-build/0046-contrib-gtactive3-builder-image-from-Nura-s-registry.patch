@@ -1,0 +1,37 @@
+From 1d545f35e9ec7af9372b27110869a8b274f20d86 Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Fri, 20 Nov 2026 11:52:33 +1100
+Subject: [PATCH] contrib: gtactive3: builder image from Nura's registry
+
+postmarketOS became Nura: gitlab.postmarketos.org redirects to
+gitlab.nura.eco, and docker-postmarketos moved to nura/nura-oci. The old
+registry path answers 403 to the token request, so every CI image build
+since 2026-11-11 stopped before building. nura/nura-oci:edge has the
+same repositories and every package the builder installs (gcc-aarch64,
+devicepkg-dev, postmarketos-installkernel, checked 2026-11-20);
+upstream's own mkosi image already comes from there.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ contrib/samsung-gtactive3/pkgbuilder.Containerfile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/samsung-gtactive3/pkgbuilder.Containerfile b/contrib/samsung-gtactive3/pkgbuilder.Containerfile
+index 58612f1..c1e2435 100644
+--- a/contrib/samsung-gtactive3/pkgbuilder.Containerfile
++++ b/contrib/samsung-gtactive3/pkgbuilder.Containerfile
+@@ -5,7 +5,10 @@
+ # repository), the linux-postmarketos-exynos9810 makedepends and
+ # devicepkg-dev. Everything is built natively on the host CPU with
+ # CARCH=aarch64, so no qemu-user emulation is involved.
+-FROM gitlab.postmarketos.org:5050/postmarketos/docker-postmarketos:edge
++# postmarketOS is Nura now: docker-postmarketos moved to nura/nura-oci (the
++# old registry path answers 403 to the token request since 2026-11-11), with
++# the same repositories and packages (checked 2026-11-20).
++FROM gitlab.nura.eco:5050/nura/nura-oci:edge
+ 
+ RUN apk add --no-cache \
+ 	alpine-sdk \
+-- 
+2.53.0
+
