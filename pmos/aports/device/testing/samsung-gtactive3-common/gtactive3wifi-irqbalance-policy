@@ -1,0 +1,12 @@
+#!/bin/sh
+# irqbalance --policyscript: called once per interrupt with its sysfs device
+# path and number; prints key=value settings for it.
+#
+# irqbalance balances an interrupt it cannot classify (every platform
+# device here: no PCI class) at package level, so its mask becomes all of
+# CPU0-3, and the GICv3 driver delivers a multi-CPU mask to the lowest CPU:
+# CPU0 again. Only PCI Wi-Fi ("network", core level) moved. Asking for core
+# level gives each interrupt one CPU. Measured 2026-11-20 on the SM-T570
+# (TESTPLAN D12.2): display and SPI on CPU1, UFS on CPU2, Wi-Fi and dwc3
+# on CPU3, nothing on CPU4-7, the USB link unaffected.
+echo balance_level=core
