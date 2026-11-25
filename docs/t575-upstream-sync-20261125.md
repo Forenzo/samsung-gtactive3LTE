@@ -25,3 +25,11 @@ Base: `ca8e2265ae7e3fd8d95a33000c6acef96a86e289` (November 24 headphone preserva
 3. Verify known-good recovery path, RT5665 playback, protected headphone service, TAS2562 lock, Wi-Fi, USB, UFS, display, LTE device identity and modem non-regression; measure battery current and IRQ distribution. No automatic activation of experimental audio or deep idle.
 
 No build or hardware validation has been performed on the sync branch yet.
+
+## Second review pass
+
+- Added the input-boost regression test to the existing check workflow without replacing LTE CI adjustments.
+- Backported initrd-deadline sleep fallback and USB-prep marker handling from upstream `71cfecded34baf6a66b250fba55090254ba5565f`. Updated both source checksums; local common pkgrel 56 (selective, not upstream-equivalent). Boot/USB validation remains required.
+- Installer `stock.sh` is already identical to upstream; upstream `04d5d1f99631d22805e80a6d7a79a3c6f173dc54` cherry-picked our model validation.
+- Installer local-image cleanup needs cache-collision review before adoption; keep LTE install gate. Updater inactive-slot protection is useful but must match our partition labels. Paired USB SSH, unauthenticated-console gating, socket/firewall and host-tool changes are a coordinated migration; preserve the known recovery path until tested. Do not import hardcoded endpoint literals.
+- Kernel r29 reference `47ddb580a8e6cc261dc82d8cc600f96836c06609`: config delta is FS_VERITY=y (built-in signatures off); the consolidated patch remains unavailable through connector contents API. Review its actual inner diff in local Git, retain `t575-gpu-first-desktop.patch` in APKBUILD, and rebuild/test rather than replace the live charger. RTC r32/r62 ports source not retrieved. Review other fork branches independently before merging; the headphone snapshot does not necessarily include every separate privacy or GPU experiment.
