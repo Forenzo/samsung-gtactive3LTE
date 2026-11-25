@@ -24308,10 +24308,10 @@ index 505a68c26463e79f4ba6da86e0360df2912833a9..4c2fb15152db60da11ba4312f8310dab
  	return max17042_probe(i2c, dev, irq, id->driver_data);
  }
 diff --git a/drivers/power/supply/max77705_charger.c b/drivers/power/supply/max77705_charger.c
-index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922c9001d38 100644
+index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7c9f5c419 100644
 --- a/drivers/power/supply/max77705_charger.c
 +++ b/drivers/power/supply/max77705_charger.c
-@@ -17,10 +17,67 @@
+@@ -17,10 +17,70 @@
  #include <linux/platform_device.h>
  #include <linux/power_supply.h>
  #include <linux/regmap.h>
@@ -24342,6 +24342,9 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 +#define MAX77705_TEMP_POLL_MS		10000
 +#define MAX77705_TEMP_HYST		2000	/* m°C */
 +#define MAX77705_TEMP_MAX_ERRORS	3
++
++/* force-discharge is refused, and ended, below this state of charge (%) */
++#define MAX77705_FORCE_DISCHARGE_MIN	20
 +
 +/*
 + * Charging by battery temperature, from the Samsung Galaxy Tab Active3
@@ -24379,7 +24382,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  static const struct regmap_config max77705_chg_regmap_config = {
  	.reg_base = MAX77705_CHG_REG_BASE,
  	.reg_bits = 8,
-@@ -57,6 +114,16 @@ static irqreturn_t max77705_aicl_irq(int irq, void *irq_drv_data)
+@@ -57,6 +117,16 @@ static irqreturn_t max77705_aicl_irq(int irq, void *irq_drv_data)
  		if (err < 0)
  			return IRQ_HANDLED;
  
@@ -24396,7 +24399,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  		regval--;
  
  		err = regmap_field_write(chg->rfield[MAX77705_CHG_CHGIN_LIM], regval);
-@@ -102,22 +169,13 @@ static const struct regmap_irq_chip max77705_charger_irq_chip = {
+@@ -102,27 +172,53 @@ static const struct regmap_irq_chip max77705_charger_irq_chip = {
  	.num_irqs		= ARRAY_SIZE(max77705_charger_irqs),
  };
  
@@ -24410,18 +24413,57 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 -
 -	return rv;
 -}
--
++static const struct power_supply_ext max77705_care_ext;
+ 
  static void max77705_charger_disable(void *data)
  {
  	struct max77705_charger_data *chg = data;
  	int rv;
  
++	/* the controls first: a write to them queues the work again */
++	power_supply_unreg_notifier(&chg->psy_nb);
++	if (chg->bat_ext)
++		power_supply_unregister_extension(chg->bat, &max77705_care_ext);
 +	cancel_delayed_work_sync(&chg->temp_work);
++	if (chg->bat)
++		put_device(&chg->bat->dev);
++
++	/* never leave the tablet running from the battery with a charger in */
++	if (chg->buck_off &&
++	    regmap_update_bits(chg->regmap, MAX77705_CHG_REG_CNFG_00,
++			       MAX77705_BUCK_MASK, MAX77705_BUCK_MASK))
++		dev_err(chg->dev, "unable to turn the buck back on\n");
++
++	/* nor held at the battery care limit once the driver is gone */
++	if (chg->en_set == 0 &&
++	    regmap_update_bits(chg->regmap, MAX77705_CHG_REG_CNFG_00,
++			       MAX77705_CHG_MASK, MAX77705_CHG_MASK))
++		dev_err(chg->dev, "unable to re-enable charging\n");
 +
  	rv = regmap_field_write(chg->rfield[MAX77705_CHG_EN], MAX77705_CHG_DISABLE);
  	if (rv)
  		dev_err(chg->dev, "unable to disable the charger: %d\n", rv);
-@@ -137,15 +195,30 @@ static int max77705_get_online(struct regmap *regmap, int *val)
+ }
+ 
++/*
++ * Whether the charger may charge the battery: the CHG bit of the mode in
++ * CNFG_00, which Samsung's max77705_set_charger_state() switches. CNFG_09
++ * bit 7 (MAX77705_CHG_EN) does not stop charging: the SM-T570 charged at
++ * 280 mA in CV with it clear (2026-11-20).
++ */
++static int max77705_chg_on(struct max77705_charger_data *chg)
++{
++	unsigned int mode;
++
++	if (regmap_read(chg->regmap, MAX77705_CHG_REG_CNFG_00, &mode))
++		return 0;
++	return !!(mode & MAX77705_CHG_MASK);
++}
++
+ static int max77705_get_online(struct regmap *regmap, int *val)
+ {
+ 	unsigned int data;
+@@ -137,15 +233,30 @@ static int max77705_get_online(struct regmap *regmap, int *val)
  	return 0;
  }
  
@@ -24457,22 +24499,38 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  }
  
  static int max77705_check_battery(struct max77705_charger_data *chg, int *val)
-@@ -202,10 +275,13 @@ static int max77705_get_status(struct max77705_charger_data *chg, int *val)
+@@ -173,10 +284,9 @@ static int max77705_check_battery(struct max77705_charger_data *chg, int *val)
+ static int max77705_get_charge_type(struct max77705_charger_data *chg, int *val)
  {
  	struct regmap *regmap = chg->regmap;
- 	unsigned int reg_data, chg_en;
+-	unsigned int reg_data, chg_en;
++	unsigned int reg_data;
+ 
+-	regmap_field_read(chg->rfield[MAX77705_CHG_EN], &chg_en);
+-	if (!chg_en) {
++	if (!max77705_chg_on(chg)) {
+ 		*val = POWER_SUPPLY_CHARGE_TYPE_NONE;
+ 		return 0;
+ 	}
+@@ -201,11 +311,13 @@ static int max77705_get_charge_type(struct max77705_charger_data *chg, int *val)
+ static int max77705_get_status(struct max77705_charger_data *chg, int *val)
+ {
+ 	struct regmap *regmap = chg->regmap;
+-	unsigned int reg_data, chg_en;
++	unsigned int reg_data;
 +	int online = 0;
  
- 	regmap_field_read(chg->rfield[MAX77705_CHG_EN], &chg_en);
- 	if (!chg_en) {
+-	regmap_field_read(chg->rfield[MAX77705_CHG_EN], &chg_en);
+-	if (!chg_en) {
 -		*val = POWER_SUPPLY_CHARGE_TYPE_NONE;
++	if (!max77705_chg_on(chg)) {
 +		max77705_get_online(regmap, &online);
 +		*val = online ? POWER_SUPPLY_STATUS_NOT_CHARGING :
 +				POWER_SUPPLY_STATUS_DISCHARGING;
  		return 0;
  	}
  
-@@ -317,6 +393,15 @@ static int max77705_get_health(struct max77705_charger_data *chg, int *val)
+@@ -317,6 +429,15 @@ static int max77705_get_health(struct max77705_charger_data *chg, int *val)
  {
  	struct regmap *regmap = chg->regmap;
  	int ret, is_online = 0;
@@ -24488,7 +24546,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  
  	ret = max77705_get_online(regmap, &is_online);
  	if (ret)
-@@ -388,6 +473,174 @@ static int max77705_get_float_voltage(struct max77705_charger_data *chg,
+@@ -388,6 +509,450 @@ static int max77705_get_float_voltage(struct max77705_charger_data *chg,
  	return 0;
  }
  
@@ -24527,6 +24585,30 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 +		}
 +	}
 +
++	/* battery care: hold at the limit, or charging inhibited by userspace */
++	if (chg->care_hold ||
++	    chg->behaviour != POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO)
++		en = 0;
++
++	/*
++	 * force-discharge: the buck off, so the system runs from the battery
++	 * with the charger still plugged in (Samsung's BUCK_OFF mode). Only
++	 * the BUCK bit is touched, and only set again if we cleared it.
++	 */
++	if ((chg->behaviour == POWER_SUPPLY_CHARGE_BEHAVIOUR_FORCE_DISCHARGE) !=
++	    chg->buck_off) {
++		bool off = !chg->buck_off;
++
++		err = regmap_update_bits(chg->regmap, MAX77705_CHG_REG_CNFG_00,
++					 MAX77705_BUCK_MASK,
++					 off ? 0 : MAX77705_BUCK_MASK);
++		if (err)
++			dev_err(chg->dev, "cannot turn the buck %s: %d\n",
++				off ? "off" : "on", err);
++		else
++			chg->buck_off = off;
++	}
++
 +	if (cv != chg->cv_set_uv) {
 +		err = max77705_set_float_voltage(chg, cv);
 +		if (err)
@@ -24552,7 +24634,9 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 +	}
 +
 +	if (en != chg->en_set) {
-+		err = regmap_field_write(chg->rfield[MAX77705_CHG_EN], en);
++		err = regmap_update_bits(chg->regmap, MAX77705_CHG_REG_CNFG_00,
++					 MAX77705_CHG_MASK,
++					 en ? MAX77705_CHG_MASK : 0);
 +		if (err)
 +			dev_err(chg->dev, "cannot %s charging: %d\n",
 +				en ? "enable" : "disable", err);
@@ -24583,16 +24667,266 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 +	return thermal_zone_get_temp(tz, temp);
 +}
 +
++/*
++ * Battery care. Android's "Protect battery" stops charging at 85 %; laptops
++ * and upower use a start/end pair. The charger IC knows no state of charge,
++ * so the battery's capacity is polled with the temperature (10 s, or at once
++ * after a change) and the mode's CHG bit is cleared at end_pct with the buck on:
++ * the tablet runs from the charger and the battery rests. Charging resumes
++ * at start_pct (at most end_pct - 1). The controls are added to the battery
++ * that lists this charger in power-supplies, because that is where upower
++ * and the desktops look for charge_control_*_threshold.
++ */
++static const enum power_supply_property max77705_care_props[] = {
++	POWER_SUPPLY_PROP_CHARGE_CONTROL_START_THRESHOLD,
++	POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD,
++	POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR,
++};
++
++static int max77705_care_get(struct power_supply *psy,
++			     const struct power_supply_ext *ext, void *data,
++			     enum power_supply_property psp,
++			     union power_supply_propval *val)
++{
++	struct max77705_charger_data *chg = data;
++
++	guard(mutex)(&chg->lock);
++	switch (psp) {
++	case POWER_SUPPLY_PROP_CHARGE_CONTROL_START_THRESHOLD:
++		val->intval = chg->start_pct;
++		return 0;
++	case POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD:
++		val->intval = chg->end_pct;
++		return 0;
++	case POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR:
++		val->intval = chg->behaviour;
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++static int max77705_care_set(struct power_supply *psy,
++			     const struct power_supply_ext *ext, void *data,
++			     enum power_supply_property psp,
++			     const union power_supply_propval *val)
++{
++	struct max77705_charger_data *chg = data;
++	int v = val->intval;
++
++	scoped_guard(mutex, &chg->lock) {
++		switch (psp) {
++		case POWER_SUPPLY_PROP_CHARGE_CONTROL_START_THRESHOLD:
++			if (v < 0 || v > 100)
++				return -EINVAL;
++			chg->start_pct = v;
++			break;
++		case POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD:
++			if (v < 1 || v > 100)
++				return -EINVAL;
++			chg->end_pct = v;
++			break;
++		case POWER_SUPPLY_PROP_CHARGE_BEHAVIOUR:
++			if (v != POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO &&
++			    v != POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE &&
++			    v != POWER_SUPPLY_CHARGE_BEHAVIOUR_FORCE_DISCHARGE)
++				return -EINVAL;
++			if (v == POWER_SUPPLY_CHARGE_BEHAVIOUR_FORCE_DISCHARGE) {
++				unsigned int cnfg;
++				int ret;
++
++				/* not while supplying VBUS (OTG), nor when low */
++				ret = regmap_read(chg->regmap,
++						  MAX77705_CHG_REG_CNFG_00, &cnfg);
++				if (ret)
++					return ret;
++				if (cnfg & MAX77705_OTG_CTRL)
++					return -EBUSY;
++				if (chg->care_cap < MAX77705_FORCE_DISCHARGE_MIN)
++					return -EAGAIN;
++			}
++			chg->behaviour = v;
++			max77705_apply_limits(chg);
++			break;
++		default:
++			return -EINVAL;
++		}
++	}
++
++	/* re-check the state of charge against the new limits now */
++	mod_delayed_work(chg->wqueue, &chg->temp_work, 0);
++	return 0;
++}
++
++static int max77705_care_writeable(struct power_supply *psy,
++				   const struct power_supply_ext *ext, void *data,
++				   enum power_supply_property psp)
++{
++	return true;
++}
++
++static const struct power_supply_ext max77705_care_ext = {
++	.name			= "max77705-charge-control",
++	.charge_behaviours	= BIT(POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO) |
++				  BIT(POWER_SUPPLY_CHARGE_BEHAVIOUR_INHIBIT_CHARGE) |
++				  BIT(POWER_SUPPLY_CHARGE_BEHAVIOUR_FORCE_DISCHARGE),
++	.properties		= max77705_care_props,
++	.num_properties		= ARRAY_SIZE(max77705_care_props),
++	.get_property		= max77705_care_get,
++	.set_property		= max77705_care_set,
++	.property_is_writeable	= max77705_care_writeable,
++};
++
++static int max77705_match_battery(struct power_supply *psy, void *data)
++{
++	struct max77705_charger_data *chg = data;
++	size_t i;
++
++	if (psy->desc->type != POWER_SUPPLY_TYPE_BATTERY)
++		return 0;
++
++	for (i = 0; i < psy->num_supplies; i++) {
++		if (!strcmp(psy->supplied_from[i], chg->psy_chg->desc->name)) {
++			/*
++			 * Only the device: not power_supply_get_by_name()'s
++			 * use count, which would keep the battery "registered"
++			 * after its driver is gone. Without it, reads of an
++			 * unregistered battery fail with -ENODEV.
++			 */
++			get_device(&psy->dev);
++			WRITE_ONCE(chg->bat, psy);
++			return 1;
++		}
++	}
++
++	return 0;
++}
++
++/*
++ * The battery's state of charge, -1 if unknown. Finds the battery and adds
++ * the controls to it on first use (the gauge may probe after us). Called
++ * from the work only, without chg->lock: the battery's get_property takes
++ * its extension lock, which our callbacks hold while taking chg->lock.
++ */
++static int max77705_care_capacity(struct max77705_charger_data *chg)
++{
++	union power_supply_propval val;
++	bool retried = false;
++	int ret;
++
++again:
++	if (!chg->bat)
++		power_supply_for_each_psy(chg, max77705_match_battery);
++	if (!chg->bat)
++		return -1;
++
++	if (!chg->bat_ext) {
++		ret = power_supply_register_extension(chg->bat, &max77705_care_ext,
++						      chg->dev, chg);
++		if (!ret) {
++			WRITE_ONCE(chg->bat_ext, true);
++			/* a change uevent that carries the new controls */
++			power_supply_changed(chg->bat);
++		} else
++			dev_warn_once(chg->dev, "no charge controls on %s: %d\n",
++				      chg->bat->desc->name, ret);
++	}
++
++	ret = power_supply_get_property(chg->bat, POWER_SUPPLY_PROP_CAPACITY, &val);
++	if (ret == -ENODEV) {
++		/*
++		 * The gauge went away (driver unbound): its sysfs, and our
++		 * controls in it, are gone. Drop it and find the next one; the
++		 * extension record goes with the old power_supply.
++		 */
++		dev_info(chg->dev, "battery gone, charge limit off\n");
++		WRITE_ONCE(chg->bat_ext, false);
++		put_device(&chg->bat->dev);
++		WRITE_ONCE(chg->bat, NULL);
++		if (!retried) {
++			retried = true;
++			goto again;
++		}
++		return -1;
++	}
++	if (ret)
++		return -1;
++
++	return val.intval;
++}
++
++/*
++ * The battery usually registers after us (it needs its supplier): look for
++ * it as soon as any battery announces itself, so that upower, which checks
++ * for the controls when it first sees the battery, finds them.
++ */
++static int max77705_psy_notify(struct notifier_block *nb, unsigned long event,
++			       void *data)
++{
++	struct max77705_charger_data *chg =
++		container_of(nb, struct max77705_charger_data, psy_nb);
++	struct power_supply *psy = data;
++
++	/* also a new battery while we still hold one that went away */
++	if (event == PSY_EVENT_PROP_CHANGED &&
++	    psy->desc->type == POWER_SUPPLY_TYPE_BATTERY &&
++	    (!READ_ONCE(chg->bat_ext) || psy != READ_ONCE(chg->bat)))
++		mod_delayed_work(chg->wqueue, &chg->temp_work, 0);
++
++	return NOTIFY_OK;
++}
++
++/*
++ * Decide the hold with hysteresis, and end force-discharge when the battery
++ * runs low or its charge is unknown; true when something changed.
++ */
++static bool max77705_care_update(struct max77705_charger_data *chg, int cap)
++{
++	int start = min(chg->start_pct, chg->end_pct - 1);
++	bool hold = chg->care_hold, changed = false;
++
++	lockdep_assert_held(&chg->lock);
++
++	/* no limit, or no state of charge: charge as usual */
++	if (chg->end_pct >= 100 || cap < 0)
++		hold = false;
++	else if (cap >= chg->end_pct)
++		hold = true;
++	else if (cap <= start)
++		hold = false;
++
++	chg->care_cap = cap;
++
++	/* force-discharge ends on its own before the battery runs low */
++	if (chg->behaviour == POWER_SUPPLY_CHARGE_BEHAVIOUR_FORCE_DISCHARGE &&
++	    cap < MAX77705_FORCE_DISCHARGE_MIN) {
++		dev_warn(chg->dev, "battery %d %%: force-discharge ended\n", cap);
++		chg->behaviour = POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO;
++		changed = true;
++	}
++
++	if (hold == chg->care_hold)
++		return changed;
++
++	dev_info(chg->dev, "battery %d %%: %s (limit %d-%d %%)\n", cap,
++		 hold ? "charge limit reached, charging paused" : "charging resumed",
++		 start, chg->end_pct);
++	chg->care_hold = hold;
++	return true;
++}
++
 +static void max77705_temp_work(struct work_struct *work)
 +{
 +	struct max77705_charger_data *chg =
 +		container_of(work, struct max77705_charger_data, temp_work.work);
-+	int temp, chg_temp, step, cur, ret;
++	int temp, chg_temp, step, cur, ret, cap;
 +	bool changed = false;
 +
++	cap = max77705_care_capacity(chg);
 +	ret = max77705_read_zone("battery-thermal", &temp);
 +
 +	mutex_lock(&chg->lock);
++	changed = max77705_care_update(chg, cap);
 +	cur = chg->temp_step;
 +
 +	if (ret) {
@@ -24663,7 +24997,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  static int max77705_chg_get_property(struct power_supply *psy,
  					enum power_supply_property psp,
  					union power_supply_propval *val)
-@@ -434,24 +687,29 @@ static int max77705_set_property(struct power_supply *psy,
+@@ -434,24 +999,29 @@ static int max77705_set_property(struct power_supply *psy,
  	struct max77705_charger_data *chg = power_supply_get_drvdata(psy);
  	int err = 0;
  
@@ -24703,7 +25037,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  
  	return err;
  };
-@@ -468,6 +726,32 @@ static int max77705_property_is_writeable(struct power_supply *psy,
+@@ -468,6 +1038,32 @@ static int max77705_property_is_writeable(struct power_supply *psy,
  	}
  }
  
@@ -24736,7 +25070,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  static const struct power_supply_desc max77705_charger_psy_desc = {
  	.name = "max77705-charger",
  	.type = POWER_SUPPLY_TYPE_USB,
-@@ -476,6 +760,7 @@ static const struct power_supply_desc max77705_charger_psy_desc = {
+@@ -476,6 +1072,7 @@ static const struct power_supply_desc max77705_charger_psy_desc = {
  	.num_properties = ARRAY_SIZE(max77705_charger_props),
  	.get_property = max77705_chg_get_property,
  	.set_property = max77705_set_property,
@@ -24744,7 +25078,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  };
  
  static void max77705_chgin_isr_work(struct work_struct *work)
-@@ -528,7 +813,6 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+@@ -528,7 +1125,6 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
  	if (err)
  		goto err;
  
@@ -24752,7 +25086,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  	/* otg current limit 900mA */
  	err = regmap_field_write(chg->rfield[MAX77705_OTG_ILIM], MAX77705_OTG_ILIM_900);
  	if (err)
-@@ -557,11 +841,25 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+@@ -557,11 +1153,25 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
  	/* MINVSYS 3.6V(default) */
  	if (info->voltage_max_design_uv < 0) {
  		dev_warn(chg->dev, "missing battery:voltage-max-design-microvolt\n");
@@ -24780,7 +25114,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  	err = regmap_field_write(chg->rfield[MAX77705_VCHGIN], MAX77705_VCHGIN_4_5);
  	if (err)
  		goto err;
-@@ -596,11 +894,37 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+@@ -596,11 +1206,37 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
  
  }
  
@@ -24818,7 +25152,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  	struct device *dev;
  	struct regmap_irq_chip_data *irq_data;
  	int ret;
-@@ -614,6 +938,15 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -614,6 +1250,19 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	chg->dev = dev;
  	i2c_set_clientdata(i2c, chg);
  
@@ -24830,11 +25164,25 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 +	chg->cv_set_uv = -1;
 +	chg->ilim_set_ua = -1;
 +	chg->en_set = -1;
++	chg->end_pct = 100;
++	chg->start_pct = 100;
++	chg->behaviour = POWER_SUPPLY_CHARGE_BEHAVIOUR_AUTO;
++	chg->care_cap = -1;
 +
  	chip_desc = devm_kmemdup(dev, &max77705_charger_irq_chip,
  				 sizeof(max77705_charger_irq_chip),
  				 GFP_KERNEL);
-@@ -654,10 +987,24 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -646,7 +1295,8 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "failed to add irq chip\n");
+ 
+-	chg->wqueue = devm_alloc_ordered_workqueue(dev, "%s", 0, dev_name(dev));
++	chg->wqueue = devm_alloc_ordered_workqueue(dev, "%s", WQ_FREEZABLE,
++						  dev_name(dev));
+ 	if (!chg->wqueue)
+ 		return -ENOMEM;
+ 
+@@ -654,10 +1304,24 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	if (ret)
  		return dev_err_probe(dev, ret, "failed to initialize interrupt work\n");
  
@@ -24859,7 +25207,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
  	ret = devm_request_threaded_irq(dev, regmap_irq_get_virq(irq_data, MAX77705_CHGIN_I),
  					NULL, max77705_chgin_irq,
  					IRQF_TRIGGER_NONE,
-@@ -672,9 +1019,8 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -672,9 +1336,15 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	if (ret)
  		return ret;
  
@@ -24868,6 +25216,13 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..015312d9ca53e8771382a2197e6ac922
 -		return dev_err_probe(dev, ret, "failed to enable charge\n");
 +	/* follow the battery temperature from now on */
 +	queue_delayed_work(chg->wqueue, &chg->temp_work, 0);
++
++	chg->psy_nb.notifier_call = max77705_psy_notify;
++	ret = power_supply_reg_notifier(&chg->psy_nb);
++	if (ret) {
++		cancel_delayed_work_sync(&chg->temp_work);
++		return ret;
++	}
  
  	return devm_add_action_or_reset(dev, max77705_charger_disable, chg);
  }
@@ -30131,7 +30486,7 @@ index 0000000000000000000000000000000000000000..54c3fc2c36199b2dfb0f424431c18d30
 +
 +#endif /* __LINUX_MFD_S2MPS18_H */
 diff --git a/include/linux/power/max77705_charger.h b/include/linux/power/max77705_charger.h
-index b3950ce0625e1abe96457cb65fd477da4a27cafd..e1ee98ff8afcef477e3b3d2efc8fe04d29e5e084 100644
+index b3950ce0625e1abe96457cb65fd477da4a27cafd..0808396fbc5193c8b833701b18161bcc541276d1 100644
 --- a/include/linux/power/max77705_charger.h
 +++ b/include/linux/power/max77705_charger.h
 @@ -130,6 +130,8 @@
@@ -30143,7 +30498,7 @@ index b3950ce0625e1abe96457cb65fd477da4a27cafd..e1ee98ff8afcef477e3b3d2efc8fe04d
  
  enum max77705_field_idx {
  	MAX77705_CHGPROT,
-@@ -188,6 +190,20 @@ struct max77705_charger_data {
+@@ -188,6 +190,36 @@ struct max77705_charger_data {
  	struct workqueue_struct *wqueue;
  	struct work_struct	chgin_work;
  	struct power_supply	*psy_chg;
@@ -30161,6 +30516,22 @@ index b3950ce0625e1abe96457cb65fd477da4a27cafd..e1ee98ff8afcef477e3b3d2efc8fe04d
 +	int			temp_step;	/* -1: not monitored */
 +	int			temp_errors;
 +	bool			chg_hot;
++
++	/*
++	 * Battery care: charging pauses at end_pct and resumes at start_pct
++	 * (state of charge from the battery this charger supplies), or stays
++	 * off while userspace inhibits it. The controls live on that battery
++	 * as a power_supply extension, where upower looks for them.
++	 */
++	struct power_supply	*bat;
++	struct notifier_block	psy_nb;		/* finds the battery early */
++	bool			bat_ext;
++	int			end_pct;	/* 100: no limit */
++	int			start_pct;
++	int			behaviour;	/* POWER_SUPPLY_CHARGE_BEHAVIOUR_* */
++	int			care_cap;	/* last state of charge, -1 */
++	bool			care_hold;
++	bool			buck_off;	/* force-discharge: we cleared BUCK */
  };
  
  #endif /* __MAX77705_CHARGER_H */
