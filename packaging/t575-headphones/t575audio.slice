@@ -1,0 +1,5 @@
+[Unit]
+Description=SM-T575 protected audio management slice
+
+[Slice]
+AllowedCPUs=0-7
