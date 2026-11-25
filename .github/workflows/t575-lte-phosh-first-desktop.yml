@@ -95,6 +95,9 @@ jobs:
               test -s "$F"
               EXPECTED=$(awk -v name="$(basename "$F")" '$2 == name {print $1}' pmos/aports/device/testing/linux-postmarketos-exynos9810/APKBUILD)
               [[ "$EXPECTED" =~ ^[a-f0-9]{128}$ ]]
+              ACTUAL=$(sha512sum "$F" | awk '{print $1}')
+              echo "Expected SHA512: $EXPECTED"
+              echo "Actual SHA512:   $ACTUAL"
               printf '%s  %s\n' "$EXPECTED" "$F" | sha512sum -c -
               echo "Kernel source retrieved."
               exit 0
