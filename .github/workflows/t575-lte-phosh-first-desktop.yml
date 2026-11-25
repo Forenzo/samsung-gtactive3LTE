@@ -267,6 +267,10 @@ jobs:
           PYMKOSI
           printf '%s\n' "$DIGEST" > pkgs/MKOSI-IMAGE
 
+      - name: Prepare authenticated Alpine APK compatibility pin
+        run: |
+          bash ci/t575-fetch-apk-pin.sh work/duranium-build
+
       - name: Assemble a complete, unpublished Phosh desktop system for SM-T575
         env:
           DEVICE: samsung-gtactive3
@@ -327,6 +331,7 @@ jobs:
           )
           cp pkgs/BUILDER-IMAGE "$OUT/"
           cp pkgs/MKOSI-IMAGE "$OUT/"
+          cp work/duranium-build/apk-pin/PROVENANCE "$OUT/APK-PIN-PROVENANCE"
           cp pkgs/UPSTREAM-REVISIONS "$OUT/"
           git rev-parse HEAD > "$OUT/SOURCE-COMMIT"
           echo 'PASS: compressed image integrity, UKI, LTE signing key and SHA256 manifest'
@@ -348,6 +353,7 @@ jobs:
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/BASE-PACKAGES.txt
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/BUILDER-IMAGE
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/MKOSI-IMAGE
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/APK-PIN-PROVENANCE
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/UPSTREAM-REVISIONS
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/SOURCE-COMMIT
           if-no-files-found: error
