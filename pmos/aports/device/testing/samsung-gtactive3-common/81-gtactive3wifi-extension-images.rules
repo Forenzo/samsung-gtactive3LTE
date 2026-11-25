@@ -1,0 +1,8 @@
+# System extension images (systemd-sysext/confext DDIs: their erofs or
+# squashfs /usr and verity partitions, and plain squashfs images) are
+# loop devices that systemd mounts itself. Hide them from udisks, or the
+# session's automounter (udiskie) asks the user for a password to "mount
+# /dev/loopN" every time the extensions are refreshed (seen with
+# "systemd-sysext refresh" on the SM-T570, 2026-11-20).
+SUBSYSTEM=="block", KERNEL=="loop*", ACTION=="add|change", \
+	ENV{ID_FS_TYPE}=="squashfs|erofs|DM_verity_hash", ENV{UDISKS_IGNORE}="1"
