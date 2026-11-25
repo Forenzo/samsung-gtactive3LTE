@@ -252,7 +252,8 @@ jobs:
           tag=${{ matrix.tag }}
           ci/check-image "work/duranium-build/mkosi.output/${tag%-dev}" "${{ needs.state.outputs.version }}" "${{ matrix.channel }}" "$tag" "${{ matrix.variant }}"
       - name: Publish
-        if: github.ref == 'refs/heads/main' && steps.gate.outputs.skip != 'yes' && steps.gate.outputs.publish != 'no'
+        # Publication remains blocked until LTE validation.
+        if: ${{ false }}
         env:
           GH_TOKEN: ${{ github.token }}
           KEY: ${{ secrets.SYSUPDATE_SIGNING_KEY }}

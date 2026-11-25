@@ -53,6 +53,24 @@ git_id "$D" am -q --committer-date-is-author-date \
 
 git -C "$D" diff --check "$DBASE" HEAD
 
+# Replace the inherited upstream key with our release key.
+KEY="$P/pmos/sysupdate-public-key.asc"
+EXPECTED=$("$P/scripts/config" get update.fingerprint)
+
+ACTUAL=$(gpg --batch --with-colons --show-keys "$KEY" |
+    awk -F: '$1 == "fpr" {print $10}')
+
+[ "$ACTUAL" = "$EXPECTED" ]
+
+cp "$KEY" \
+    "$D/contrib/samsung-gtactive3/sysupdate-public-key.asc"
+
+cmp "$KEY" \
+    "$D/contrib/samsung-gtactive3/sysupdate-public-key.asc"
+
+note "Image signing fingerprint: $EXPECTED"
+
+
 note "Duranium pinned base: $DBASE"
 note "Duranium patched tree: $(git -C "$D" rev-parse HEAD^{tree})"
 

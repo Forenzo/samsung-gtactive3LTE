@@ -29,7 +29,10 @@ Booted system:
   gtactive3wifi-suspend-gate.service allows it for a boot when the kernel
   can freeze, the power key is a wake-up source and
   /var/lib/gtactive3wifi/suspend-wake-proven exists (written after the
-  on-device suspend test). Power key: suspend, long press: power off; the
+  on-device suspend test). On LTE, the marker additionally identifies
+  the booted usrhash and normal or experimental WFI suspend mode.
+  C2 must remain disabled until independently validated.
+  Power key: suspend, long press: power off; the
   book cover (SW_LID) suspends. After a sleep, gtactive3wifi-usb-resume
   makes sure the USB debug link is enumerated again. dwc3 and the UFS disks
   keep runtime PM off (60-gtactive3wifi-pm.rules).

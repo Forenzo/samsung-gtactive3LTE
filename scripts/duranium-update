@@ -34,6 +34,12 @@
 #                                        ./setup.sh update --test uses it)
 #   then reboot the tablet ("tab reboot" or from GNOME)
 set -euo pipefail
+
+if [ "${APPLY:-0}" != 0 ]; then
+    echo "BLOCKED: destructive updater awaits physical validation" >&2
+    exit 1
+fi
+
 P=$(cd "$(dirname "$0")/.." && pwd)
 UI=${UI:-gnome}
 IMAGE=${IMAGE:-$("$(dirname "$0")/config" get "variants.$("$(dirname "$0")/config" get device.codename).image_id")}
@@ -230,7 +236,7 @@ log "inactive slot: usr $TU, verity $TV (booted: $CU / $CV)"
 if [ "${APPLY:-0}" != 1 ]; then
     echo "PASS: update preflight"
     echo "NO PARTITION OR BOOT ENTRY WRITES"
-    echo "Use APPLY=1 only after reviewing the selected slot."
+    echo "Destructive apply is currently disabled."
     exit 0
 fi
 

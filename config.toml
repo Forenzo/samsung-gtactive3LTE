@@ -16,7 +16,7 @@ schema = 1
 template = false
 # owner/name on GitHub. CI uses $GITHUB_REPOSITORY when it is set, so a
 # fork (and this repo until it has moved to exynos-linux) publishes to itself.
-repo = "exynos-linux/samsung-gtactive3"
+repo = "Forenzo/samsung-gtactive3LTE"
 title = "Galaxy Tab Active3: mainline Linux"
 maintainers = ["@dixonSolutions"]
 community = "https://discord.gg/exynos-linux"
@@ -142,8 +142,8 @@ release = true
 keep = 2
 
 [upstream]
-duranium_build = "https://gitlab.postmarketos.org/postmarketOS/duranium-build.git"
-pmaports = "https://gitlab.postmarketos.org/postmarketOS/pmaports.git"
+duranium_build = "https://gitlab.nura.eco/nura/duranium-build.git"
+pmaports = "https://gitlab.nura.eco/nura/pmaports.git"
 # postmarketOS's newest published Duranium version (their image build):
 # a change here starts a rebuild (ci/state).
 version_url = "https://duranium.nura.eco/images/mkosi.version"
@@ -161,7 +161,7 @@ channel_file = "/usr/lib/gtactive3wifi/update-channel"
 # The public half of the signing key (scripts/new-signing-key makes it).
 public_key = "pmos/sysupdate-public-key.asc"
 # Its fingerprint, for humans and the installer (scripts/new-signing-key).
-fingerprint = "D0FE850AF01A47831B6EF808583161CE787FF5B5"
+fingerprint = "7B6D21ECD36A5795AEBFA4FD9578ED7A8AB05227"
 
 [bootchain]
 # A boot-chain payload release for the installer (bootchain/, ci/bootchain).

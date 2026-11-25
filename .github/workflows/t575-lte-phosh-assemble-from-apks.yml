@@ -8,13 +8,7 @@ on:
       source_run_id:
         description: 'Successful LTE APK run with downloadable compiled package artifact'
         required: true
-        default: '44186618054'
         type: string
-  push:
-    branches:
-      - work/t575-phosh-convergence
-    paths:
-      - '.github/workflows/t575-lte-phosh-assemble-from-apks.yml'
 
 permissions:
   contents: read
@@ -50,12 +44,13 @@ jobs:
         with:
           name: t575-lte-phosh-compiled-apks-UNTESTED
           path: pkgs
-          run-id: ${{ inputs.source_run_id || '44186618054' }}
+          run-id: ${{ inputs.source_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify APK contents, signatures manifest, and upstream source consistency
         run: |
           set -euo pipefail
+          python3 ci/t575-aport-checksums.py
           python3 ci/t575-phosh-preflight.py source
           python3 ci/t575-phosh-preflight.py packages pkgs
           (cd pkgs && sha256sum -c SHA256SUMS)
@@ -78,6 +73,25 @@ jobs:
           chmod +x ci-build-compat/podman
           docker info >/dev/null
           echo "PASS: Docker-backed Podman command available for mkosi"
+
+      - name: Resolve canonical Nura mkosi image
+        run: |
+          set -euo pipefail
+          BASE=gitlab.nura.eco:5050/nura/nura-oci/mkosi:edge
+          docker pull "$BASE"
+          DIGEST=$(docker image inspect --format '{{index .RepoDigests 0}}' "$BASE")
+          python3 - "$BASE" "$DIGEST" <<'PYMKOSI'
+          from pathlib import Path
+          import sys
+          p = Path("work/duranium-build/scripts/mkosi-container")
+          old = 'IMAGE="' + sys.argv[1] + '"'
+          new = 'IMAGE="' + sys.argv[2] + '"'
+          s = p.read_text()
+          assert s.count(old) == 1
+          assert "@sha256:" in new
+          p.write_text(s.replace(old, new, 1))
+          PYMKOSI
+          printf '%s\n' "$DIGEST" > pkgs/MKOSI-IMAGE
 
       - name: Assemble a complete, unpublished Phosh desktop system for SM-T575
         env:
@@ -137,7 +151,11 @@ jobs:
             done
             sha256sum -- *.raw.zst *.efi > SHA256SUMS
           )
-          echo 'PASS: compressed image integrity, UKI, upstream signing key and SHA256 manifest'
+          cp pkgs/BUILDER-IMAGE "$OUT/"
+          cp pkgs/MKOSI-IMAGE "$OUT/"
+          cp pkgs/UPSTREAM-REVISIONS "$OUT/"
+          git rev-parse HEAD > "$OUT/SOURCE-COMMIT"
+          echo 'PASS: compressed image integrity, UKI, LTE signing key and SHA256 manifest'
           test -n "$(find "$OUT" -maxdepth 1 -name '*.raw.zst' -print -quit)"
           echo 'PASS: SM-T575 Phosh compressed full OS image'
           echo 'UNTESTED: boot chain, first boot, desktop render on physical LTE'
@@ -154,6 +172,10 @@ jobs:
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/*.sha256
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/SHA256SUMS
             work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/BASE-PACKAGES.txt
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/BUILDER-IMAGE
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/MKOSI-IMAGE
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/UPSTREAM-REVISIONS
+            work/duranium-build/mkosi.output/samsung-gtactive3-lte_phosh_edge/SOURCE-COMMIT
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
