@@ -20,4 +20,9 @@ Type=simple
 # for the user's passphrase): only 600 s of initrd time without anyone being
 # asked counts. The first deadline counted the prompt too and rebooted a
 # tablet that was simply waiting for its passphrase.
-ExecStart=/bin/sh -c 'n=0; while [ $$n -lt 600 ]; do sleep 5; set -- /run/systemd/ask-password/ask.*; [ -e "$$1" ] || n=$$((n + 5)); done; echo "gtactive3wifi: initrd did not reach switch-root within 600 s (not counting password prompts), rebooting to Download mode" > /dev/kmsg; exec systemctl --force --force reboot --reboot-argument=download'
+# Each tick must really sleep: an initrd without a sleep applet link (Cairn OS
+# 2026.11.9's had only busybox itself) made 'sleep 5' fail at once, the 600 s
+# ran out within milliseconds and every boot went to Download mode. So fall
+# back to 'busybox sleep', and with neither, turn the deadline off rather than
+# reboot a healthy boot.
+ExecStart=/bin/sh -c 'n=0; while [ $$n -lt 600 ]; do sleep 5 2>/dev/null || busybox sleep 5 || { echo "gtactive3wifi: no sleep in this initrd, initrd deadline off" > /dev/kmsg; exit 0; }; set -- /run/systemd/ask-password/ask.*; [ -e "$$1" ] || n=$$((n + 5)); done; echo "gtactive3wifi: initrd did not reach switch-root within 600 s (not counting password prompts), rebooting to Download mode" > /dev/kmsg; exec systemctl --force --force reboot --reboot-argument=download'
