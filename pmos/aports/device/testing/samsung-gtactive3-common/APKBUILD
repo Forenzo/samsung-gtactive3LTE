@@ -11,7 +11,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=samsung-gtactive3-common
 pkgdesc="Samsung Galaxy Tab Active3: support shared by every variant"
 pkgver=2
-pkgrel=58
+pkgrel=64
 url="https://github.com/exynos-linux/samsung-gtactive3"
 license="MIT"
 arch="aarch64"
@@ -69,6 +69,9 @@ source="
 	gtactive3wifi-reboot.tmpfiles
 	firmware-path.tmpfiles
 	firmware-import.sh
+	rtc-time.sh
+	gtactive3wifi-rtc-time@.service
+	90-gtactive3wifi-rtc.rules
 	gtactive3wifi-firmware-import.service
 	ucm/gtactive3.conf
 	ucm/HiFi.conf
@@ -301,6 +304,13 @@ package() {
 		-t "$pkgdir"/usr/lib/systemd/system/
 	ln -s ../gtactive3wifi-firmware-import.service \
 		"$pkgdir"/usr/lib/systemd/system/sysinit.target.wants/
+	# PMIC calendar RTC, independently of the SoC wake alarm
+	install -Dm755 "$srcdir"/rtc-time.sh \
+		"$pkgdir"/usr/libexec/gtactive3wifi/rtc-time
+	install -Dm644 "$srcdir"/gtactive3wifi-rtc-time@.service \
+		-t "$pkgdir"/usr/lib/systemd/system/
+	install -Dm644 "$srcdir"/90-gtactive3wifi-rtc.rules \
+		-t "$pkgdir"/usr/lib/udev/rules.d/
 	install -Dm644 "$srcdir"/sysctl.conf \
 		"$pkgdir"/usr/lib/sysctl.d/90-device-samsung-gtactive3wifi.conf
 	# hardware key bindings, read by GNOME Shell and Phosh
@@ -470,6 +480,9 @@ initramfs() {
 }
 
 sha512sums="
+b065f4f94a6621ab714f45cd33fd6c2de10b67ad35ac8a3e36d257e6a7d1bdc6d01ae75aa831ce0a40c098c96ecc8a7653ae08ce665ee95c9b25f395b301d56c  gtactive3wifi-rtc-time@.service
+f8ee96b076c2bd4850bec1bad325eb6ba54c32210d8d63a9b0f94a1f77087138ca589efa8c23c21edea451cc7c65d406280482cd5cd96ea258c27bde76647084  90-gtactive3wifi-rtc.rules
+0b4ffa48d08dc0c332e112ed84409beb3d6e455fa0a073471c9ae8b3091b8a95b1db1cbb810e0b9e1758593bfa36bbcc566bf120dd04b317639dabe55c5a39fb  rtc-time.sh
 5413c9e42ecc4a45ad8bc5ecab3e5940a17a38bef58d6f81ff22e19ea63c312ae64bdcd389439f1cbc2f0ada32839e5447537ecdd0091eb6cee942267a0812c5  charge-speed.policy
 806a19719edcdc7189f471d6b0eb88db732c6f3147ab2ce758e9c136cbb4a33abacf8b63d3213776282953748f5681f113022bd6667dc8ad25d48941e1a13464  charge-speed.sh
 4aab843e115626a410700e6643bacbe4c6331ec669c6a9be4a1b19e72ed3eff5f4e3458d4ecdc803c6dc54890a0c2e92743bf7a57b78c95191c6809c1a857989  battery-care.tmpfiles
@@ -496,7 +509,7 @@ a775c18d0c38a06a4062a13ea47723c00a13eb7bd88d2b5fb7696998e882981eb0036e8aadc6ed3f
 045877096b97e31ecfccb086f3cbd88d12a52de24e74590ea5cd9e5a6f41254b007756ff71869e3a021712b50a69d452abd060c244f9409f500886d627a6c8b4  sleep.conf
 387945088babde1318d3ef42dd7db7497a8c69dffcf9b016b8366b6ecbdc63c21fe3b82b1ecfa4ee16a4b9451df2cbf47b8d2246737ae3ee3a39f579ca09c407  logind.conf
 b3a054807f4cd896e1a18fdfc90249adc8f7e155012220693e49b1141d10c0c571e784a39da646a35e5b5f916be07a895a575c094e26b680caa6cefee81e85f4  suspend-gate.sh
-6948fcf169cf3b213789e8f78d8fe7ae6bdc6a2cf65bdc68dbabb720bec1268f6c68e8247d68afb1d711287e362d18187205114ee582759a6d2c5d8886aad492  boot-default.sh
+ea3a027cb54b608d2a3edfae55c2e665dcdfd5afdbf9826ce4bc1ab1b7b85250ec6a0d70e66ef0a271a626f776b8e964d33016aa2de61a6f944b06730ff4f054  boot-default.sh
 3484d585f5adc408cce9add987c119198cfca7bb8b560df399caef85ef10ab6fec0092eb85ff135e687db5ec2a6dfe94068042b5cf004b80af4e13b38fe034d6  gtactive3wifi-boot-default.service
 4019671d606592d9cf1d5d4abe6fb131c0f270fc2cdb0e946368fc8576043b2b79f631ba8dee4215e00f2997301d83b8268280aadbc8c01d0b6dfb593cb5f9c7  gtactive3wifi-suspend-gate.service
 a3c783e96d1c6f3d4a9b42bbcb385974df5ffb3178a3273a8a34a65d1e8ef7aaa77c9849ab8ec3189d7e0519886fdd6e8d83a0481aea3d047528a3d72d844a94  blank-suspend.sh

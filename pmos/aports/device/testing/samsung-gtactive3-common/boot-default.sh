@@ -38,8 +38,26 @@ esac
 
 # every name these images had (samsung-gtactive3wifi_..., then
 # samsung-gtactive3-wifi_...): systemd-boot sorts entries by their image id
-# and the new name sorts first, so the newest new-named image wins
-want="default samsung-gtactive3*_${ui}_edge_*@main"
+# and the new name sorts first, so the newest new-named image wins.
+# An entry id is the UKI's file name, lower case, without the boot counter;
+# systemd-boot 262 appends @<profile> only to profiles after the first, so the
+# pattern ends in .efi (the main profile). Not an exact id: `default` ignores
+# boot counting, while a pattern takes the first entry with tries left (used-up
+# entries sort last), which keeps the A/B fallback between this UI's images.
+. /usr/lib/os-release
+
+case "${IMAGE_ID:-}" in
+    samsung-gtactive3-lte)
+        want="default samsung-gtactive3-lte_${ui}_edge_*.efi"
+        ;;
+    samsung-gtactive3-wifi|samsung-gtactive3wifi)
+        want="default samsung-gtactive3*_${ui}_edge_*.efi"
+        ;;
+    *)
+        echo "Unknown image identity; boot default unchanged"
+        exit 0
+        ;;
+esac
 [ -f "$conf" ] || { echo "no $conf"; exit 0; }
 if grep -qx "$want" "$conf" && [ "$(grep -c '^default' "$conf")" = 1 ]; then
 	exit 0

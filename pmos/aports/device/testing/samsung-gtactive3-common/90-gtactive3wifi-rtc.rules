@@ -1,0 +1,3 @@
+# The S2MPS18 PMIC's RTC (rtc-s5m, kernel r30+) keeps the time while the
+# tablet is off: set the system clock from it once it appears
+SUBSYSTEM=="rtc", ACTION=="add", DRIVERS=="s5m-rtc", TAG+="systemd", ENV{SYSTEMD_WANTS}+="gtactive3wifi-rtc-time@%k.service"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Set the clock from the PMIC's real-time clock (%i)
+Documentation=file:///usr/share/doc/samsung-gtactive3-common/README
+DefaultDependencies=no
+ConditionPathExists=/var/lib/gtactive3wifi/pmic-rtc-time-proven
+Before=time-set.target shutdown.target
+Wants=time-set.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/gtactive3wifi/rtc-time %i
