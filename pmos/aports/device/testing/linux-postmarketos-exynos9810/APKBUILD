@@ -1,4 +1,4 @@
-# Upstream r29 charger fixes; LTE GPU override retained.
+# Upstream r31 charger fixes; LTE GPU override retained.
 # Kernel config: the gtactive3-mainline bring-up config the device runs
 # (configs/gtactive3-bringup.config), plus the pmbootstrap kconfigcheck
 # categories below and the device fragment for systemd, Duranium (UKI,
@@ -16,8 +16,8 @@
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=linux-postmarketos-exynos9810
 pkgver=7.3.0_git20261021
-pkgrel=29
-_commit="2bbe2395e94733d9cdc80c4734a494fe4299e1cd"
+pkgrel=31
+_commit="7ebdcc3552362021d011753f1061ede9695302c7"
 # torvalds/linux commit that gtactive3.patch applies to; base + patch
 # is the tree of _commit in the gtactive3-mainline kernel (scripts/pmos-export)
 _base="f47d223627f80cb7a1eb14c585fe6cb35de5e984"
@@ -127,7 +127,7 @@ _dtb() {
 
 sha512sums="
 4cc471f94509680acb6f55e5c14babab5bf2a60edf014bcc48b55da8cb96dbd262645a82c81e9e2108d01d2eda59dae1844c797475a9691c7e43a43d53ff0917  linux-f47d223627f80cb7a1eb14c585fe6cb35de5e984.tar.gz
-d8ef98262b6108840bc64aa606782ee8046ab7b36db17f218915b6ca9894179dcb07b5a100a0ec54becb55764f7ed4367a808313e8c23ba5a4b8005d24b12ec8  gtactive3.patch
+aefbb50e39257dc701ac48853bf301310bc8a822ad816c28489d633e333612ec9dd5a934f75cfb3c9f17c21635ca1aef3633a0edf168acd3784229dee7ab1304  gtactive3.patch
 006c2489f0371f1c94096f85233de414e7454fa6f878c06b237338cddf5fe67c094778ae70c70cfb4421006960c229167f500c042867259dd5cdba96fd8fce3f  t575-gpu-first-desktop.patch
 bae048a5b87bb32c9d74d0d29afb495fbee440d34f0438fbae9786a6e326ed814bdcff5d8c1874da702ceffc56e7ff1b489657b6358e11a437cf574ce3de99b3  config-postmarketos-exynos9810.aarch64
 "

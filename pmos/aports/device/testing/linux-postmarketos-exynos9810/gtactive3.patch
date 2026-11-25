@@ -24308,10 +24308,10 @@ index 505a68c26463e79f4ba6da86e0360df2912833a9..4c2fb15152db60da11ba4312f8310dab
  	return max17042_probe(i2c, dev, irq, id->driver_data);
  }
 diff --git a/drivers/power/supply/max77705_charger.c b/drivers/power/supply/max77705_charger.c
-index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7c9f5c419 100644
+index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..8a9b7b89bdb889a4cc171c8a10464752a4f84e65 100644
 --- a/drivers/power/supply/max77705_charger.c
 +++ b/drivers/power/supply/max77705_charger.c
-@@ -17,10 +17,70 @@
+@@ -17,10 +17,78 @@
  #include <linux/platform_device.h>
  #include <linux/power_supply.h>
  #include <linux/regmap.h>
@@ -24330,6 +24330,14 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
 + * steps below. They stay at levels that are safe without thermal
 + * supervision until the temperature-driven limits have been checked on the
 + * device. 0 removes a cap.
++ *
++ * They are the "Standard" charge type. "Fast" (charge_types, Android's
++ * "Fast charging" switch) lifts them: the input follows what the source
++ * allows (Type-C Rp 3 A, DCP 1.8 A, from the stock tables) and the charge
++ * current the battery's limit, still under the temperature steps. Without
++ * a battery temperature Fast falls back to the caps. Only 5 V: asking a
++ * source for 9 V (AFC, USB PD) takes MAX77705 firmware commands that no
++ * driver sends yet.
 + */
 +static unsigned int cc_cap_ua = 1500000;
 +module_param(cc_cap_ua, uint, 0444);
@@ -24382,7 +24390,15 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  static const struct regmap_config max77705_chg_regmap_config = {
  	.reg_base = MAX77705_CHG_REG_BASE,
  	.reg_bits = 8,
-@@ -57,6 +117,16 @@ static irqreturn_t max77705_aicl_irq(int irq, void *irq_drv_data)
+@@ -38,6 +106,7 @@ static enum power_supply_property max77705_charger_props[] = {
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
+ 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
+ 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
++	POWER_SUPPLY_PROP_CHARGE_TYPES,
+ };
+ 
+ static irqreturn_t max77705_aicl_irq(int irq, void *irq_drv_data)
+@@ -57,6 +126,16 @@ static irqreturn_t max77705_aicl_irq(int irq, void *irq_drv_data)
  		if (err < 0)
  			return IRQ_HANDLED;
  
@@ -24399,7 +24415,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  		regval--;
  
  		err = regmap_field_write(chg->rfield[MAX77705_CHG_CHGIN_LIM], regval);
-@@ -102,27 +172,53 @@ static const struct regmap_irq_chip max77705_charger_irq_chip = {
+@@ -102,27 +181,53 @@ static const struct regmap_irq_chip max77705_charger_irq_chip = {
  	.num_irqs		= ARRAY_SIZE(max77705_charger_irqs),
  };
  
@@ -24463,7 +24479,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  static int max77705_get_online(struct regmap *regmap, int *val)
  {
  	unsigned int data;
-@@ -137,15 +233,30 @@ static int max77705_get_online(struct regmap *regmap, int *val)
+@@ -137,15 +242,30 @@ static int max77705_get_online(struct regmap *regmap, int *val)
  	return 0;
  }
  
@@ -24477,29 +24493,29 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
 + * max77705_get_input_current().
 + */
 +static int max77705_set_charge_current(struct max77705_charger_data *chg, int uA)
- {
- 	unsigned int regval;
- 
--	regval = clamp_val(val, clamp_min, clamp_max) / div;
++{
++	unsigned int regval;
++
 +	regval = clamp_val(uA, MAX77705_CURRENT_CHG_MIN, MAX77705_CURRENT_CHG_MAX) /
 +		 MAX77705_CURRENT_CHG_STEP;
- 
--	return regmap_field_write(chg->rfield[fidx], regval);
++
 +	return regmap_field_write(chg->rfield[MAX77705_CHG_CC_LIM], regval);
 +}
 +
 +static int max77705_set_input_current(struct max77705_charger_data *chg, int uA)
-+{
-+	unsigned int regval;
-+
+ {
+ 	unsigned int regval;
+ 
+-	regval = clamp_val(val, clamp_min, clamp_max) / div;
 +	regval = clamp_val(uA, MAX77705_CURRENT_CHGIN_MIN, MAX77705_CURRENT_CHGIN_MAX) /
 +		 MAX77705_CURRENT_CHGIN_STEP - 1;
-+
+ 
+-	return regmap_field_write(chg->rfield[fidx], regval);
 +	return regmap_field_write(chg->rfield[MAX77705_CHG_CHGIN_LIM], regval);
  }
  
  static int max77705_check_battery(struct max77705_charger_data *chg, int *val)
-@@ -173,10 +284,9 @@ static int max77705_check_battery(struct max77705_charger_data *chg, int *val)
+@@ -173,10 +293,9 @@ static int max77705_check_battery(struct max77705_charger_data *chg, int *val)
  static int max77705_get_charge_type(struct max77705_charger_data *chg, int *val)
  {
  	struct regmap *regmap = chg->regmap;
@@ -24512,7 +24528,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  		*val = POWER_SUPPLY_CHARGE_TYPE_NONE;
  		return 0;
  	}
-@@ -201,11 +311,13 @@ static int max77705_get_charge_type(struct max77705_charger_data *chg, int *val)
+@@ -201,11 +320,13 @@ static int max77705_get_charge_type(struct max77705_charger_data *chg, int *val)
  static int max77705_get_status(struct max77705_charger_data *chg, int *val)
  {
  	struct regmap *regmap = chg->regmap;
@@ -24530,7 +24546,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  		return 0;
  	}
  
-@@ -317,6 +429,15 @@ static int max77705_get_health(struct max77705_charger_data *chg, int *val)
+@@ -317,6 +438,15 @@ static int max77705_get_health(struct max77705_charger_data *chg, int *val)
  {
  	struct regmap *regmap = chg->regmap;
  	int ret, is_online = 0;
@@ -24546,7 +24562,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  
  	ret = max77705_get_online(regmap, &is_online);
  	if (ret)
-@@ -388,6 +509,450 @@ static int max77705_get_float_voltage(struct max77705_charger_data *chg,
+@@ -388,6 +518,456 @@ static int max77705_get_float_voltage(struct max77705_charger_data *chg,
  	return 0;
  }
  
@@ -24563,10 +24579,16 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
 +
 +	lockdep_assert_held(&chg->lock);
 +
-+	if (cc_cap_ua)
-+		cc = min(cc, (int)cc_cap_ua);
-+	if (ilim_cap_ua && ilim > 0)
-+		ilim = min(ilim, (int)ilim_cap_ua);
++	if (chg->fast && chg->temp_step >= 0) {
++		/* the source's own limit, not the supplier's capped one */
++		if (chg->src_ua > ilim)
++			ilim = chg->src_ua;
++	} else {
++		if (cc_cap_ua)
++			cc = min(cc, (int)cc_cap_ua);
++		if (ilim_cap_ua && ilim > 0)
++			ilim = min(ilim, (int)ilim_cap_ua);
++	}
 +
 +	if (chg->temp_step >= 0) {
 +		const struct max77705_temp_step *step =
@@ -24997,7 +25019,18 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  static int max77705_chg_get_property(struct power_supply *psy,
  					enum power_supply_property psp,
  					union power_supply_propval *val)
-@@ -434,24 +999,29 @@ static int max77705_set_property(struct power_supply *psy,
+@@ -415,6 +995,10 @@ static int max77705_chg_get_property(struct power_supply *psy,
+ 	case POWER_SUPPLY_PROP_VOLTAGE_MAX_DESIGN:
+ 		val->intval = chg->bat_info->voltage_max_design_uv;
+ 		break;
++	case POWER_SUPPLY_PROP_CHARGE_TYPES:
++		val->intval = READ_ONCE(chg->fast) ? POWER_SUPPLY_CHARGE_TYPE_FAST :
++						     POWER_SUPPLY_CHARGE_TYPE_STANDARD;
++		break;
+ 	case POWER_SUPPLY_PROP_MODEL_NAME:
+ 		val->strval = max77705_charger_model;
+ 		break;
+@@ -434,24 +1018,41 @@ static int max77705_set_property(struct power_supply *psy,
  	struct max77705_charger_data *chg = power_supply_get_drvdata(psy);
  	int err = 0;
  
@@ -25027,6 +25060,18 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
 +		chg->ilim_req_ua = val->intval;
 +		/* rewrite even if unchanged, e.g. after AICL lowered it */
 +		chg->ilim_set_ua = -1;
++		break;
++	case POWER_SUPPLY_PROP_CHARGE_TYPES:
++		if (val->intval != POWER_SUPPLY_CHARGE_TYPE_STANDARD &&
++		    val->intval != POWER_SUPPLY_CHARGE_TYPE_FAST) {
++			err = -EINVAL;
++			break;
++		}
++		WRITE_ONCE(chg->fast, val->intval == POWER_SUPPLY_CHARGE_TYPE_FAST);
++		if (chg->fast && chg->temp_step < 0)
++			dev_info(chg->dev, "fast charging waits for the battery temperature\n");
++		/* back to the caps: start again from them, not from AICL's */
++		chg->ilim_set_ua = -1;
  		break;
  	default:
  		err = -EINVAL;
@@ -25037,20 +25082,33 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  
  	return err;
  };
-@@ -468,6 +1038,32 @@ static int max77705_property_is_writeable(struct power_supply *psy,
+@@ -462,20 +1063,57 @@ static int max77705_property_is_writeable(struct power_supply *psy,
+ 	switch (psp) {
+ 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
+ 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
++	case POWER_SUPPLY_PROP_CHARGE_TYPES:
+ 		return true;
+ 	default:
+ 		return false;
  	}
  }
  
 +/*
 + * A supplier such as the MAX77705 USB-C block knows what the attached source
 + * allows; follow its input current limit. Without a supplier, or when it
-+ * reports nothing, the current limit is left alone.
++ * reports nothing, the current limit is left alone. Its current_max, the
++ * source's limit before the supplier's own cap, is what Fast charging uses.
 + */
 +static void max77705_external_power_changed(struct power_supply *psy)
 +{
 +	struct max77705_charger_data *chg = power_supply_get_drvdata(psy);
 +	union power_supply_propval val;
++	int src = 0;
 +	int ret;
++
++	if (!power_supply_get_property_from_supplier(psy,
++			POWER_SUPPLY_PROP_CURRENT_MAX, &val) && val.intval > 0)
++		src = val.intval;
 +
 +	ret = power_supply_get_property_from_supplier(psy,
 +			POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &val);
@@ -25061,6 +25119,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
 +
 +	mutex_lock(&chg->lock);
 +	chg->ilim_req_ua = val.intval;
++	chg->src_ua = src;
 +	/* a new source: start from its limit again, not from AICL's */
 +	chg->ilim_set_ua = -1;
 +	max77705_apply_limits(chg);
@@ -25070,7 +25129,10 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  static const struct power_supply_desc max77705_charger_psy_desc = {
  	.name = "max77705-charger",
  	.type = POWER_SUPPLY_TYPE_USB,
-@@ -476,6 +1072,7 @@ static const struct power_supply_desc max77705_charger_psy_desc = {
++	.charge_types = BIT(POWER_SUPPLY_CHARGE_TYPE_STANDARD) |
++			BIT(POWER_SUPPLY_CHARGE_TYPE_FAST),
+ 	.properties = max77705_charger_props,
+ 	.property_is_writeable = max77705_property_is_writeable,
  	.num_properties = ARRAY_SIZE(max77705_charger_props),
  	.get_property = max77705_chg_get_property,
  	.set_property = max77705_set_property,
@@ -25078,7 +25140,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  };
  
  static void max77705_chgin_isr_work(struct work_struct *work)
-@@ -528,7 +1125,6 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+@@ -528,7 +1166,6 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
  	if (err)
  		goto err;
  
@@ -25086,7 +25148,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  	/* otg current limit 900mA */
  	err = regmap_field_write(chg->rfield[MAX77705_OTG_ILIM], MAX77705_OTG_ILIM_900);
  	if (err)
-@@ -557,11 +1153,25 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+@@ -557,11 +1194,25 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
  	/* MINVSYS 3.6V(default) */
  	if (info->voltage_max_design_uv < 0) {
  		dev_warn(chg->dev, "missing battery:voltage-max-design-microvolt\n");
@@ -25114,7 +25176,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  	err = regmap_field_write(chg->rfield[MAX77705_VCHGIN], MAX77705_VCHGIN_4_5);
  	if (err)
  		goto err;
-@@ -596,11 +1206,37 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+@@ -596,11 +1247,37 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
  
  }
  
@@ -25152,7 +25214,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  	struct device *dev;
  	struct regmap_irq_chip_data *irq_data;
  	int ret;
-@@ -614,6 +1250,19 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -614,6 +1291,19 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	chg->dev = dev;
  	i2c_set_clientdata(i2c, chg);
  
@@ -25172,7 +25234,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  	chip_desc = devm_kmemdup(dev, &max77705_charger_irq_chip,
  				 sizeof(max77705_charger_irq_chip),
  				 GFP_KERNEL);
-@@ -646,7 +1295,8 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -646,7 +1336,8 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	if (ret)
  		return dev_err_probe(dev, ret, "failed to add irq chip\n");
  
@@ -25182,7 +25244,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  	if (!chg->wqueue)
  		return -ENOMEM;
  
-@@ -654,10 +1304,24 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -654,10 +1345,24 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	if (ret)
  		return dev_err_probe(dev, ret, "failed to initialize interrupt work\n");
  
@@ -25207,7 +25269,7 @@ index 63b0b4f0cd217fcdd98caf5a729cb7d98332bc4a..270ce83b2f5314b9d1a037e1ce4d76d7
  	ret = devm_request_threaded_irq(dev, regmap_irq_get_virq(irq_data, MAX77705_CHGIN_I),
  					NULL, max77705_chgin_irq,
  					IRQF_TRIGGER_NONE,
-@@ -672,9 +1336,15 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+@@ -672,9 +1377,15 @@ static int max77705_charger_probe(struct i2c_client *i2c)
  	if (ret)
  		return ret;
  
@@ -30486,7 +30548,7 @@ index 0000000000000000000000000000000000000000..54c3fc2c36199b2dfb0f424431c18d30
 +
 +#endif /* __LINUX_MFD_S2MPS18_H */
 diff --git a/include/linux/power/max77705_charger.h b/include/linux/power/max77705_charger.h
-index b3950ce0625e1abe96457cb65fd477da4a27cafd..0808396fbc5193c8b833701b18161bcc541276d1 100644
+index b3950ce0625e1abe96457cb65fd477da4a27cafd..9484771ee64f9b43931fab93971a98e49ed4c8ed 100644
 --- a/include/linux/power/max77705_charger.h
 +++ b/include/linux/power/max77705_charger.h
 @@ -130,6 +130,8 @@
@@ -30498,7 +30560,7 @@ index b3950ce0625e1abe96457cb65fd477da4a27cafd..0808396fbc5193c8b833701b18161bcc
  
  enum max77705_field_idx {
  	MAX77705_CHGPROT,
-@@ -188,6 +190,36 @@ struct max77705_charger_data {
+@@ -188,6 +190,38 @@ struct max77705_charger_data {
  	struct workqueue_struct *wqueue;
  	struct work_struct	chgin_work;
  	struct power_supply	*psy_chg;
@@ -30514,6 +30576,8 @@ index b3950ce0625e1abe96457cb65fd477da4a27cafd..0808396fbc5193c8b833701b18161bcc
 +	int			ilim_set_ua;
 +	int			en_set;
 +	int			temp_step;	/* -1: not monitored */
++	int			src_ua;		/* what the source allows, 0: unknown */
++	bool			fast;		/* charge_types Fast: no caps */
 +	int			temp_errors;
 +	bool			chg_hot;
 +
