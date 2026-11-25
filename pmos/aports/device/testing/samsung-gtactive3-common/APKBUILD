@@ -11,7 +11,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=samsung-gtactive3-common
 pkgdesc="Samsung Galaxy Tab Active3: support shared by every variant"
 pkgver=2
-pkgrel=50
+pkgrel=54
 url="https://github.com/exynos-linux/samsung-gtactive3"
 license="MIT"
 arch="aarch64"
@@ -33,6 +33,9 @@ depends="$depends iw e2fsprogs-extra"
 # gtactive3wifi-claim-android-space (also uses util-linux and e2fsprogs,
 # both in every Duranium image)
 depends="$depends cryptsetup"
+# irqbalance spreads device interrupts over the A55 cores
+# (gtactive3wifi-irqbalance.service); Alpine's package has no unit
+depends="$depends irqbalance"
 # The Duranium USB debug layer (main/duranium-usb-debug) is not a
 # dependency: development images add it (duranium-usb-debug,
 # duranium-usb-debug-adb; build-image.sh CHANNEL=dev), release images leave
@@ -82,6 +85,10 @@ source="
 	gtactive3wifi-blank-suspend.service
 	gtactive3wifi-active-key.c
 	gtactive3wifi-active-key.service
+	gtactive3wifi-input-boost.c
+	gtactive3wifi-input-boost.service
+	gtactive3wifi-irqbalance.service
+	gtactive3wifi-irqbalance-policy
 	system-sleep-usb.sh
 	system-sleep-wifi.sh
 	wifi-recover.sh
@@ -138,6 +145,9 @@ build() {
 	${CC:-gcc} $CFLAGS -O2 -Wall -static -o "$srcdir"/gtactive3wifi-active-key \
 		"$srcdir"/gtactive3wifi-active-key.c $LDFLAGS
 	${CROSS_COMPILE:-}strip "$srcdir"/gtactive3wifi-active-key
+	${CC:-gcc} $CFLAGS -O2 -Wall -static -o "$srcdir"/gtactive3wifi-input-boost \
+		"$srcdir"/gtactive3wifi-input-boost.c $LDFLAGS
+	${CROSS_COMPILE:-}strip "$srcdir"/gtactive3wifi-input-boost
 	# The bring-up debug console (gtactive3-mainline initramfs/init.c built
 	# with CONSOLE_STDIO; refresh both copies from that repository)
 	${CC:-gcc} $CFLAGS -O2 -Wall -Wno-unused-function -Wno-unused-variable \
@@ -182,6 +192,18 @@ package() {
 		-t "$pkgdir"/usr/lib/systemd/system/
 	mkdir -p "$pkgdir"/usr/lib/systemd/system/multi-user.target.wants
 	ln -s ../gtactive3wifi-active-key.service \
+		"$pkgdir"/usr/lib/systemd/system/multi-user.target.wants/
+	# responsiveness: CPU floors raised while the screen is touched, as
+	# Samsung's input_booster does, and device interrupts off CPU0
+	install -Dm755 "$srcdir"/gtactive3wifi-input-boost \
+		"$pkgdir"/usr/libexec/gtactive3wifi/input-boost
+	install -Dm755 "$srcdir"/gtactive3wifi-irqbalance-policy \
+		"$pkgdir"/usr/libexec/gtactive3wifi/irqbalance-policy
+	install -Dm644 "$srcdir"/gtactive3wifi-input-boost.service \
+		"$srcdir"/gtactive3wifi-irqbalance.service \
+		-t "$pkgdir"/usr/lib/systemd/system/
+	ln -s ../gtactive3wifi-input-boost.service \
+		../gtactive3wifi-irqbalance.service \
 		"$pkgdir"/usr/lib/systemd/system/multi-user.target.wants/
 	# boot the owner's UI by default, whatever else is on the ESP
 	install -Dm755 "$srcdir"/boot-default.sh \
@@ -463,6 +485,10 @@ a3c783e96d1c6f3d4a9b42bbcb385974df5ffb3178a3273a8a34a65d1e8ef7aaa77c9849ab8ec318
 5b29e9866a1b6b431e868a9fae8af6f9b974d04eb5fbd5870c705bd0bee81ef1f4743354b9407fb77c7041e2fc1964a794b5d55d83b31bacbd0fd2f524c80c56  gtactive3wifi-blank-suspend.service
 5a3bdd06d6e79af512c5443622d6fdf8688b6da9b6c3555c78981147b2b68fd970a2d092ed1744446f9eeee1913542adb11b126fc7f1f0f66420f32a5ff75542  gtactive3wifi-active-key.c
 66f4f332e87bb279c9e32c166fa168fde108c4221e663c7b78a1e0f034e9b65c8255c356e5a61a16fa74c018653b58f71a5ad682dc45f87383be5f2f2d7c4c70  gtactive3wifi-active-key.service
+50f78b4644d308a2425ed324798feceec8e7bd50443b3705c92edf1dc877ceecb933f5823b9c4a16e4f4ffc4e1b3746c323de404da7beceb4753cb3d6235f1c2  gtactive3wifi-input-boost.c
+d3e7fea623df6e738f10fa428f7c18c6824656d587050db1b22046f797542bdc8d2c5bab52e21523a5d5138a4d32d93f16d15f45a8093e502380f43ba7a7bc5f  gtactive3wifi-input-boost.service
+7df25844ba549733e7ce5de86d8aa913b5066b745239f1b358bc6376926d36920e83d9745edd874846c4096ef93a0f64389de789eedeca478cba878e4ed83730  gtactive3wifi-irqbalance.service
+e4973259d6482a1382dc1228186dbfb4187eed3d922526acbca5ef5b10bdb10daac2a8aeb56fdff76d9e377a7b53dc07770fe2e04796177799f0c2d332c46d72  gtactive3wifi-irqbalance-policy
 dd982aead67e3cc4d6b0b128395d21bcbcd4065f3cfd5c1733123813a48169032a499ee8788c1de3e6d7618718688707868c512cb66d349f33e4b4d8c5237dfe  system-sleep-usb.sh
 5390a4cf096eab6c3d0b09871481490951dd2e7e5a374550580822f5b5e7829ea308c079c81f2ad5e997716cb93595370613a3bf310258b091d063902c1e06dc  system-sleep-wifi.sh
 29121844bd1b8d3f3c32837e3bd3924a33dababd5852ad38a1e7ea2cefc08bf3294172b3cf68243103d3c2565cdee059013fa1734deaaea38771a72ac8792f59  wifi-recover.sh
@@ -491,7 +517,7 @@ c15bf919861bc0d0db2475c751a7ccb9b2773a10e328465d0eb3a5b89125d8e9c03954698b9c9bdf
 625508baa42fad23519a17bf5044ce7fe4652dd02887e8fe649d79b273893fd3f619a3d45e596db2515c64dc5196af585c7541f7cdc708ee46f228dca83681a8  80-device-samsung-gtactive3wifi.preset
 12ecb8f1960365f7ab82897905f0426dbdbfb7d00a6e1a1c0bbbe3ca3bfbe8fe1c463667124c8244975f63f5c8cedac2ace01f35ed590296e2e5db0065f8374d  80-device-samsung-gtactive3wifi.user-preset
 75283b6d91b9ffa5ccbcf05fd5d4ac522462046ade9a8d411ac209a18fbb2cda9ba4509bdc1d0ad2c7b77d8b7c6c5ebe4d2618ad2625266f8ea4ee1ba7014b80  oomd-avoid.conf
-c049eaa52427f76ad7ada60091e9724a97b1f98cf0c503dc20cb2836b71d5cccfd1cebeb3163374a461952be9efa5a6af4e4f1d01b3acc4f069abfe49d3c94bb  powersave.conf
+908a74c65da5fc1f6333c57c4a66688e2c57e1b5749b44a9e43fd2c8a5d4abe338646cf322d3b7431469842d98e0ef3cfebd7e869d98b06bf90de62e5496f54d  powersave.conf
 50533c0384c6270ade75b1a97c7c4adc04cae53e19118804b82518891326aeaf56c61f7a65efec9b158ea273d34642bceecd5bef425538f3a03716a5d9619b21  throughput-performance.conf
 496eafb8c2e21be8923182ee932bac40100e1940805f4e3dcc37a0b1dbfc4c8e5007f2fee9f0f815ed77ce88add0bfc427909e3a31bc01b9887f75d76e1ec244  extension.js
 ddad1d319f586fa4c5b6f91a00d6e99591c5492923d44f9161b71aa09a97b788261e5bdd3657e1eba4d7f501ad272ef82ef918f6c5bcf0077020e8d24e7e143c  metadata.json
@@ -506,5 +532,5 @@ fb2febe60164d63cb0c02ef81f477fd326f53b9a39bbf9487492c4c6743d0e6d4eec5462ebb0bf94
 1c7dea1fc828d397636ad2cefd59d481c39f8827269498587057bb97d723742738b79f1c9e60bd5d4d732411868507079e8b02c6546f2a5800a75c22118783e3  containers-selftest.sh
 2f58d3af193c441d90b2b2a25d8f7f5db160ab63fb26b1f36bb6ac3db35cd50ab71693c6fa588873000c9d59542d7f91e6e8d58700a60603f01282f201f522f9  gtactive3wifi-container-images.service
 e4f4a34f93f43ff0439299269252cc487fe1fb763b42a51c887685607560e8dcd096e6b7290fab45006fcd76727bdcd467d2626f4545b6e234e48eaf61ee9f28  gtactive3wifi-container-images.user.service
-e5c88cc4a2aaa887aecf74b4097070118dfde56099049e422b5f2e4040e1fa6dd9248d71c2a0d04c1e3ea3dbf0f221504eda16532257556382090af32e5fb266  README
+1d5a227787bc97898ccb88a05d430b4b51685409b7acac3612bec6cccd89cc8e4d54cfd91bf8dcdc3bd0c921303ea034b365eea67674355834e2b04f7be93a78  README
 "
