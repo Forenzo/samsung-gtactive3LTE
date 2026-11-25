@@ -22,3 +22,7 @@ Awake relative +20 s alarm: IRQ 83 count 0 -> 1, cleared successfully. First sch
 Next: repeat with physical power button well before the RTC fallback, verify early resume and unchanged alarm IRQ at resume, test actual headphones/touch/network, repeat wake trials and measure extended suspend. Keep C2 disabled and no flash. Do not create persistent wake-proven marker before validated power-button wake. Retest on updated kernel.
 
 Private user names, endpoints, boot hashes and raw logs excluded.
+
+## Physical power-button wake trial
+
+Same temporary test script and +120 s RTC fallback. Kernel entered s2idle at 10:56:47 CET and exited at 10:57:21 (34 s). User pressed the power button; reported that a second press appeared necessary for the display, then normal recovery. Successful counter 1 -> 2, failed 0 -> 0, RTC alarm IRQ count unchanged at 2. Strong evidence of physical wake before RTC fallback. Audio controller PID unchanged; headphone PipeWire sink present (idle/SUSPENDED); actual playback still to verify. Speaker lock N, SSH reachable and temporary override removed. Charge fields decreased 3 mAh over 40 s; too short for accurate standby power measurement. Next: temporary screen-off-driven suspend through existing user service, then sustained standby and repeated wake validation before persistent opt-in. No permanent marker yet.
