@@ -1,0 +1,49 @@
+/* SM-T575: recovered live headphone configuration. */
+
+&tas2562 {
+    compatible = "samsung,t575-tas2562-safeactive";
+    #sound-dai-cells = <0>;
+    shutdown-gpios = <&gpm40 0 0>;
+    status = "okay";
+};
+
+&rt5510 {
+    status = "disabled";
+};
+
+&{/sound} {
+    compatible = "samsung,gtactive3lte-transport64";
+    model = "Galaxy Tab Active3";
+    status = "okay";
+
+    audio-routing = "Headphones", "HPOL",
+                    "Headphones", "HPOR",
+                    "Speaker", "OUT",
+                    "IN1P", "Headset Mic",
+                    "IN1N", "Headset Mic",
+                    "Headset Mic", "MICBIAS1",
+                    "IN3P", "Main Mic",
+                    "IN3N", "Main Mic",
+                    "Main Mic", "MICBIAS2",
+                    "IN4P", "Sub Mic",
+                    "IN4N", "Sub Mic",
+                    "Sub Mic", "MICBIAS3";
+
+    headset-dai-link {
+        cpu {
+            sound-dai = <&abox 0>;
+        };
+        codec {
+            sound-dai = <&rt5665 0>;
+        };
+    };
+
+    speaker-dai-link {
+        cpu {
+            sound-dai = <&abox 1>;
+        };
+        codec {
+            sound-dai = <&tas2562>;
+        };
+    };
+};

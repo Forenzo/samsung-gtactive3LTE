@@ -27,7 +27,7 @@
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=linux-postmarketos-exynos9810
 pkgver=7.3.0_git20261021
-pkgrel=32
+pkgrel=33
 _commit="7ebdcc3552362021d011753f1061ede9695302c7"
 # torvalds/linux commit that gtactive3.patch applies to; base + patch
 # is the tree of _commit in the gtactive3-mainline kernel (scripts/pmos-export)
@@ -91,10 +91,14 @@ subpackages="
 	$pkgname-gtactive3:_dtb
 	"
 source="
+	gtactive3lte_transport64.c
+	t575_tas2562_locked.c
+	t575-headphones.dtsi
 	linux-$_base.tar.gz::https://github.com/torvalds/linux/archive/$_base.tar.gz
 	gtactive3.patch
 	0156-rtc-s5m-S2MPS18-RTC-over-ACPM-Exynos-9810.patch
 	t575-gpu-first-desktop.patch
+	t575-rt5665-calibration-recovery.patch
 	$_config
 	"
 builddir="$srcdir/linux-$_base"
@@ -102,6 +106,22 @@ builddir="$srcdir/linux-$_base"
 prepare() {
 	default_prepare
 	cp "$srcdir/$_config" .config
+
+    # Build the LTE audio modules against this exact kernel.
+    cp "$srcdir/gtactive3lte_transport64.c" sound/soc/samsung/
+    cp "$srcdir/t575_tas2562_locked.c" sound/soc/samsung/
+
+    cat >> sound/soc/samsung/Makefile <<'EOF'
+obj-$(CONFIG_SND_SOC_SAMSUNG_GTACTIVE3_RT5665) += snd-soc-gtactive3lte-transport64.o
+snd-soc-gtactive3lte-transport64-y := gtactive3lte_transport64.o
+obj-$(CONFIG_SND_SOC_SAMSUNG_GTACTIVE3_RT5665) += t575-tas2562-safeactive.o
+t575-tas2562-safeactive-y := t575_tas2562_locked.o
+EOF
+
+    cp "$srcdir/t575-headphones.dtsi" arch/arm64/boot/dts/exynos/
+
+    printf '\n#include "t575-headphones.dtsi"\n' \
+        >> arch/arm64/boot/dts/exynos/exynos9810-gtactive3.dts
 }
 
 build() {
@@ -142,6 +162,10 @@ _dtb() {
 }
 
 sha512sums="
+25b063f48183c0fe7a9f17409a59e1d6c74911a182a9746933b354b738413d4793150a8901a2233383164204ec21a931b733acb7c69412e5522d6c99b05564f9  gtactive3lte_transport64.c
+30c3179b339133bf309fc98c27288730d6538d3a1b52a13ce286824464019fbd7b5ac917a7ecdf4f815e28312314f0b8e612537438dcb9558372f18bec7fb3e5  t575_tas2562_locked.c
+ef5fa9d02914b6a4bdda562006f259b803d2aba09b3c0620090adce3c3254d18db931049621fa24b5f811fd7bba540cb3902ce43b93d1b46624cc06140b6c7bb  t575-headphones.dtsi
+3b0994681787ab00901fe932764676f21bf8bcdd233f6251926a7503c79fc7a8a9b61620bd354d6a42140bad0cf15ad6d7a359c6a4b4fb6bb5fc751663ccb117  t575-rt5665-calibration-recovery.patch
 006c2489f0371f1c94096f85233de414e7454fa6f878c06b237338cddf5fe67c094778ae70c70cfb4421006960c229167f500c042867259dd5cdba96fd8fce3f  t575-gpu-first-desktop.patch
 a7490df85efe523200c304259e154aa9cc2be22bfd9612f397dde142d20eced1c8b27cbe45ffa7d043ce12d84992536c4bc58ab14080b50a518f953e83ab5608  linux-f47d223627f80cb7a1eb14c585fe6cb35de5e984.tar.gz
 aefbb50e39257dc701ac48853bf301310bc8a822ad816c28489d633e333612ec9dd5a934f75cfb3c9f17c21635ca1aef3633a0edf168acd3784229dee7ab1304  gtactive3.patch

@@ -9,7 +9,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=device-samsung-gtactive3
 pkgdesc="Samsung Galaxy Tab Active3 (LTE)"
 pkgver=1
-pkgrel=1
+pkgrel=2
 url="https://github.com/exynos-linux/samsung-gtactive3"
 license="MIT"
 arch="aarch64"
@@ -27,6 +27,8 @@ makedepends="devicepkg-dev"
 # support (USB prep, watchdog, nested GPT) there
 subpackages="$pkgname-initramfs:initramfs"
 source="
+	Galaxy_Tab_Acti.conf
+	HiFi.conf
 	deviceinfo
 	kernel-cmdline.conf
 	"
@@ -37,6 +39,12 @@ build() {
 
 package() {
 	devicepkg_package $startdir $pkgname
+
+    install -Dm644 "$srcdir/Galaxy_Tab_Acti.conf" \
+        "$pkgdir/usr/share/alsa/ucm2/conf.d/Galaxy_Tab_Acti/Galaxy_Tab_Acti.conf"
+
+    install -Dm644 "$srcdir/HiFi.conf" \
+        "$pkgdir/usr/share/alsa/ucm2/conf.d/Galaxy_Tab_Acti/HiFi.conf"
 }
 
 initramfs() {
@@ -46,6 +54,8 @@ initramfs() {
 }
 
 sha512sums="
+133b074bf02d3bcb760a340d44b7fdf1281537dd2cff9854bb915fd0295fb078e1ebaa7af24093cb98a337abae747fa97752832562e5f2b941654575f7dca3c8  Galaxy_Tab_Acti.conf
+48e8f26b280343a2c1f9bfb70d318e5611d25e578ec3b21f1dfb6069ee97a82abcc929fcabffa66a9e0ef53df4b0cb41c76c0e36e608c59689c1df9a19d7baee  HiFi.conf
 53fb8ce0312ef87202b90ef2623bf8dc529b507c1bea65551a94783300a9b35f149371d85d41da706b86c81ba0f3a53b13b6bdde271b9be2777cdf36665ec14d  deviceinfo
 3076178c711a93d0e8cd75acbe3236de157622078d0042b55516813d14f405a755bf5fc569841255a011ba5731479bb4fe0a6fd483ee587f10502f3b63a9d7b0  kernel-cmdline.conf
 "
