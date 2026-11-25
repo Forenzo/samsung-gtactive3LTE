@@ -1,0 +1,54 @@
+#!/bin/bash
+set -euo pipefail
+
+ADDR=${GTA3_CONSOLE_ADDR:?Set GTA3_CONSOLE_ADDR locally}
+KEY=${GTA3_SSH_KEY:-$HOME/.ssh/id_ed25519_gta3_usb}
+
+opts=(
+    -i "$KEY"
+    -o IdentitiesOnly=yes
+    -o BatchMode=yes
+    -o ConnectTimeout=10
+    -o UserKnownHostsFile="$HOME/.ssh/known_hosts_gta3"
+    -o StrictHostKeyChecking=accept-new
+    -o ServerAliveInterval=5
+    -o ServerAliveCountMax=3
+)
+
+case "${1:-}" in
+    --pair)
+        mkdir -p "$HOME/.ssh"
+
+        if [ ! -f "$KEY" ]; then
+            ssh-keygen -q -t ed25519 -N "" -f "$KEY"
+        fi
+
+        echo "Verify this fingerprint on the tablet:"
+        ssh-keygen -lf "$KEY.pub"
+
+        python3 - "$ADDR" "$KEY.pub" <<'PY'
+import socket
+import sys
+from pathlib import Path
+
+with socket.create_connection((sys.argv[1], 2324), timeout=10) as s:
+    key = Path(sys.argv[2]).read_bytes().splitlines()[0]
+    s.sendall(key + b"\n")
+    s.settimeout(80)
+    print(s.makefile().readline().strip() or "No answer")
+PY
+        ;;
+
+    --where)
+        printf '%s\n' "root@$ADDR"
+        ;;
+
+    *)
+        test -f "$KEY" || {
+            echo "Pair this computer using scripts/tab-ssh --pair" >&2
+            exit 1
+        }
+
+        exec ssh "${opts[@]}" "root@$ADDR" "$@"
+        ;;
+esac

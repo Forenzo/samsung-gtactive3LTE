@@ -18,39 +18,31 @@ usage:
   console.py key DEV SECS                waits for a key press: prints its code,
                                          "timeout", or exits 3 if the console went away
 
-Address: $GTA3_CONSOLE_ADDR, else fe80::57:aff:fe00:1%<the cdc_ncm interface>;
+Address: $GTA3_CONSOLE_ADDR (set locally; include IPv6 interface scope);
 port $GTA3_CONSOLE_PORT (default 23).
+
+Duranium dev images with duranium-usb-debug r7 or newer have no console on
+port 23 (only with duranium.usb_debug=open): there probe, cmd, put, get and
+hash go over the key-only USB debug ssh instead, with the paired key
+$GTA3_SSH_KEY (default ~/.ssh/id_ed25519_gta3_usb, see scripts/tab-ssh
+--pair). The live environment keeps the console.
 """
 import hashlib
 import os
+import shlex
 import socket
+import subprocess
 import sys
 import time
 
-LL = "fe80::57:aff:fe00:1"
 PORT = int(os.environ.get("GTA3_CONSOLE_PORT", "23"))
-
-
-def ncm_iface():
-    base = "/sys/class/net"
-    for n in sorted(os.listdir(base)):
-        try:
-            drv = os.path.basename(os.readlink(os.path.join(base, n, "device", "driver")))
-        except OSError:
-            continue
-        if drv == "cdc_ncm":
-            return n
-    return None
 
 
 def address():
     a = os.environ.get("GTA3_CONSOLE_ADDR")
-    if a:
-        return a
-    i = ncm_iface()
-    if not i:
-        sys.exit("no tablet USB network (cdc_ncm) interface")
-    return f"{LL}%{i}"
+    if not a:
+        sys.exit("Set GTA3_CONSOLE_ADDR locally, including the USB interface scope")
+    return a
 
 
 def connect(timeout=10):
@@ -63,6 +55,143 @@ def connect(timeout=10):
             sys.exit("console closed before the prompt")
         buf += d
     return s
+
+
+def ssh_key():
+    k = os.environ.get("GTA3_SSH_KEY", os.path.expanduser("~/.ssh/id_ed25519_gta3_usb"))
+    return k if os.path.exists(k) else None
+
+
+def ssh_argv(shell_cmd):
+    home = os.path.expanduser("~")
+    return ["ssh", "-i", ssh_key(), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=10",
+            "-o", f"UserKnownHostsFile={home}/.ssh/known_hosts_gta3",
+            "-o", "StrictHostKeyChecking=accept-new",
+            f"root@{address()}", shell_cmd]
+
+
+def ssh_shell(line):
+    """A console command as a shell command (the ones the installer sends
+    to a booted Duranium)."""
+    w = line.split(None, 2)
+    if w and w[0] == "run":
+        return line[4:]
+    if w and w[0] == "write" and len(w) == 3:
+        return f"printf '%s\\n' {shlex.quote(w[2])} > {shlex.quote(w[1])} && echo ok || echo error"
+    if w[:2] == ["reboot", "download"]:
+        return "systemctl reboot --reboot-argument=download"
+    return line
+
+
+def ssh_stream(remote, n, sink, label=None):
+    """The first n bytes of remote over ssh; returns their sha256."""
+    p = subprocess.Popen(ssh_argv(f"head -c {int(n)} {shlex.quote(remote)}"),
+                         stdout=subprocess.PIPE)
+    h, got = hashlib.sha256(), 0
+    prog = Progress(label or os.path.basename(remote), n) if n > 1 << 20 else None
+    while got < n:
+        d = p.stdout.read(min(1 << 20, n - got))
+        if not d:
+            break
+        h.update(d)
+        sink(d)
+        got += len(d)
+        if prog:
+            prog(got)
+    if p.wait() != 0:
+        sys.exit("SSH transfer failed")
+    if prog:
+        prog(got, True)
+    if got != n:
+        sys.exit(f"ssh: short read of {remote}: {got} of {n} bytes")
+    return h.hexdigest()
+
+
+def ssh_put(local, remote, n):
+    if n < 0:
+        raise ValueError("Invalid transfer length")
+
+    q = shlex.quote(remote)
+
+    if remote.startswith("/dev/"):
+        sh = f"dd of={q} bs=1M iflag=fullblock conv=fsync"
+    else:
+        sh = f"cat > {q} && sync"
+
+    f = sys.stdin.buffer if local == "-" else open(local, "rb")
+    proc = subprocess.Popen(ssh_argv(sh), stdin=subprocess.PIPE)
+    digest = hashlib.sha256()
+    sent = 0
+
+    try:
+        while sent < n:
+            data = f.read(min(1 << 20, n - sent))
+            if not data:
+                raise IOError("Unexpected end of input")
+            proc.stdin.write(data)
+            digest.update(data)
+            sent += len(data)
+
+        proc.stdin.close()
+
+        if proc.wait() != 0:
+            raise IOError("Remote write failed")
+
+    except BaseException:
+        proc.kill()
+        proc.wait()
+        raise
+
+    finally:
+        if local != "-":
+            f.close()
+
+    actual = ssh_stream(remote, n, lambda data: None)
+
+    if actual != digest.hexdigest():
+        sys.exit("Remote readback checksum mismatch")
+
+    print(f"ok {n}")
+    return True
+
+
+def os_release(text):
+    kv = dict(ln.split("=", 1) for ln in text.splitlines() if "=" in ln)
+    # Duranium images say ID=nura (upstream's name); the bring-up
+    # Linux has no os-release at all
+    # any Galaxy Tab Active3 variant (samsung-gtactive3wifi, -gtactive3)
+    if kv.get("IMAGE_ID", "").strip('"').startswith("samsung-gtactive3"):
+        return " ".join(["duranium", kv.get("IMAGE_VERSION", "?").strip('"'),
+                         kv.get("VARIANT_ID", "?").strip('"')])
+    return "bringup"
+
+
+def via_ssh(op, a):
+    if op == "probe":
+        r = subprocess.run(ssh_argv("cat /etc/os-release"), capture_output=True, timeout=30)
+        if r.returncode:
+            sys.exit("console: neither the console nor ssh answers")
+        print(os_release(r.stdout.decode(errors="replace")))
+    elif op == "cmd":
+        r = subprocess.run(ssh_argv(ssh_shell(a[1])), capture_output=True,
+                           timeout=int(a[2]) if len(a) > 2 else 30)
+        sys.stdout.write(r.stdout.decode(errors="replace"))
+        sys.stderr.write(r.stderr.decode(errors="replace"))
+        if r.returncode:
+            sys.exit(r.returncode)
+    elif op == "put":
+        sys.exit(0 if ssh_put(a[1], a[2], int(a[3])) else 1)
+    elif op == "get":
+        out = sys.stdout.buffer
+        digest = ssh_stream(a[1], int(a[2]), out.write, a[4] if len(a) > 4 else None)
+        out.flush()
+        with open(a[3], "w") as f:
+            f.write(digest + "\n")
+    elif op == "hash":
+        print(ssh_stream(a[1], int(a[2]), lambda d: None, a[3] if len(a) > 3 else None))
+    else:
+        sys.exit(f"console: {op} needs the console (port {PORT}), which this image does not run")
 
 
 def until_prompt(s):
@@ -195,15 +324,7 @@ def main():
             s.sendall(b"cat /etc/os-release\n")
             r = until_prompt(s).decode(errors="replace")
             s.close()
-            kv = dict(ln.split("=", 1) for ln in r.splitlines() if "=" in ln)
-            # Duranium images say ID=nura (upstream's name); the bring-up
-            # Linux has no os-release at all
-            # any Galaxy Tab Active3 variant (samsung-gtactive3wifi, -gtactive3)
-            if kv.get("IMAGE_ID", "").strip('"').startswith("samsung-gtactive3"):
-                print("duranium", kv.get("IMAGE_VERSION", "?").strip('"'),
-                      kv.get("VARIANT_ID", "?").strip('"'))
-            else:
-                print("bringup")
+            print(os_release(r))
         elif op == "cmd":
             sys.stdout.write(cmd(a[1], int(a[2]) if len(a) > 2 else 30))
         elif op == "put":
@@ -220,6 +341,13 @@ def main():
             key(a[1], int(a[2]))
         else:
             sys.exit(__doc__)
+    except ConnectionRefusedError as e:
+        # no console on port 23: a Duranium dev image with the key-only
+        # debug layer (r7+); its ssh does the same jobs
+        if ssh_key() and os.environ.get("GTA3_CONSOLE_ADDR"):
+            via_ssh(op, a)
+        else:
+            sys.exit(f"console: {e} (pair with scripts/tab-ssh --pair for ssh)")
     except (OSError, socket.timeout) as e:
         sys.exit(f"console: {e}")
 
