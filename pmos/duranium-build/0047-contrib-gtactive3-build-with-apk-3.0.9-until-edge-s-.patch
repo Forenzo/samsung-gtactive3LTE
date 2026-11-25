@@ -1,0 +1,80 @@
+From 7f0228935e578a0e4f7ee6b70c12627151de6cab Mon Sep 17 00:00:00 2001
+From: dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>
+Date: Fri, 20 Nov 2026 14:21:52 +1100
+Subject: [PATCH] contrib: gtactive3: build with apk 3.0.9 until edge's 3.0.10
+ is fixed
+
+apk-tools 3.0.10 (Alpine edge, 2026-11-19) cannot install systemd 262.2
+into Nura's bin-merged root: "systemd-262.2-r0: failed to commit
+usr/sbin/init: No such file or directory", and the same for udevadm.
+Reproduced on 2026-11-20 with upstream duranium-build's own
+device-qemu-amd64 ui-phosh build; with apk 3.0.9 the base installs.
+The tools tree only ever gets edge's newest apk, and its scripts in
+mkosi.tools.conf are not run, so the build overlays Alpine's static
+apk 3.0.9 (sha256 checked) through a mkosi sandbox tree. APK_PIN=
+turns it off once a fixed apk or systemd is out.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .gitignore                               |  2 ++
+ contrib/samsung-gtactive3/build-image.sh | 27 ++++++++++++++++++++++++
+ 2 files changed, 29 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+index 8bd75bf..7180882 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -13,3 +13,5 @@ mkosi.version
+ pmaports/
+ public/
+ /pmaports
++# the pinned static apk (contrib/samsung-gtactive3/build-image.sh)
++apk-pin/
+diff --git a/contrib/samsung-gtactive3/build-image.sh b/contrib/samsung-gtactive3/build-image.sh
+index a49e9fb..46a3dd5 100755
+--- a/contrib/samsung-gtactive3/build-image.sh
++++ b/contrib/samsung-gtactive3/build-image.sh
+@@ -93,6 +93,32 @@ CACHE_ONLY=
+ if [ -z "${FRESH:-}" ] && ls mkosi.cache/*.metadata.cache >/dev/null 2>&1; then
+ 	CACHE_ONLY=--cache-only=metadata
+ fi
++# apk-tools 3.0.10 (Alpine edge, 2026-11-19) cannot install systemd 262.2
++# into Nura's bin-merged root: "systemd-262.2-r0: failed to commit
++# usr/sbin/init: No such file or directory" (reproduced with upstream
++# duranium-build's own qemu-amd64 build; 3.0.9 installs it). Until a fixed
++# apk or systemd lands, the build runs Alpine's static apk 3.0.9, checked
++# against its sha256, from a mkosi sandbox tree that overlays the tools
++# tree's apk. APK_PIN= turns it off.
++APK_PIN=${APK_PIN-3.0.9-r0}
++SANDBOX=
++if [ -n "$APK_PIN" ]; then
++	case $(uname -m)/$APK_PIN in
++	x86_64/3.0.9-r0) sum=677dddb435ca7d621ce9f8a1a404a4cedc631651fd025893c548c34a4ceecb19 ;;
++	*) echo "APK_PIN=$APK_PIN: no checksum for $(uname -m); set APK_PIN= or add it" >&2; exit 1 ;;
++	esac
++	pin=apk-pin/apk-tools-static-$APK_PIN.apk
++	mkdir -p apk-pin/sandbox/usr/bin apk-pin/sandbox/usr/sbin
++	if ! echo "$sum  $pin" | sha256sum -c --quiet >/dev/null 2>&1; then
++		curl -fsSL --retry 3 -o "$pin" \
++			"https://cdn.alpinelinux.org/edge/main/$(uname -m)/apk-tools-static-$APK_PIN.apk"
++		echo "$sum  $pin" | sha256sum -c --quiet || { echo "$pin: wrong sha256" >&2; exit 1; }
++	fi
++	tar -xzf "$pin" -C apk-pin sbin/apk.static 2>/dev/null
++	for d in bin sbin; do install -m755 apk-pin/sbin/apk.static apk-pin/sandbox/usr/$d/apk; done
++	# relative to $DUR, which is the working directory in the mkosi container too
++	SANDBOX=--sandbox-tree=apk-pin/sandbox
++fi
+ log=$(mktemp)
+ trap 'rm -f "$log"' EXIT
+ for attempt in 1 2 3; do
+@@ -113,6 +139,7 @@ for attempt in 1 2 3; do
+ 			--release="$RELEASE" \
+ 			--package-directory="$PKGS" \
+ 			$CACHE_ONLY \
++			$SANDBOX \
+ 			"$@" 2>&1 || rc=$?
+ 		echo "MKOSI-EXIT $rc"
+ 	} | tee "$log"
+-- 
+2.53.0
+
