@@ -22,7 +22,13 @@ ExecStart=-modprobe -a exynos_usi i2c_exynos5
 # loaded (the bring-up init also continues), the cable may already be routed.
 ExecStart=-/usr/libexec/gtactive3wifi/usb-prep --switch-only
 ExecStart=modprobe -a phy_exynos5_usbdrd dwc3 dwc3_exynos
-ExecStartPost=/bin/sh -c 'mkdir -p /run/gtactive3wifi && touch /run/gtactive3wifi/usb-prep.done'
+# The marker needs nothing but sh: systemd makes the directory (kept after the
+# unit stops, so it crosses switch-root) and a builtin redirect writes the
+# file. An initrd without mkdir/touch (Cairn OS 2026.11.9) failed this line,
+# put a red FAILED on the boot screen and left no marker.
+RuntimeDirectory=gtactive3wifi
+RuntimeDirectoryPreserve=yes
+ExecStartPost=/bin/sh -c ': > /run/gtactive3wifi/usb-prep.done'
 StandardOutput=journal+console
 TimeoutStartSec=60
 
