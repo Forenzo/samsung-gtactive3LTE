@@ -1,0 +1,98 @@
+diff --git a/drivers/cpuidle/cpuidle-psci.c b/drivers/cpuidle/cpuidle-psci.c
+--- a/drivers/cpuidle/cpuidle-psci.c
++++ b/drivers/cpuidle/cpuidle-psci.c
+@@ -44,7 +44,12 @@
+ 
+ static DEFINE_PER_CPU_READ_MOSTLY(struct psci_cpuidle_data, psci_cpuidle_data);
+ static DEFINE_PER_CPU(struct psci_cpuidle_domain_state, psci_domain_state);
+-static bool psci_cpuidle_use_syscore;
++static bool psci_cpuidle_use_syscore;
++
++/* Experimental opt-in: retain WFI but freeze ticks during system sleep. */
++static bool psci_s2idle_wfi;
++module_param_named(s2idle_wfi, psci_s2idle_wfi, bool, 0444);
++MODULE_PARM_DESC(s2idle_wfi, "Allow architectural WFI as an s2idle fallback");
+ 
+ void psci_set_domain_state(struct generic_pm_domain *pd, unsigned int state_idx,
+ 			   u32 state)
+@@ -223,7 +228,15 @@
+ 	return CPU_PM_CPU_IDLE_ENTER_PARAM_RCU(psci_cpu_suspend_enter, idx, state[idx]);
+ }
+ 
+-static const struct of_device_id psci_idle_state_match[] = {
++static __cpuidle int psci_enter_wfi_s2idle(struct cpuidle_device *dev,
++					struct cpuidle_driver *drv, int idx)
++{
++	/* No PSCI CPU_SUSPEND or deeper hardware state is requested. */
++	cpu_do_idle();
++	return idx;
++}
++
++static const struct of_device_id psci_idle_state_match[] = {
+ 	{ .compatible = "arm,idle-state",
+ 	  .data = psci_enter_idle_state },
+ 	{ },
+@@ -382,8 +395,10 @@
+ 	 * PSCI idle states relies on architectural WFI to be represented as
+ 	 * state index 0.
+ 	 */
+-	drv->states[0].enter = psci_enter_idle_state;
+-	drv->states[0].exit_latency = 1;
++	drv->states[0].enter = psci_enter_idle_state;
++	if (psci_s2idle_wfi)
++		drv->states[0].enter_s2idle = psci_enter_wfi_s2idle;
++	drv->states[0].exit_latency = 1;
+ 	drv->states[0].target_residency = 1;
+ 	drv->states[0].power_usage = UINT_MAX;
+ 	strscpy(drv->states[0].name, "WFI");
+diff --git a/drivers/cpuidle/cpuidle.c b/drivers/cpuidle/cpuidle.c
+--- a/drivers/cpuidle/cpuidle.c
++++ b/drivers/cpuidle/cpuidle.c
+@@ -187,7 +187,10 @@
+  * @latency_limit_ns: Idle state exit latency limit
+  *
+  * If there are states with the ->enter_s2idle callback, find the deepest of
+- * them and enter it with frozen tick.
++ * them and enter it with frozen tick. State zero may be used only if the
++ * driver explicitly provides an s2idle callback for it.
++ *
++ * Return: entered state index (including zero), or a negative error.
+  */
+ int cpuidle_enter_s2idle(struct cpuidle_driver *drv, struct cpuidle_device *dev,
+ 			 u64 latency_limit_ns)
+@@ -199,12 +202,15 @@
+ 	 * specified latency limit, which guarantees that interrupts won't be
+ 	 * enabled when it exits and allows the tick to be frozen safely.
+ 	 */
+-	index = find_deepest_state(drv, dev, latency_limit_ns, 0, true);
+-	if (index > 0) {
+-		enter_s2idle_proper(drv, dev, index);
+-		local_irq_enable();
+-	}
+-	return index;
++	index = find_deepest_state(drv, dev, latency_limit_ns, 0, true);
++	if (!index && (!drv->states[0].enter_s2idle ||
++		       dev->states_usage[0].disable ||
++		       drv->states[0].exit_latency_ns > latency_limit_ns))
++		return -ENODEV;
++
++	enter_s2idle_proper(drv, dev, index);
++	local_irq_enable();
++	return index;
+ }
+ #endif /* CONFIG_SUSPEND */
+ 
+diff --git a/kernel/sched/idle.c b/kernel/sched/idle.c
+--- a/kernel/sched/idle.c
++++ b/kernel/sched/idle.c
+@@ -219,8 +219,8 @@
+ 
+ 			entered_state = call_cpuidle_s2idle(drv, dev,
+ 							    max_latency_ns);
+-			if (entered_state > 0)
+-				goto exit_idle;
++			if (entered_state >= 0)
++				goto exit_idle;
+ 		} else {
+ 			max_latency_ns = dev->forced_idle_latency_limit_ns;
+ 		}
