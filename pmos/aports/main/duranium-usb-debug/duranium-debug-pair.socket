@@ -1,0 +1,25 @@
+[Unit]
+Description=Duranium USB debug pairing socket (TCP 2324, USB interface only)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+ConditionKernelCommandLine=!duranium.usb_debug=0
+ConditionPathExists=!/etc/duranium-usb-debug/disabled
+# asks the person at the screen: needs the booted system and its session
+ConditionPathExists=!/etc/initrd-release
+DefaultDependencies=no
+PartOf=duranium-usb-debug.target
+Conflicts=shutdown.target
+Before=shutdown.target
+After=duranium-usb-debug.service
+
+[Socket]
+# A computer sends its ssh public key here; the tablet shows its fingerprint
+# and adds it only when the owner taps "Allow" (usb-debug-pair). One request
+# at a time.
+ListenStream=2324
+BindToDevice=usb0
+BindIPv6Only=ipv6-only
+Accept=yes
+MaxConnections=1
+
+[Install]
+WantedBy=duranium-usb-debug.target

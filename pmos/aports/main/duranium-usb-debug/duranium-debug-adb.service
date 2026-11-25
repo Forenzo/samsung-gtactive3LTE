@@ -1,7 +1,10 @@
 [Unit]
 Description=Duranium USB debug layer: adb function on the debug gadget
 Documentation=file:///usr/share/doc/duranium-usb-debug/README
-ConditionKernelCommandLine=!duranium.usb_debug=0
+# Unauthenticated root access: only with duranium.usb_debug=open on the
+# kernel command line (bring-up images, or typed once in the boot menu's
+# editor, which is physical root access anyway). Dev images use ssh.
+ConditionKernelCommandLine=duranium.usb_debug=open
 ConditionKernelCommandLine=!duranium.usb_debug_adb=0
 PartOf=duranium-usb-debug.target
 After=duranium-usb-debug.service

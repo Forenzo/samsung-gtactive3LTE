@@ -1,0 +1,11 @@
+[Unit]
+Description=Duranium USB debug pairing request (per connection)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+
+[Service]
+ExecStart=-/usr/libexec/duranium/usb-debug-pair
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+# the owner has 60 s to answer
+RuntimeMaxSec=90

@@ -3,19 +3,19 @@
 # interface only. Its own host key keeps it apart from a production sshd the
 # user may run on the system.
 #
-# SECURITY: this permits root login. It is meant for development images only.
-# See /usr/share/doc/duranium-usb-debug/README. Disable the whole layer with
-#   systemctl disable --now duranium-usb-debug.target
-# or ship a release image without the duranium-usb-debug sysext/package.
-PermitRootLogin yes
-PasswordAuthentication yes
+# Keys only: a computer gets in after it was paired (the owner tapped
+# "Allow" on the tablet, usb-debug-pair) or its key was installed by the
+# installer. No passwords, so nothing can be guessed over the cable.
+# See /usr/share/doc/duranium-usb-debug/README; off with
+#   duranium-usb-debug off
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
 PubkeyAuthentication yes
-# Empty-password root login is NOT allowed; set a root password or install a
-# key before relying on SSH access (the telnet console needs no password).
 PermitEmptyPasswords no
-UsePAM no
 HostKey /etc/duranium-usb-debug/ssh_host_ed25519_key
-# Keys baked into a development image go to /usr/share/duranium-usb-debug
-# (read-only /usr); keys added at runtime to ~/.ssh/authorized_keys.
-AuthorizedKeysFile .ssh/authorized_keys /usr/share/duranium-usb-debug/authorized_keys
+# Paired computers in /etc/duranium-usb-debug/authorized_keys (root only),
+# keys baked into a bring-up image in /usr/share/duranium-usb-debug, and a
+# user's own ~/.ssh/authorized_keys.
+AuthorizedKeysFile /etc/duranium-usb-debug/authorized_keys /usr/share/duranium-usb-debug/authorized_keys .ssh/authorized_keys
 Subsystem sftp internal-sftp

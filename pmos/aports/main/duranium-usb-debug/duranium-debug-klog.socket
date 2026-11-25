@@ -1,9 +1,10 @@
 [Unit]
 Description=Duranium USB debug kernel log socket (TCP 24, USB interface only)
 Documentation=file:///usr/share/doc/duranium-usb-debug/README
-# Off switch that also covers the initrd (whose presets cannot be changed at
-# runtime): add duranium.usb_debug=0 to the kernel command line.
-ConditionKernelCommandLine=!duranium.usb_debug=0
+# Unauthenticated root access: only with duranium.usb_debug=open on the
+# kernel command line (bring-up images, or typed once in the boot menu's
+# editor, which is physical root access anyway). Dev images use ssh.
+ConditionKernelCommandLine=duranium.usb_debug=open
 DefaultDependencies=no
 # "systemctl stop|disable --now duranium-usb-debug.target" stops this too
 PartOf=duranium-usb-debug.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=USB debugging indicator (Duranium USB debug layer)
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+ConditionKernelCommandLine=!duranium.usb_debug=0
+ConditionPathExists=!/etc/duranium-usb-debug/disabled
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/libexec/duranium/usb-debug-notify
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

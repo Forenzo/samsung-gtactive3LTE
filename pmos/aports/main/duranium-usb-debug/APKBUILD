@@ -7,15 +7,17 @@
 maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=duranium-usb-debug
 pkgver=1
-pkgrel=6
-pkgdesc="Duranium development USB debug layer: NCM gadget, root console, ssh, kernel log"
+pkgrel=8
+pkgdesc="Duranium development USB debug layer: NCM gadget, key-only ssh with on-screen pairing; open root console only on request"
 url="https://github.com/dixonSolutions/gtactive3-mainline"
 arch="noarch"
 license="GPL-3.0-or-later"
 # The -initramfs subpackage carries the gadget setup and the console, which
 # the booted system needs too, hence the hard dependency on it.
-# busybox-extras: telnetd; openssh-server (sshd -i) + openssh-keygen;
-# iproute2 for "ip"; kmod for modprobe (libcomposite etc).
+# busybox-extras: telnetd (open mode); openssh-server (sshd -i) +
+# openssh-keygen; iproute2 for "ip"; kmod for modprobe (libcomposite etc);
+# libnotify (notify-send) and glib (gdbus) for the pairing prompt and the
+# indicator in the owner's session.
 depends="
 	$pkgname-initramfs=$pkgver-r$pkgrel
 	busybox-extras
@@ -23,6 +25,8 @@ depends="
 	kmod
 	openssh-server
 	openssh-keygen
+	libnotify
+	glib
 "
 subpackages="$pkgname-initramfs:initramfs $pkgname-adb:adb"
 source="
@@ -36,6 +40,8 @@ source="
 	duranium-debug-shell@.service
 	duranium-debug-sshd.socket
 	duranium-debug-sshd@.service
+	duranium-debug-pair.socket
+	duranium-debug-pair@.service
 	duranium-debug-sockets.service
 	duranium-debug-klog.socket
 	duranium-debug-klog@.service
@@ -50,6 +56,13 @@ source="
 	duranium-debug-adb.service
 	duranium-debug-adbd.service
 	80-duranium-usb-debug-adb.preset
+	usb-debug-pair
+	usb-debug-ctl
+	usb-debug-notify
+	duranium-usb-debug-off.service
+	duranium-usb-debug-notify.service
+	usb-moded-notify-duranium-usb-debug.conf
+	50-duranium-usb-debug.rules
 	README
 "
 options="!check"
@@ -61,6 +74,12 @@ package() {
 		"$pkgdir"/usr/libexec/duranium/usb-debug-gadget-teardown
 	install -Dm755 "$srcdir"/usb-debug-sshd-keygen \
 		"$pkgdir"/usr/libexec/duranium/usb-debug-sshd-keygen
+	# pairing, the switch (duranium-usb-debug on|off|status|keys) and the
+	# on-screen indicator
+	install -Dm755 "$srcdir"/usb-debug-pair "$srcdir"/usb-debug-ctl \
+		"$srcdir"/usb-debug-notify -t "$pkgdir"/usr/libexec/duranium/
+	mkdir -p "$pkgdir"/usr/bin
+	ln -s ../libexec/duranium/usb-debug-ctl "$pkgdir"/usr/bin/duranium-usb-debug
 
 	install -Dm644 "$srcdir"/sshd_config \
 		"$pkgdir"/etc/duranium-usb-debug/sshd_config
@@ -68,8 +87,9 @@ package() {
 	for u in duranium-usb-debug.target duranium-usb-debug.service \
 		 duranium-debug-shell.socket duranium-debug-shell@.service \
 		 duranium-debug-sshd.socket duranium-debug-sshd@.service \
+		 duranium-debug-pair.socket duranium-debug-pair@.service \
 		 duranium-debug-klog.socket duranium-debug-klog@.service \
-		 duranium-debug-sockets.service; do
+		 duranium-debug-sockets.service duranium-usb-debug-off.service; do
 		install -Dm644 "$srcdir/$u" -t "$pkgdir"/usr/lib/systemd/system/
 	done
 
@@ -91,6 +111,19 @@ package() {
 		-t "$pkgdir"/usr/lib/NetworkManager/conf.d/
 	install -Dm644 "$srcdir"/40-duranium-usb-debug-watchdog.conf \
 		"$pkgdir"/usr/lib/systemd/system.conf.d/40-duranium-usb-debug.conf
+
+	# the indicator in the owner's session, and Nura's USB mode chooser
+	# held back while the debug gadget has the port (the conf says why)
+	install -Dm644 "$srcdir"/duranium-usb-debug-notify.service \
+		-t "$pkgdir"/usr/lib/systemd/user/
+	mkdir -p "$pkgdir"/usr/lib/systemd/user/graphical-session.target.wants
+	ln -s ../duranium-usb-debug-notify.service \
+		"$pkgdir"/usr/lib/systemd/user/graphical-session.target.wants/
+	install -Dm644 "$srcdir"/usb-moded-notify-duranium-usb-debug.conf \
+		"$pkgdir"/usr/lib/systemd/user/usb-moded-notify.service.d/50-duranium-usb-debug.conf
+	# the person at the screen may turn it off without a password
+	install -Dm644 "$srcdir"/50-duranium-usb-debug.rules \
+		-t "$pkgdir"/usr/share/polkit-1/rules.d/
 
 	install -Dm644 "$srcdir"/README \
 		"$pkgdir"/usr/share/doc/$pkgname/README
@@ -141,29 +174,38 @@ adb() {
 }
 
 sha512sums="
-cbc2008a2318b11adaba215f28804526bd3b6e35cb86c4e1ccec9c727cae1f591aaa70b268ca39bc93a14312d825cc6f648ce475bf8e0b42ea802110301454c7  usb-debug-gadget-setup
-f77ce736e4fb641aaa2990ce1b66445ad97c37084425b8e926899482f029e6e14883dbe1b8ae53709e35c40097b40f1ef3458308163de760257b38834e8728f3  usb-debug-gadget-teardown
+bc89ff70a6a87309ded070ed40dc6d908353bcac0e4cd040e9b3900acfc4118fbe9f3ecc4d2bdfe09d613f242037e65ae35eb121f9d1a53173f46ae2ea619346  usb-debug-gadget-setup
+1e0b66ca3e05119900f32e8440ec0ba083fd0459cf44c3ea6957c905e90ac622cba636d966dc8416b83e34dff3df6fdbc4d326c74f99b5a89f25cbb002590383  usb-debug-gadget-teardown
 a6fa62f8c3f9cca9c9ae91d3b84999aa5cdaa1b73c544a2a77df26ce0313a4b1f68bd34c0f8fa876611093894cedd1e9f637de58574e15b2c4c26b51e306daba  usb-debug-sshd-keygen
-7ac7b9a525931bb30f6ac3f5981edf2b5600d000a235dc3f2e9edc68ab453b674cc1f8fa5fcdbcb4105a615ff689cff9999d18838c27cdabd40d678f56d64b49  sshd_config
-23c13327f2f221ab9671e2ae46adf6a4bf25c4db4cc17e6842ff1ea1fe43f8af51c98376fd4c0d5e06ab398a265b0a5c7482e492edbc8f7cf8313205f9209f40  duranium-usb-debug.target
-f4d8b8dac9b6475b67acdbd1b50698c4fe46c920eff27e3c1e7f76763adddcab1aa17e7a0bb8dd967937f73e98bbd9ae72cfbd8729444e1a7447f7fa5f7a612a  duranium-usb-debug.service
-720ca66c3e11ee673e61d5e18e28559cbbfb29753e314addb89df4e40a83ff5d4247d088de7a269eb59d5414af9fe49a623dae6bd25f0d4df1e9940c2af35967  duranium-debug-shell.socket
+0bd23056ec85cf3ad92acbc86dc487bedb0863e70ce1a74c670b87a22e7aa818cfe6a312599fb6b7a19c9bcfc06062aa3d49adcd5c07b0d096d3beab7c1af768  sshd_config
+69f2f0c0996125901d790453593d40651b96e50a6507276c811a639be4cdbedd4cbf8698485dfae8e8bf1fe9b28727f5d06bf9029193361008ca0c318ddd477c  duranium-usb-debug.target
+6dab86d2fb0126e25b333420cde661299146460764ccd79984ed040607797185ad534ff782ee5719eb136858e1aea3b584d8758a1b4db166bb6d313d5886009b  duranium-usb-debug.service
+e9381884e884446f7e07456daf400971db7d2eb895364561ea1a55385a9eec1be2020096c6f4a1c0966fa55534c0d8e621d99d262b90bf0d54062c16d4e792fa  duranium-debug-shell.socket
 60ecdaf4a09376e00fed419b94da5bffd5990ca40c3e913fa26350f7793ea93c8b2f18692ceae43efea1228bb36b60826b902694f36ba64bc5fcdce9edbce1d6  duranium-debug-shell@.service
-000343b9dd6c3badea5fe2eaa42c61913c63f49a15eff84271db7f72d5fd50a385699727a025be0d9442c0ae3b490495e25874fb2ba85beff00cfdcf742f16b7  duranium-debug-sshd.socket
+0ca3b98b14a29e377c3ff39f5d1de975e122e38c8e4dd83e30938ff8ee1ba080c09793e31fa3f2de98af43653205231594b87c92682afb6197f790454239b429  duranium-debug-sshd.socket
 2cf52171f03350988068c80935cc1cfd15794ff79a2aef16f1c74f023814cfe3b08a4f8ff01b1512c00afdb11c7d1d24c759a90373ffdd18faa23f767e8c4e53  duranium-debug-sshd@.service
-24009e3d4c9c5a3291db96eb034c059a9f59b52b6e92fe20011fdd3fb3c73be65e02589be54b0d36eb43b13dd2bb4923c5c37bef5743cf3d0756bce0d5f4624f  duranium-debug-sockets.service
-76ce5f1da8b0437e3595dbe4c943c496bd004c79072a78758d06270b9f9dacb60976e2dd87eb26152654f32e02f210618ee85add0b48aac16b2933901f594d51  duranium-debug-klog.socket
+60ec8806e649d6327bbb01fef87836d166a08da04e44f6db4088c4f60642caab701d1cf0ae4fe9aa2fe7120919bc49f7e8de63acf5c106d7320001053bf2d87d  duranium-debug-pair.socket
+4bd8c8be165228a0129af4def6a8ca7dd0b9e1f172e9a4b79806a7caf7eeab834a9b17f6a9f75b1dc8ed419700aa26c14222e84af0489bd0cf536b5a66d89c85  duranium-debug-pair@.service
+8f4d92d60267c3ee73af4fe0cd44dc80dbc244e1242c974c2ccd88b3fd712fa84ef86c7a6e8da0ec80d2b3e19c1a52a316906a600e4269cd0526ae3bf9218279  duranium-debug-sockets.service
+9c5f824c05dc912b3cf3fb8dc1fd44807aab99c1a4966bdb716f8284f665c41fce34e7a3576af3fd40b9067c0fb82259861c21fdccecb241734989cb06f3ef75  duranium-debug-klog.socket
 363ec22695304403e006315c4cdc9e06117e8220256fecad108e6f2cbfb5af3a8bfc525e2a0b66ae206cd55b6a712ae2723097155376a04263a1108fa3eeda37  duranium-debug-klog@.service
-f77d01240e321d262a5cb25a493477ae896de40a38b5c49f04ca0a38abb5023b647a008851e9cb885a906cc59c9762987ae2b00f577ef27fc26677c3e24ce488  80-duranium-usb-debug.preset
+ed07c81100390eadddae5badb024a165a1401344f120cd48edb57632fe587b4cf067b7b129e251ec8541dee85c4da1b4f33bd7acca76f1e918221064976486ce  80-duranium-usb-debug.preset
 895006ae84b302e92916847de3bfaf67d0ba917026e525ff9af5ccbbf97caae13b9c29b8bb1d06abf5f5415b65d1921fe233fb41371d6c3a66e025efa94510bb  initramfs-duranium-usb-debug.preset
-4b7b02a801ee2e738e17ddc98be7c416cf3ea6356def7892a617edad3e21afa4b076a5a93538c2db65c916e8adda55d003f179e419dc1ebd22fcea6b8c9aca05  60_duranium_usb_debug.nft
-c79eef910a228b323140303c5877668ac65745064fa4b3f99bfa1bd092a06ba616c313061d625c4de0abcd367b331d81eaa0de2efd584cd93f296546aefaebe6  10-duranium-usb-debug.link
-77e7f107c7678ad3b8191a8ba111d990e951b6cda0405d4436c4ae0657b8d01094f48dff1fa89b6b5e13547b54860daa0b5d474903ae4da15b946a9843d0a73f  90-duranium-usb-debug-sockets.rules
+df3713ad39347c07c666b5ba17971892ced30f633088da20390ad8fd1b8ad7642761723978f9442aedd9264723ff738cae70d5f7135d480f4e03be91c2ff3f31  60_duranium_usb_debug.nft
+8d39b24ca1b099daa65d4b44089c4059a94309c7cb868cb3b1bd46e589749a371db7dd02d6b1ea5d3e89aa5e96e9d1d0226e19d24d205eecf79899bd5d8cbd07  10-duranium-usb-debug.link
+da7f38963b72e516b70d03e437c36b601ec0f6f4cf881c82a847a6fa41baae2a4f92f0e72c77cebad0794e6e835398923dbe0171b6dd4481aac6fdf7c2cff3ad  90-duranium-usb-debug-sockets.rules
 1c6e8841263246694e45947ec7c94ad746a9876233590f8353f01c08cbe2c048be0c853eb9d9d062b13fd03fd903db7da13eae65ec52fd9390e566fb98bcb339  50-duranium-usb-debug-nm.conf
 6c704ef958a66d343ee8bae7d0a83dadde14ec0559b2d0d69e7e65f2e303d581a7280b83222547a8d6e81b78b7891314080b520250f7dd512a41b8c1a931ae34  40-duranium-usb-debug-watchdog.conf
 c5840fc214cc09f512e0f0b28ec92f6f0663340b2779f22fcb63ec874ab2c1fee04ff8bafa4afc974ff443da4a0e705ab15915367fec9a71bf6a5a16e782df4c  usb-debug-adb-attach
-4a99711350c7a388929be5ffdf8705e81d5e02441f1d56dc63595efce0b5288b67a1e2f09c38bf8ccdde68574425414ba3bfcb8e038d9172bb4854aa4dff1a86  duranium-debug-adb.service
-c0bb0750454e646819832d4c835574b6827f336800ec20ef5ca8931e316aaa0372f0e91ff60c1cf9ac10febea5fce00f44aef478df60477da1720514243e8789  duranium-debug-adbd.service
+e1170e6b3d8e6f5815b7a0824dc2f05b32f1715c4207bf4cadfe1ab04629c04b29490e16f1f95a95f1f754b56c932758c5d29c645c515c73948831cc28f2d43f  duranium-debug-adb.service
+b75904afeb06b68da6c573895d8a9e2c5ab3e4d1c7e1f929f20c7ff11f7da67d24cce0ea63b231cb370aa83b2a46383ba5a8d45a9cb0794477910acafa2de454  duranium-debug-adbd.service
 f85d1f481835f868c847c17072676120d3e7eab5aa1cb48a2fe88491c19060379aba6fc7e286174454a08d3b659c88764d8af278f2359b051c653c18eec0b080  80-duranium-usb-debug-adb.preset
-34079b3d02c2d11a14a08e5d5e9eb40d6c06b5858260966a3b1940cfd63dd255832b02ee81df1f8c66359ffe97d8fbb9a3b2b62b0e454d3b6b91d6a4646d5f3e  README
+dcb32722c289a21e773a89ce3706ccb886371a6ddb5395c8bd1ab612201f9d4da63c0c9a5ab3d8c41f4ee148f5b01e1170e190a4d1510e038d29acd909805e9a  usb-debug-pair
+dbcedd128fa3e280d06f728bea01ad862b17b48f253be79be89d0093ecf3747ca937c55dba84e41563f0bf7b8c1f8d1f0140a75977f3eee0d3215de22aa5c0c3  usb-debug-ctl
+5f0373bc6d070218bb0b16120bd7b3783ad7ec186c7c1bd2ebf6703d7a5e265a35d1d8375badd9b014c3691b80276c493166a3f848a5bac81c0f9ac370261ae4  usb-debug-notify
+51af8ad727076e10715ee2c9d797cd2881b1423a5c3fac6aeebc94b61f91375d655dbb3acac23d383df7de81d66d71447038d91ced897f5a250a5b40ec499c87  duranium-usb-debug-off.service
+7d62ad989872de12ca3f68a3e09c1362b25629b326bb8e8368b2cafb21c365520688db6c5a631f77b305c12ca14fdf722c073da85b237b6f132843b4303240a8  duranium-usb-debug-notify.service
+2ecc2ec7b65de163d8987323900d3fda3a5a71e2e8dbfbe6aedf27a8c0431def835830cf781cd45e7650ca9023b621534ea0ede834f8c32dece8abb676595d3d  usb-moded-notify-duranium-usb-debug.conf
+b38afb29c9d1a821f440f7ddc6ce6bae8af16a92cc1e378d3c6d6a6a59a29d659482b0d2c2d2d90c100b37e14ec772009b0df2eb829b07e45d3f3aaa97a9531c  50-duranium-usb-debug.rules
+26a63a5bc27fdcce36aaa12836de0dc50ab7f1c7b857a91db35d2c14062c4c4b3ea98cd4cde27794045d66ab6df738a4f1995063f5e5fa77d92bfb6efdbc336c  README
 "

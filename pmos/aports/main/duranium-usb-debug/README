@@ -4,64 +4,90 @@ Duranium USB debug layer (duranium-usb-debug)
 What it is
 ----------
 A development-only debug layer for postmarketOS Duranium, modelled on the
-SM-T570 mainline bring-up console (gtactive3-mainline initramfs/init.c). It
-brings up a USB NCM network interface and exposes, over that interface only:
+SM-T570 mainline bring-up console. It brings up a USB NCM network interface
+and, over that interface only:
 
-  * root shell on TCP 2323      -> busybox "telnetd -l /bin/sh" (root, no auth)
-  * register console on TCP 23 -> gta3-console from the device package, the
-    same console as the bring-up init (scripts/tab, tab-get, tab-put)
-  * adb (duranium-usb-debug-adb) -> adbd on FunctionFS: adb shell/push/pull
-  * ssh on TCP 22             -> a dedicated sshd (its own host key)
-  * kernel log on TCP 24      -> "dmesg -w", or /dev/kmsg without util-linux
+  * ssh on TCP 22           -> a dedicated sshd, keys only (no passwords)
+  * pairing on TCP 2324     -> a computer sends its ssh public key; the
+                               tablet asks "Allow USB debugging?" with the
+                               key's fingerprint and adds it only on "Allow"
 
-Fixed addressing (matches the bring-up console so the host tooling in
-gtactive3-mainline/scripts works unchanged):
+and, only in open mode (below):
+
+  * root shell on TCP 2323    -> busybox "telnetd -l /bin/sh" (no auth)
+  * register console on TCP 23 -> gta3-console from the device package
+  * kernel log on TCP 24       -> "dmesg -w"
+  * adb (duranium-usb-debug-adb) -> adbd on FunctionFS (no auth)
+
+Fixed addressing (the host tools in the device repository rely on it):
 
   * gadget VID:PID 0x1d6b:0x0104
-  * device MAC 02:57:0a:00:00:01  -> device link-local  fe80::57:aff:fe00:1
-  * host   MAC 02:57:0a:00:00:02  -> host link-local     fe80::57:aff:fe00:2
+  * device MAC 02:57:0a:00:00:01  -> device link-local  <USB link-local address>
+  * host   MAC 02:57:0a:00:00:02  -> host link-local     <USB link-local address>
 
-Host usage (replace usb0 with the host's cdc_ncm interface):
+All sockets are socket-activated (Accept=yes) on the wildcard address but
+bound to the gadget interface with SO_BINDTODEVICE (BindToDevice=usb0),
+which works before the link has carrier and before IPv6 DAD finished.
 
-  nc  fe80::57:aff:fe00:1%usb0 23          # raw root shell (telnetd -l /bin/sh)
-  nc  fe80::57:aff:fe00:1%usb0 24 | less   # kernel log
-  ssh root@fe80::57:aff:fe00:1%usb0        # needs a root key or password first
+Pairing a computer
+------------------
+From the device repository: scripts/tab-ssh --pair (prints this computer's
+key fingerprint; tap Allow on the tablet if it shows the same one), then
+scripts/tab-ssh [command]. By hand:
 
-All three are socket-activated (systemd .socket units with Accept=yes),
-listening on the wildcard address but bound to the gadget interface with
-SO_BINDTODEVICE (BindToDevice=usb0). That works before the link has carrier
-and before IPv6 duplicate address detection finished, which binding the
-link-local address directly does not.
+  ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_gta3_usb
+  nc ${GTA3_CONSOLE_ADDR} 2324 < ~/.ssh/id_ed25519_gta3_usb.pub
+  ssh -i ~/.ssh/id_ed25519_gta3_usb root@${GTA3_CONSOLE_ADDR}
 
-It is present both in the mkosi initrd (interface, telnet console and kernel
-log; -initramfs subpackage) and in the booted system (adds sshd, which needs
-the real root). The gadget stays bound across switch-root.
+Paired keys live in /etc/duranium-usb-debug/authorized_keys (root only).
+"duranium-usb-debug keys" lists them, "duranium-usb-debug unpair N" forgets
+one. The prompt goes to the active graphical session on seat0; with nobody
+logged in, or no answer in 60 s, the request is denied.
+
+On the screen, on and off
+-------------------------
+While the debug gadget holds the USB port, a notification "USB debugging is
+on" appears once per connection (not again while the cable stays in; again
+after it was out for 10 s), with a "Turn off" button. Under Do Not Disturb
+it goes to the notification list only.
+
+  duranium-usb-debug status     on/off, open mode, USB state, paired count
+  duranium-usb-debug off        off until "on": no debug network, no ssh,
+                                no pairing; the USB port goes back to the
+                                system's USB modes. Lasts across reboots
+                                and updates (/etc/duranium-usb-debug/disabled).
+                                The person at the screen may do this
+                                without a password (polkit rule).
+  sudo duranium-usb-debug on
+
+duranium.usb_debug=0 on the kernel command line is the hard off that also
+covers the initrd.
+
+While the debug gadget holds the port, Nura's USB mode chooser
+(usb-moded-notify) is not started: usb-signaller sees the gadget as the
+read-only mode "Netboot", so every choice failed and the chooser came back
+again and again. After "off" the chooser works as usual.
+
+Open mode
+---------
+duranium.usb_debug=open on the kernel command line turns on the
+unauthenticated root shell, register console, kernel log stream and adbd,
+in the initrd and the booted system. Bring-up images set it. On a dev image
+it is typed once in the boot menu (systemd-boot "e"): that editor already
+gives anyone at the screen root, so open mode adds no new way in. The
+indicator says "Open mode" while it is on.
+
+Without open mode the initrd brings up only the network interface: the disk
+passphrase is typed on the screen (scripts/tab-unlock needs open mode).
 
 SECURITY
 --------
-This is an UNAUTHENTICATED root shell and an SSH daemon that permits root
-login, reachable by anyone who can attach to the USB port. It is for
-development images only. It listens on the USB gadget interface only and the
-firewall (60_duranium_usb_debug.nft) only opens 22/23/24 on usb*, but USB
-access is physical root access regardless. Do not ship it in a release image.
-
-How to disable it
------------------
-Booted system, whole layer off (the target's Also= list covers every unit):
-    systemctl disable --now duranium-usb-debug.target
-Permanently, so a preset cannot re-enable it:
-    systemctl mask duranium-usb-debug.target duranium-usb-debug.service \
-        duranium-debug-shell.socket duranium-debug-sshd.socket \
-        duranium-debug-klog.socket
-Just one piece, e.g. keep the interface but drop the shell:
-    systemctl disable --now duranium-debug-shell.socket
-The initrd's units come from presets baked into the UKI and cannot be
-disabled at runtime; the kernel command line switch covers the initrd and the
-booted system alike:
-    duranium.usb_debug=0
+Default (dev images): no unauthenticated access. ssh accepts only keys that
+were installed by root or allowed on the screen; nothing listens on Wi-Fi or
+any routable link (BindToDevice=usb0, and the firewall rule
+60_duranium_usb_debug.nft opens the ports on usb* only). Open mode is an
+unauthenticated root shell for anyone on the cable: bring-up only.
 
 Release images
 --------------
-This layer is a SEPARATE package. A release image is built without it (drop
-duranium-usb-debug from the device package's depends), so no masking is
-needed.
+This layer is a separate package. Release images are built without it.

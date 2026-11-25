@@ -4,6 +4,8 @@ Documentation=file:///usr/share/doc/duranium-usb-debug/README
 # Off switch that also covers the initrd (whose presets cannot be changed at
 # runtime): add duranium.usb_debug=0 to the kernel command line.
 ConditionKernelCommandLine=!duranium.usb_debug=0
+# turned off with "duranium-usb-debug off" (the initrd has its own /etc)
+ConditionPathExists=!/etc/duranium-usb-debug/disabled
 DefaultDependencies=no
 # "systemctl stop|disable --now duranium-usb-debug.target" stops this too
 PartOf=duranium-usb-debug.target

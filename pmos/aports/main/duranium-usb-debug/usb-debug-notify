@@ -1,0 +1,82 @@
+#!/bin/sh
+# The on-screen sign that USB debugging is on, in the owner's session
+# (duranium-usb-debug-notify.service, a user unit).
+#
+# One notification per USB connection: "USB debugging is on", with a "Turn
+# off" button. It is not shown again while the cable stays in (the host
+# suspending the port does not count as a new connection), only after the
+# cable was out for 10 s. "Turn off" stops the debug layer
+# (duranium-usb-debug-off.service, allowed by a polkit rule) and gives the
+# port back to the system's USB mode chooser (usb-moded-notify), which
+# cannot work while the debug gadget holds the port: usb-signaller sees it
+# as the read-only mode "Netboot", every choice failed and the chooser came
+# back, again and again.
+set -u
+g=/sys/kernel/config/usb_gadget/g_debug
+run=${XDG_RUNTIME_DIR:-/tmp}/duranium-usb-debug-notify
+mkdir -p "$run"
+out=$run/out
+pid=
+id=
+shown=
+away=0
+
+state() {
+	udc=$(cat "$g/UDC" 2>/dev/null || true)
+	[ -n "$udc" ] || { echo off; return; }
+	cat "/sys/class/udc/$udc/state" 2>/dev/null || echo unknown
+}
+
+show() {
+	body="A paired computer can log in as root over this cable. Tap Turn off if you did not expect this."
+	grep -qw 'duranium.usb_debug=open' /proc/cmdline &&
+		body="Open mode: anything on this cable gets a root shell without a key (duranium.usb_debug=open)."
+	: > "$out"
+	notify-send -a "USB debugging" -i security-low-symbolic -u normal \
+		--hint=boolean:resident:true -p -A off="Turn off" \
+		"USB debugging is on" "$body" > "$out" 2>/dev/null &
+	pid=$!
+	shown=1
+}
+
+close() {
+	id=$(head -n 1 "$out" 2>/dev/null || true)
+	case $id in
+	'' | *[!0-9]*) ;;
+	*) gdbus call --session --dest org.freedesktop.Notifications \
+		--object-path /org/freedesktop/Notifications \
+		--method org.freedesktop.Notifications.CloseNotification "$id" >/dev/null 2>&1 || true ;;
+	esac
+	[ -n "$pid" ] && kill "$pid" 2>/dev/null
+	pid=
+	shown=
+}
+
+while :; do
+	s=$(state)
+	case $s in
+	off)
+		# debug was turned off: the system's own chooser takes over
+		close
+		systemctl --user start usb-moded-notify.service 2>/dev/null || true
+		exit 0
+		;;
+	configured | suspended)
+		away=0
+		[ -n "$shown" ] || show
+		;;
+	*)
+		# "not attached", "default", ...: the cable is out (or re-enumerating)
+		away=$((away + 1))
+		[ "$away" -ge 4 ] && [ -n "$shown" ] && close
+		;;
+	esac
+	# the button: notify-send prints the action's name after the id
+	if [ -n "$pid" ] && [ "$(sed -n 2p "$out" 2>/dev/null)" = off ]; then
+		pid=
+		systemctl start --no-ask-password duranium-usb-debug-off.service ||
+			notify-send -a "USB debugging" -u normal "USB debugging stays on" \
+				"Turning it off needs root: sudo duranium-usb-debug off"
+	fi
+	sleep 3
+done

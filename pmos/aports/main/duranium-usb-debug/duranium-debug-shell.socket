@@ -1,9 +1,10 @@
 [Unit]
 Description=Duranium USB debug root shell socket (TCP 2323, USB interface only)
 Documentation=file:///usr/share/doc/duranium-usb-debug/README
-# Off switch that also covers the initrd (whose presets cannot be changed at
-# runtime): add duranium.usb_debug=0 to the kernel command line.
-ConditionKernelCommandLine=!duranium.usb_debug=0
+# Unauthenticated root access: only with duranium.usb_debug=open on the
+# kernel command line (bring-up images, or typed once in the boot menu's
+# editor, which is physical root access anyway). Dev images use ssh.
+ConditionKernelCommandLine=duranium.usb_debug=open
 # No default dependencies: sockets.target must not wait for a USB link that
 # may never come up.
 DefaultDependencies=no
@@ -20,7 +21,7 @@ IgnoreOnIsolate=yes
 [Socket]
 # A plain root shell (telnet). TCP 23 belongs to the SM-T570 register console
 # (gta3-debug-console.socket in the device package). Formerly mirrored the bring-up console in gtactive3-mainline initramfs/init.c (TCP 23
-# on fe80::57:aff:fe00:1). Bound to the wildcard address but restricted to the
+# on <USB link-local address>). Bound to the wildcard address but restricted to the
 # gadget interface with SO_BINDTODEVICE: binding the link-local address itself
 # fails until the NCM link has carrier and IPv6 DAD finished. BindToDevice=
 # also orders the socket after sys-subsystem-net-devices-usb0.device.

@@ -1,0 +1,92 @@
+#!/bin/sh
+# Pairing for the USB debug ssh (duranium-debug-pair.socket, TCP 2324 on the
+# USB gadget only). The computer sends one line, its ssh public key; the
+# tablet shows the key's fingerprint on the screen and adds the key to
+# /etc/duranium-usb-debug/authorized_keys only when the person logged in at
+# the screen taps "Allow" within 60 s. Like adb's "Allow USB debugging?":
+# nothing is reachable without a key, and a key needs a tap on the tablet.
+# Replies with one line: "paired", "already paired" or "denied: <why>".
+set -u
+dir=/etc/duranium-usb-debug
+keys=$dir/authorized_keys
+reply() { printf '%s\n' "$*"; }
+log() { echo "usb-debug-pair: $*" >&2; }
+
+# one line of at most 8 KiB, within 10 s (the computer keeps the
+# connection open for the reply, so read the line, not up to EOF)
+line=
+# shellcheck disable=SC3045 # busybox ash and bash have read -t/-n
+IFS= read -r -t 10 -n 8192 line || [ -n "$line" ] || { reply "denied: no key received"; exit 0; }
+line=$(printf '%s' "$line" | tr -d '\r')
+case $line in
+ssh-ed25519\ * | ecdsa-sha2-nistp*\ * | sk-ssh-ed25519@openssh.com\ * | \
+	sk-ecdsa-sha2-nistp256@openssh.com\ * | ssh-rsa\ *) ;;
+*) reply "denied: send one ssh public key (no options)"; exit 0 ;;
+esac
+tmp=$(mktemp)
+out=
+trap 'rm -f "$tmp" $out' EXIT
+printf '%s\n' "$line" > "$tmp"
+fp=$(ssh-keygen -l -f "$tmp" 2>/dev/null) || { reply "denied: not a valid ssh public key"; exit 0; }
+fp=$(echo "$fp" | cut -d' ' -f2)
+# the key type and the key itself; a comment is kept but not compared
+key=$(echo "$line" | cut -d' ' -f1-2)
+if [ -f "$keys" ] && cut -d' ' -f1-2 "$keys" | grep -qxF "$key"; then
+	reply "already paired"; exit 0
+fi
+
+# the person at the screen: the active graphical session on seat0
+user=
+prop() { loginctl show-session "$1" -p "$2" --value 2>/dev/null; }
+for s in $(loginctl list-sessions --no-legend | awk '{print $1}'); do
+	[ "$(prop "$s" Active)" = yes ] && [ "$(prop "$s" Remote)" = no ] &&
+		[ "$(prop "$s" Seat)" = seat0 ] || continue
+	case $(prop "$s" Type) in
+	wayland | x11) user=$(prop "$s" Name); break ;;
+	esac
+done
+[ -n "$user" ] || { reply "denied: nobody is logged in at the tablet's screen"; exit 0; }
+
+log "asking $user about $fp"
+# in the owner's session: notify-send prints the notification's id, then
+# the chosen action. A critical notification never expires by itself, so
+# an unanswered one is closed here after 60 s (else a dead prompt stays).
+in_session() { systemd-run -M "$user@" --user --pipe --wait --quiet --collect -- "$@"; }
+out=$(mktemp)
+trap 'rm -f "$tmp" "$out"' EXIT
+in_session notify-send -a "USB debugging" -i security-high-symbolic -u critical -p \
+	-A allow=Allow -A deny=Deny \
+	"Allow USB debugging?" \
+	"Key ${fp#SHA256:}: a computer on the USB cable asks for root access to this tablet. Allow it only if it is your computer and it shows the same key." \
+	> "$out" 2>/dev/null &
+np=$!
+ans=
+i=0
+while [ $i -lt 60 ]; do
+	sleep 1
+	i=$((i + 1))
+	ans=$(sed -n 2p "$out")
+	[ -n "$ans" ] && break
+	# dismissed with a swipe: notify-send ends without an action
+	kill -0 "$np" 2>/dev/null || break
+done
+if [ -z "$ans" ]; then
+	id=$(sed -n 1p "$out")
+	case $id in
+	'' | *[!0-9]*) ;;
+	*) in_session gdbus call --session --dest org.freedesktop.Notifications \
+		--object-path /org/freedesktop/Notifications \
+		--method org.freedesktop.Notifications.CloseNotification "$id" >/dev/null 2>&1 ;;
+	esac
+	kill "$np" 2>/dev/null
+fi
+if [ "$ans" != allow ]; then
+	log "not allowed ($fp)"
+	reply "denied: not allowed on the tablet (or no answer in 60 s)"
+	exit 0
+fi
+mkdir -p "$dir"
+( umask 077; printf '%s\n' "$line" >> "$keys" )
+chmod 600 "$keys"
+log "paired $fp"
+reply "paired"

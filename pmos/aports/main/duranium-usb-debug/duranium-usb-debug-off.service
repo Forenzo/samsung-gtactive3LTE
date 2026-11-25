@@ -1,0 +1,10 @@
+[Unit]
+Description=Turn the Duranium USB debug layer off
+Documentation=file:///usr/share/doc/duranium-usb-debug/README
+# Started by the indicator's "Turn off" button; the polkit rule
+# (50-duranium-usb-debug.rules) lets the person at the screen do it without
+# a password. Turning it on again needs root (duranium-usb-debug on).
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/duranium/usb-debug-ctl off

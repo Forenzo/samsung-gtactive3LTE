@@ -18,4 +18,5 @@ WantedBy=sysinit.target
 Also=duranium-usb-debug.service
 Also=duranium-debug-shell.socket
 Also=duranium-debug-sshd.socket
+Also=duranium-debug-pair.socket
 Also=duranium-debug-klog.socket

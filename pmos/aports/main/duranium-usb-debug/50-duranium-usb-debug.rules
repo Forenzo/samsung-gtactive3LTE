@@ -1,0 +1,11 @@
+// The person at the tablet's screen may turn USB debugging off without a
+// password (the indicator's "Turn off" button). Only off: turning it on
+// again, pairing and unpairing need root or a tap on the pairing prompt.
+polkit.addRule(function(action, subject) {
+	if (action.id == "org.freedesktop.systemd1.manage-units" &&
+	    action.lookup("unit") == "duranium-usb-debug-off.service" &&
+	    action.lookup("verb") == "start" &&
+	    subject.local && subject.active) {
+		return polkit.Result.YES;
+	}
+});

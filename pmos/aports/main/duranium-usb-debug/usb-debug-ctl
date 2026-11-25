@@ -1,0 +1,175 @@
+#!/bin/sh
+# duranium-usb-debug: the USB debug layer's switch and paired computers.
+#
+#   duranium-usb-debug status        on/off, open mode, cable, paired keys
+#   duranium-usb-debug off           off until "on" (also from the
+#                                    notification's "Turn off" button)
+#   duranium-usb-debug on
+#   duranium-usb-debug keys          the paired computers, numbered
+#   duranium-usb-debug unpair N      forget one of them
+#
+# Off drops the debug network, the ssh and the pairing port and hands the USB
+# port back to the system's own USB modes (usb-signaller). It lasts across
+# reboots and updates (a file in /etc). duranium.usb_debug=0 on the kernel
+# command line is the hard off that also covers the initrd.
+set -eu
+dir=/etc/duranium-usb-debug
+keys=$dir/authorized_keys
+flag=$dir/disabled
+g=/sys/kernel/config/usb_gadget/g_debug
+units="duranium-debug-sshd.socket duranium-debug-pair.socket duranium-debug-shell.socket duranium-debug-klog.socket gta3-debug-console.socket"
+
+need_root() {
+	[ "$(id -u)" = 0 ] && return 0
+	# the one thing a user may do without a password (polkit rule): turn off
+	if [ "$1" = off ]; then
+		exec systemctl start duranium-usb-debug-off.service
+	fi
+	echo "duranium-usb-debug $1: run it as root (sudo)" >&2
+	exit 1
+}
+
+open_mode() { grep -qw 'duranium.usb_debug=open' /proc/cmdline; }
+cable() {
+	udc=$(cat "$g/UDC" 2>/dev/null || true)
+	if [ -n "$udc" ]; then cat "/sys/class/udc/$udc/state" 2>/dev/null || echo unknown
+	else echo "not bound"; fi
+}
+
+# one at a time: a unit that is not installed (the register console comes
+# with the device package) or whose condition fails must not stop the rest
+start_units() {
+	for u in $units; do systemctl start --no-block "$u" 2>/dev/null || true; done
+}
+
+# the users logged in at the screen: their indicator and USB mode chooser
+session_users() {
+	loginctl list-sessions --no-legend 2>/dev/null | while read -r _ _ user seat _; do
+		[ "$seat" = seat0 ] && echo "$user"
+	done | sort -u
+}
+user_units() {
+	for u in $(session_users); do
+		systemctl -M "$u@" --user "$@" 2>/dev/null || true
+	done
+}
+
+turn_off() {
+	mkdir -p "$dir"
+	: > "$flag"
+	# shellcheck disable=SC2086
+	systemctl stop $units duranium-debug-adbd.service duranium-debug-adb.service 2>/dev/null || true
+	systemctl stop duranium-usb-debug.target duranium-usb-debug.service 2>/dev/null || true
+	# the gadget may be from the initrd, where the unit is not ours to stop
+	if [ -n "$(cat "$g/UDC" 2>/dev/null || true)" ]; then
+		/usr/libexec/duranium/usb-debug-gadget-teardown || true
+	fi
+	# the system's USB modes take the port; the indicator (which sees the
+	# gadget go) starts the mode chooser in the session
+	systemctl try-restart usb-signaller.service 2>/dev/null || true
+}
+
+# Remove a gadget completely. Unbinding is not enough: its NCM function
+# keeps the network interface name, and ours would come up as usb1 while
+# every debug socket is bound to usb0 (seen on the SM-T570, 2026-11-20:
+# after "off" usb-signaller made its own NCM gadget, "on" unbound it and
+# nothing listened any more until a reboot).
+rm_gadget() {
+	gd=${1%/}
+	echo "" > "$gd/UDC" 2>/dev/null || true
+	for c in "$gd"/configs/*/; do
+		[ -d "$c" ] || continue
+		for l in "$c"*; do [ -L "$l" ] && rm -f "$l"; done
+		rmdir "$c"strings/* 2>/dev/null || true
+		rmdir "$c" 2>/dev/null || true
+	done
+	for f in "$gd"/functions/*/; do
+		[ -d "$f" ] || continue
+		# FunctionFS functions (MTP, adb) are mounted somewhere: unmount
+		# first. Nothing else may be using another gadget's FunctionFS
+		# while its owner (usb-signaller) is stopped.
+		case ${f%/} in
+		*/ffs.*)
+			inst=${f%/}; inst=${inst##*/ffs.}
+			awk -v i="$inst" '$1 == i && $3 == "functionfs" {print $2}' /proc/mounts |
+				while read -r m; do umount "$m" 2>/dev/null || true; done ;;
+		esac
+		rmdir "$f" 2>/dev/null || true
+	done
+	rmdir "$gd"/strings/* "$gd"/os_desc 2>/dev/null || true
+	rmdir "$gd" 2>/dev/null || echo "duranium-usb-debug: could not remove $gd" >&2
+}
+
+turn_on() {
+	rm -f "$flag"
+	# usb-signaller may have made a gadget of its own while debug was off:
+	# stop it, remove that gadget, bring ours up, then let it start again
+	# (it sees g_debug as a fixed mode then, as after every boot)
+	signaller=
+	systemctl -q is-active usb-signaller.service 2>/dev/null && signaller=1
+	[ -z "$signaller" ] || systemctl stop usb-signaller.service
+	for other in /sys/kernel/config/usb_gadget/*/; do
+		[ -d "$other" ] || continue
+		[ "${other%/}" = "$g" ] && continue
+		rm_gadget "$other"
+	done
+	systemctl restart duranium-usb-debug.service
+	iface=$(cat /run/duranium-usb-debug.iface 2>/dev/null || true)
+	[ "$iface" = usb0 ] ||
+		echo "duranium-usb-debug: the debug interface is ${iface:-missing}, not usb0: ssh will not listen until a reboot" >&2
+	start_units
+	# postmarketOS's DHCP server on usb0: the host's NetworkManager drops
+	# the link (and its link-local address) when no lease comes
+	systemctl try-restart unudhcpd@usb0.service 2>/dev/null || true
+	[ -z "$signaller" ] || systemctl start usb-signaller.service
+	user_units stop usb-moded-notify.service
+	user_units start duranium-usb-debug-notify.service
+}
+
+case ${1:-status} in
+status)
+	if grep -qw 'duranium.usb_debug=0' /proc/cmdline; then echo "USB debugging: off (kernel command line)"
+	elif [ -e "$flag" ]; then echo "USB debugging: off"
+	else echo "USB debugging: on"; fi
+	open_mode && echo "open mode: unauthenticated root shell and console (duranium.usb_debug=open)"
+	echo "USB: $(cable)"
+	n=0; [ -r "$keys" ] && n=$(grep -c . "$keys" || true)
+	echo "paired computers: $n"
+	;;
+off)
+	need_root off
+	turn_off
+	echo "USB debugging: off (\"duranium-usb-debug on\" to turn it on again)"
+	;;
+on)
+	need_root on
+	turn_on
+	echo "USB debugging: on"
+	;;
+boot)
+	# duranium-debug-sockets.service, after switch-root
+	need_root boot
+	if [ -e "$flag" ]; then turn_off; exit 0; fi
+	start_units
+	;;
+keys)
+	need_root keys
+	[ -s "$keys" ] || { echo "no paired computers"; exit 0; }
+	i=0
+	while IFS= read -r k; do
+		i=$((i + 1))
+		printf '%d  %s\n' "$i" "$(printf '%s\n' "$k" | ssh-keygen -l -f - 2>/dev/null || echo "(unreadable line)")"
+	done < "$keys"
+	;;
+unpair)
+	need_root unpair
+	n=${2:?usage: duranium-usb-debug unpair N}
+	case $n in *[!0-9]* | '') echo "N is a number from \"keys\"" >&2; exit 1 ;; esac
+	sed -i "${n}d" "$keys"
+	echo "forgot computer $n"
+	;;
+*)
+	sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+	exit 1
+	;;
+esac

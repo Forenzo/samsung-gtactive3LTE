@@ -2,4 +2,4 @@
 # whenever the interface goes away, e.g. when the gadget is re-enumerated to
 # add a function. Start them again every time usb0 appears.
 SUBSYSTEM=="net", ACTION=="add", KERNEL=="usb0", TAG+="systemd", \
-  ENV{SYSTEMD_WANTS}+="duranium-debug-shell.socket duranium-debug-klog.socket duranium-debug-sshd.socket gta3-debug-console.socket"
+  ENV{SYSTEMD_WANTS}+="duranium-debug-shell.socket duranium-debug-klog.socket duranium-debug-sshd.socket duranium-debug-pair.socket gta3-debug-console.socket"
