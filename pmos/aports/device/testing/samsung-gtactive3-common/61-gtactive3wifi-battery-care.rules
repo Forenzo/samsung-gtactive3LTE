@@ -6,3 +6,8 @@
 # hence 61-: charging pauses at 85 %, Samsung's "Protect battery" level,
 # and resumes at 80 %.
 ACTION!="remove", SUBSYSTEM=="power_supply", KERNEL=="max170xx_battery", TEST=="charge_control_end_threshold", ENV{CHARGE_LIMIT}="80,85"
+
+# Charge speed (docs/BATTERY.md "Fast charging"): the owner's choice of
+# Standard or Fast (charge-speed set, kept in /var/lib/gtactive3wifi), put
+# back whenever the charger appears; the kernel starts at Standard.
+ACTION=="add", SUBSYSTEM=="power_supply", KERNEL=="max77705-charger", TEST=="charge_types", RUN+="/usr/libexec/gtactive3wifi/charge-speed apply"

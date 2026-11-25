@@ -11,7 +11,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=samsung-gtactive3-common
 pkgdesc="Samsung Galaxy Tab Active3: support shared by every variant"
 pkgver=2
-pkgrel=57
+pkgrel=58
 url="https://github.com/exynos-linux/samsung-gtactive3"
 license="MIT"
 arch="aarch64"
@@ -121,6 +121,8 @@ source="
 	80-device-samsung-gtactive3wifi.user-preset
 	oomd-avoid.conf
 	tuned/powersave.conf
+	charge-speed.sh
+	charge-speed.policy
 	tuned/throughput-performance.conf
 	fast-animations/extension.js
 	fast-animations/metadata.json
@@ -279,6 +281,10 @@ package() {
 	# looks in /etc/tuned/profiles first, and each includes the stock profile
 	install -Dm644 "$srcdir"/powersave.conf \
 		"$pkgdir"/etc/tuned/profiles/powersave/tuned.conf
+	install -Dm755 "$srcdir"/charge-speed.sh \
+		"$pkgdir"/usr/libexec/gtactive3wifi/charge-speed
+	install -Dm644 "$srcdir"/charge-speed.policy \
+		"$pkgdir"/usr/share/polkit-1/actions/io.github.exynos-linux.charge-speed.policy
 	install -Dm644 "$srcdir"/throughput-performance.conf \
 		"$pkgdir"/etc/tuned/profiles/throughput-performance/tuned.conf
 	install -Dm644 "$srcdir"/gtactive3wifi-reboot.tmpfiles \
@@ -464,8 +470,10 @@ initramfs() {
 }
 
 sha512sums="
+5413c9e42ecc4a45ad8bc5ecab3e5940a17a38bef58d6f81ff22e19ea63c312ae64bdcd389439f1cbc2f0ada32839e5447537ecdd0091eb6cee942267a0812c5  charge-speed.policy
+806a19719edcdc7189f471d6b0eb88db732c6f3147ab2ce758e9c136cbb4a33abacf8b63d3213776282953748f5681f113022bd6667dc8ad25d48941e1a13464  charge-speed.sh
 4aab843e115626a410700e6643bacbe4c6331ec669c6a9be4a1b19e72ed3eff5f4e3458d4ecdc803c6dc54890a0c2e92743bf7a57b78c95191c6809c1a857989  battery-care.tmpfiles
-fc83f6ebbc3488746c6a43bdbc166f660b5a4ce47529643707dd459a66a426bac5e46f0cd9038953edd78b2b8054cecd19c346d691cf319cce81f8fa60bfd8da  61-gtactive3wifi-battery-care.rules
+7295b50064f0f1e67e1019a34029aa01b87c0a12b229c1529b02d2a3f26d7153ae9e22dbbcb4f0bc21389c82d7ba2156e41f3d11b879556358f75232ff89ff84  61-gtactive3wifi-battery-care.rules
 acba813ff0feb882b6cb0cc4b4c9f8dc0b9b58cb3da7c6a87920ecf4ef63670ac90f23d3ca6bc5b057832fe8e4388c1eca60b6c79c7f3e50eab6d5986cd349d7  gtactive3wifi-usb-prep.c
 20423df55d57f7791d22c647927a3d3221225d0397410ec916b4e780ff6cc67123299f84006ac2d0dcb697307c4fc5630350b0d069c9cc84971de14f6e2d4aab  gtactive3wifi-usb-prep.service
 28297b58b56192c894ed5a1f60a4834b4490945054b6db21dcf72212605fdf4a5cd153331313eab1b78d65b13402038dfd08f5b41e1da9b3bb02db0d012328dc  gta3-console.c

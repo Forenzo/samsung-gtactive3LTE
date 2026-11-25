@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Charge speed (charge-speed.sh): the user at the tablet switches fast
+     charging without a password, as Android's "Fast charging" switch and
+     upower's charge limit (org.freedesktop.UPower.enable-charging-limit).
+     Remote and inactive sessions need an administrator. -->
+<policyconfig>
+  <action id="io.github.exynos-linux.charge-speed">
+    <description>Switch fast charging on or off</description>
+    <message>Authentication is required to change the charging speed</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/gtactive3wifi/charge-speed</annotate>
+  </action>
+</policyconfig>
