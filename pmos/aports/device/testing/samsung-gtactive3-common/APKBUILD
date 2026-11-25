@@ -11,7 +11,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=samsung-gtactive3-common
 pkgdesc="Samsung Galaxy Tab Active3: support shared by every variant"
 pkgver=2
-pkgrel=54
+pkgrel=55
 url="https://github.com/exynos-linux/samsung-gtactive3"
 license="MIT"
 arch="aarch64"
@@ -112,6 +112,7 @@ source="
 	80-gtactive3wifi-wlan-mac.rules
 	wlan-efs-mac
 	61-gtactive3wifi-sensors.rules
+	81-gtactive3wifi-extension-images.rules
 	gtactive3wifi-typing-booster-defaults.sh
 	gtactive3wifi-typing-booster-defaults.service
 	80-device-samsung-gtactive3wifi.preset
@@ -315,6 +316,7 @@ package() {
 	# this unit's own Wi-Fi MAC address (the nvram has a shared placeholder)
 	install -Dm644 "$srcdir"/80-gtactive3wifi-wlan-mac.rules \
 		"$srcdir"/61-gtactive3wifi-sensors.rules \
+		"$srcdir"/81-gtactive3wifi-extension-images.rules \
 		-t "$pkgdir"/usr/lib/udev/rules.d/
 	install -Dm755 "$srcdir"/wlan-efs-mac \
 		"$pkgdir"/usr/libexec/gtactive3wifi/wlan-efs-mac
@@ -512,6 +514,7 @@ d65d18f451bbd9fda18c6d0c76fdaa9fb0c3a8d5aac0150beae3e327262ee26b7d3778c6591ba28a
 cbd57e963b49b08d97b12818d44f19bfc736a538bb04299a8d4d58f8609e2e8773b8af87ecfda0370ff4479b57fe5ffc4637fe5c5ba8d2b9b6546915cbe090d6  80-gtactive3wifi-wlan-mac.rules
 4d2c6c11f751b1ac6d028b01f2eece848330cde5b20d971f8cd19bb3cec94b126edc7f3caf82a964297cd940461690b1e50ef8f23dae33b5919d84655de28313  wlan-efs-mac
 c15bf919861bc0d0db2475c751a7ccb9b2773a10e328465d0eb3a5b89125d8e9c03954698b9c9bdfe5bb0a28a8ded4f7bb8af2d4b7cc8a3364b255a0de810d94  61-gtactive3wifi-sensors.rules
+db46e9b3e2cd049008fed160f4a41ac25e2e840e927f5e64761b0e571af5eb7b8e358958caa49b206d170737597fa0d775712f8ffbc07490db8e8c1588a47072  81-gtactive3wifi-extension-images.rules
 276873db11bcca166df29b472f32becb6b26fe76d1c8adcaab997a5f6b45c3df5c612057cc667111c521a1628ec550b8083b4cd97859d62350a017c27af9ba7a  gtactive3wifi-typing-booster-defaults.sh
 1ee2d69d7825e35c5cebb37c563267f646e5a18eec0616b99ce460c25d197c23f0d38acaad4fee7cb2f850143e5305af6e744f8345e722b8af1df2ad94aee94c  gtactive3wifi-typing-booster-defaults.service
 625508baa42fad23519a17bf5044ce7fe4652dd02887e8fe649d79b273893fd3f619a3d45e596db2515c64dc5196af585c7541f7cdc708ee46f228dca83681a8  80-device-samsung-gtactive3wifi.preset
