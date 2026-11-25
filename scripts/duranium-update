@@ -39,20 +39,68 @@ UI=${UI:-gnome}
 IMAGE=${IMAGE:-$("$(dirname "$0")/config" get "variants.$("$(dirname "$0")/config" get device.codename).image_id")}
 NAME=${IMAGE}_${UI}_edge
 OUT=${OUT:-$P/build/wt/duranium/mkosi.output/$NAME}
-LL=fe80::57:aff:fe00:1
 W=$P/build/.upd
 mkdir -p "$W"
-# Transport: the bring-up console over USB (default), or ssh when there is
-# no cable (GTA3_SSH=root@<tailscale address>, see scripts/tablet-remote).
+
+# Prevent concurrent updates from this checkout.
+LOCK=$P/build/.upd.lock
+mkdir "$LOCK" || {
+    echo "Another update is active, or a stale lock exists" >&2
+    exit 1
+}
+trap 'rmdir "$LOCK"' EXIT
+
+word_count() {
+    printf '%s\n' "$1" | awk '{n += NF} END {print n+0}'
+}
+
+filesize() {
+    python3 -I -c 'import os,sys; print(os.path.getsize(sys.argv[1]))' "$1"
+}
+
+CONSOLE=$P/scripts/installer/py/console.py
+transport=console
+
 if [ -n "${GTA3_SSH:-}" ]; then
-	sshc() { ssh -o BatchMode=yes "$GTA3_SSH" "$@"; }
-	# the console commands this script uses: "cat FILE" and "run /bin/sh FILE"
-	t() { case $1 in "run "*) sshc "${1#run }" ;; *) sshc "$1" ;; esac < /dev/null; }
-	tput_() { sshc "cat > '$2'" < "$1"; }
+    transport=ssh
+    sshc() {
+        ssh -o BatchMode=yes -o ConnectTimeout=10 \
+            -o ServerAliveInterval=5 \
+            -o ServerAliveCountMax=3 "$GTA3_SSH" "$@"
+    }
 else
-	t() { flock "$P/build/tab.lock" "$P/scripts/tab" "$@"; }
-	tput_() { flock "$P/build/tab.lock" "$P/scripts/tab-put" "$@" >/dev/null; }
+    : "${GTA3_CONSOLE_ADDR:?Set the tablet endpoint locally}"
+
+    if "$P/scripts/tab-ssh" true >/dev/null 2>&1; then
+        transport=ssh
+        sshc() { "$P/scripts/tab-ssh" "$@"; }
+    fi
 fi
+
+if [ "$transport" = ssh ]; then
+    t() {
+        case $1 in
+            "run "*) sshc "${1#run }" ;;
+            *) sshc "$1" ;;
+        esac < /dev/null
+    }
+
+    tput_() {
+        sshc "cat > '$2' && sync" < "$1"
+    }
+else
+    t() {
+        python3 "$CONSOLE" cmd "$1"
+    }
+
+    tput_() {
+        python3 "$CONSOLE" put \
+            "$1" "$2" "$(filesize "$1")" >/dev/null
+    }
+fi
+
+echo "Update transport: $transport"
+
 # run a small shell script on the tablet (the console limits each run to 60 s)
 trun() { printf '%s\n' "$2" > "$W/$1.sh"; tput_ "$W/$1.sh" "/run/upd-$1.sh"; t "run /bin/sh /run/upd-$1.sh"; }
 # a longer job (hashing a partition): run it as a transient unit, poll
@@ -76,6 +124,9 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 uuid() { local x=$1; echo "${x:0:8}-${x:8:4}-${x:12:4}-${x:16:4}-${x:20:12}"; }
 
 V=${1:-$(ls "$OUT" | sed -n "s/^${NAME}_\([0-9]*\)\.efi$/\1/p" | sort -n | tail -1)}
+[[ "$V" =~ ^[0-9]{8}(~test[0-9]+)?$ ]] ||
+    die "Invalid update version: $V"
+
 UKI=$OUT/${NAME}_$V.efi
 [ -f "$UKI" ] || die "no UKI $UKI"
 H=$(grep -ao 'usrhash=[0-9a-f]\{64\}' "$UKI" | head -1 | cut -d= -f2)
@@ -93,6 +144,12 @@ for e in ${EXTENSIONS-dev-tools}; do
 	[ "$n" -gt 0 ] || die "no $e sysext/confext built for $V"
 done
 
+LIVE_IMAGE=$(t "cat /usr/lib/os-release" |
+    sed -n 's/^IMAGE_ID=//p' | tr -d '"')
+
+[ "$LIVE_IMAGE" = "$IMAGE" ] ||
+    die "Image identity mismatch: tablet=$LIVE_IMAGE update=$IMAGE"
+
 t "cat /proc/version" | grep -q postmarketOS || die "the tablet is not in a booted Duranium"
 CUR=$(t "cat /proc/cmdline" | grep -o 'usrhash=[0-9a-f]\{64\}' | cut -d= -f2)
 [ -n "$CUR" ] || die "no usrhash on the running kernel command line"
@@ -106,22 +163,16 @@ usr, vty = sys.argv[1], sys.argv[2]
 h = open(vty, "rb").read(512)
 assert h[:8] == b"verity\0\0", "no verity superblock"
 dbs, hbs, nb = struct.unpack("<IIQ", h[64:80])
-fd = os.open(vty, os.O_RDONLY)
-end, off, size = 0, 0, os.fstat(fd).st_size
-while off < size:
-    try:
-        d = os.lseek(fd, off, os.SEEK_DATA)
-    except OSError:
-        break
-    off = os.lseek(fd, d, os.SEEK_HOLE)
-    end = off
-print(nb * dbs, -(-end // 4096) * 4096)
+size = os.path.getsize(vty)
+assert size > 0 and size % 4096 == 0
+assert nb * dbs <= os.path.getsize(usr)
+print(nb * dbs, size)
 PY
 )
-log "update to $V: usr $((ULEN >> 20)) MiB, verity $((VLEN >> 20)) MiB, UKI $(( $(stat -c %s "$UKI") >> 20 )) MiB"
+log "update to $V: usr $((ULEN >> 20)) MiB, verity $((VLEN >> 20)) MiB, UKI $(( $(filesize "$UKI") >> 20 )) MiB"
 
 # Pick the target slot on the tablet.
-PARTS=$(trun probe 'lsblk -bPno NAME,PARTLABEL,PARTTYPE,PARTUUID,SIZE /dev/loop0' | python3 -I -c '
+PARTS=$(t 'run /usr/bin/lsblk -bPno NAME,PARTLABEL,PARTTYPE,PARTUUID,SIZE /dev/loop0' | python3 -I -c '
 import re, sys
 for l in sys.stdin:
     d = dict(re.findall(r"(\w+)=\"([^\"]*)\"", l))
@@ -136,15 +187,52 @@ echo "$PARTS" | awk '{print $4}' | grep -qx "$CV" || die "booted verity partitio
 pick() { echo "$PARTS" | awk -v ty="$1" -v cur="$2" '$3 == ty && $4 != cur { print $1 }'; }
 TU=$(pick b0e01050-ee5f-4390-949a-9101b17104e9 "$CU")
 TV=$(pick 6e11a4e7-fbca-4ded-b9e9-e1a512bb664e "$CV")
-[ "$(echo "$TU" | wc -w)" = 1 ] && [ "$(echo "$TV" | wc -w)" = 1 ] ||
+[ "$(word_count "$TU")" = 1 ] && [ "$(word_count "$TV")" = 1 ] ||
 	die "expected exactly one inactive usr and one inactive verity partition (got '$TU' '$TV')"
 for n in $TU $TV; do
-	echo "$PARTS" | grep -q "^$n .*pmOS_root" && die "refusing: $n is the root partition"
+    l=$(echo "$PARTS" | awk -v n="$n" '$1 == n { print $2 }')
+
+    case "$l" in
+        duranium_*|_empty|-) ;;
+        *) die "Refusing foreign or unknown slot: $n ($l)" ;;
+    esac
+
+    case "$l" in
+        *pmOS_root*) die "Refusing root partition" ;;
+    esac
 done
 USZ=$(echo "$PARTS" | awk -v n="$TU" '$1 == n { print $5 }')
 VSZ=$(echo "$PARTS" | awk -v n="$TV" '$1 == n { print $5 }')
 [ "$ULEN" -le "$USZ" ] && [ "$VLEN" -le "$VSZ" ] || die "images larger than the target partitions"
+[ "$ULEN" -gt 0 ] && [ "$VLEN" -gt 0 ] ||
+    die "Invalid update image lengths"
+
+# The selected partitions must have the expected Duranium roles.
+ULABEL=$(echo "$PARTS" | awk -v n="$TU" '$1 == n {print $2}')
+VLABEL=$(echo "$PARTS" | awk -v n="$TV" '$1 == n {print $2}')
+
+case "$ULABEL:$VLABEL" in
+    duranium_*_usr:duranium_*_vty)
+        [ "${ULABEL%_usr}" = "${VLABEL%_vty}" ] ||
+            die "Inactive usr and verity versions do not match"
+        ;;
+    _empty:_empty|_empty:-|-:_empty|-:-)
+        ;;
+    *)
+        die "Inactive partition labels do not form a valid pair"
+        ;;
+esac
+
 log "inactive slot: usr $TU, verity $TV (booted: $CU / $CV)"
+
+# Preflight is the default. Explicit authorization is required
+# before modifying the inactive slot or boot entries.
+if [ "${APPLY:-0}" != 1 ]; then
+    echo "PASS: update preflight"
+    echo "NO PARTITION OR BOOT ENTRY WRITES"
+    echo "Use APPLY=1 only after reviewing the selected slot."
+    exit 0
+fi
 
 # The UKI of the version that lived in the inactive slot is about to point at
 # a partition being rewritten: retire it before writing (never the booted
@@ -153,7 +241,7 @@ OLDV=$(echo "$PARTS" | awk -v n="$TU" '$1 == n { print $2 }' | sed -n 's/^durani
 BOOTV=$(echo "$PARTS" | awk -v u="$CU" '$4 == u { print $2 }' | sed -n 's/^duranium_\([0-9][0-9a-z~]*\)_usr$/\1/p')
 if [ -n "$OLDV" ] && [ "$OLDV" != "$BOOTV" ] && [ "$OLDV" != "$V" ]; then
 	ESP0=$(echo "$PARTS" | awk '$3 == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" { print $1 }')
-	[ "$(echo "$ESP0" | wc -w)" = 1 ] || die "expected one ESP, got '$ESP0'"
+	[ "$(word_count "$ESP0")" = 1 ] || die "expected one ESP, got '$ESP0'"
 	log "retiring the $OLDV boot entry (its slot is rewritten now; booted: $BOOTV)"
 	trun retire "set -e
 E=\$(findmnt -n -o TARGET --source /dev/$ESP0 | head -1)
@@ -162,46 +250,20 @@ rm -f \$E/EFI/Linux/*_${OLDV}.efi \$E/EFI/Linux/*_${OLDV}+*.efi
 sync; ls \$E/EFI/Linux; [ \$E != /run/upd-esp ] || umount \$E"
 fi
 
-if [ -n "${GTA3_SSH:-}" ]; then
-send() { # local remote len: zstd-compressed over ssh (a phone hotspot is slow)
-	local t0=$SECONDS got
-	got=$(head -c "$3" "$1" | zstd -q -3 -T0 -c |
-		sshc "zstd -q -d -c | dd of='$2' bs=1M iflag=fullblock conv=fsync 2>/dev/null; blockdev --getsize64 '$2' 2>/dev/null || stat -c %s '$2'" | head -1)
-	echo "  $2: written in $((SECONDS - t0)) s"
-	# a block device reports its whole size, a file its length: both >= len
-	[ -n "$got" ] && [ "$got" -ge "$3" ]
+send() {
+    local source=$1 target=$2 length=$3
+
+    [ "$(filesize "$source")" -ge "$length" ] ||
+        die "Source shorter than requested transfer"
+
+    if [ "$transport" = ssh ]; then
+        head -c "$length" "$source" |
+            sshc "dd of='$target' bs=1M iflag=fullblock conv=fsync"
+    else
+        python3 "$CONSOLE" put "$source" "$target" "$length"
+    fi
 }
-else
-IFC=$(for d in /sys/class/net/*; do [ "$(basename "$(readlink -f "$d/device/driver" 2>/dev/null)")" = cdc_ncm ] && basename "$d"; done | head -1 || true)
-[ -n "$IFC" ] || die "tablet USB network not present"
-send() { # local remote len
-	flock "$P/build/tab.lock" python3 -I - "$LL%$IFC" "$1" "$2" "$3" <<'PY'
-import socket, sys, time
-addr, local, remote, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
-s = socket.create_connection((addr, 23), timeout=30)
-buf = b""
-while not buf.endswith(b"> "):
-    buf += s.recv(4096)
-s.sendall(f"put {remote} {n}\n".encode())
-t0, sent = time.time(), 0
-with open(local, "rb") as f:
-    while sent < n:
-        c = f.read(min(1 << 20, n - sent))
-        s.sendall(c)
-        sent += len(c)
-s.settimeout(300)
-r = b""
-while b"\n" not in r:
-    d = s.recv(4096)
-    if not d:
-        break
-    r += d
-line = r.split(b"\n")[0].decode(errors="replace").strip()
-print(f"  {remote}: {line} ({sent / (time.time() - t0) / 1e6:.1f} MB/s)")
-sys.exit(0 if line == f"ok {n}" else 1)
-PY
-}
-fi
+
 
 if [ "${SKIP_WRITE:-0}" = 1 ]; then log "SKIP_WRITE=1: checking the data already written"; else
 log "writing usr -> /dev/$TU"
@@ -210,7 +272,7 @@ log "writing verity -> /dev/$TV"
 send "$VTY" "/dev/$TV" "$VLEN"
 fi
 log "writing UKI -> /run/new.efi"
-send "$UKI" /run/new.efi "$(stat -c %s "$UKI")"
+send "$UKI" /run/new.efi "$(filesize "$UKI")"
 
 log "checking the written data on the tablet"
 # in 256 MiB pieces: every console request must answer within 30 s
@@ -229,7 +291,7 @@ chk() { same "$@" || die "$4 does not match"; }
 trun sync "sync; echo 3 > /proc/sys/vm/drop_caches" >/dev/null
 chk "$USR" "/dev/$TU" "$ULEN" usr
 chk "$VTY" "/dev/$TV" "$VLEN" verity
-chk "$UKI" /run/new.efi "$(stat -c %s "$UKI")" UKI
+chk "$UKI" /run/new.efi "$(filesize "$UKI")" UKI
 log "hashes match"
 
 # In the initrd (the disk passphrase not typed yet) /var is the initrd's
@@ -251,7 +313,7 @@ mkdir -p $XS; cd $XS
 for f in *; do case \$f in *_${CURV}.*.raw|*_${V}.*.raw) ;; *) [ -e \"\$f\" ] && rm -f \"\$f\" && echo \"removed \$f\" ;; esac; done
 true"
 	for f in "${EXTS[@]}"; do
-		b=$(basename "$f"); sz=$(stat -c %s "$f")
+		b=$(basename "$f"); sz=$(filesize "$f")
 		if same "$f" "$XS/$b" "$sz" "$b" 2>/dev/null; then log "  $b already there"; continue; fi
 		log "writing $b ($((sz >> 20)) MiB)"
 		send "$f" "$XS/$b.part" "$sz"
@@ -263,7 +325,7 @@ fi
 
 NU=$(uuid "${H:0:32}"); NV=$(uuid "${H:32:32}")
 ESP=$(echo "$PARTS" | awk '$3 == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" { print $1 }')
-[ "$(echo "$ESP" | wc -w)" = 1 ] || die "expected one ESP, got '$ESP'"
+[ "$(word_count "$ESP")" = 1 ] || die "expected one ESP, got '$ESP'"
 iu=${TU#loop0p}; iv=${TV#loop0p}
 R=$(trun apply "set -e
 D=/dev/loop0
