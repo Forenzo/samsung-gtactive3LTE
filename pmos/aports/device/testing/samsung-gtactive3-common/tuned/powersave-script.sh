@@ -1,65 +1,83 @@
 #!/bin/sh
-# LTE adaptation of upstream e552df52: restrict background services only
-# after the separately managed audio controller is isolated and verified.
-# Not enabled by default. This helper never starts/stops audio or drivers.
-set -u
+# LTE selective variant of upstream saver cpuset (e552df52).
+# Source-stage only; opt-in. Never change parent slices or audio services.
+set -eu
 FLAG=/etc/t575-power/enable-saver-cpuset
-OWN=/run/t575-saver-cpuset.owned
-UNIT=t575-headphones.service
+TEST=/run/t575-power/enable-saver-cpuset
+STATE=/run/t575-saver-cpuset-units
+UNITS="accounts-daemon.service avahi-daemon.service cups.service systemd-timesyncd.service systemd-oomd.service upower.service"
 
-prop() {
-    systemctl show "$1" -p "$2" --value
-}
-note() {
-    printf 't575-saver-cpuset: %s\n' "$*" >&2
-}
-audio_ready() {
-    [ "$(prop "$UNIT" ActiveState)" = active ] || return 1
-    [ "$(prop "$UNIT" Slice)" = t575audio.slice ] || return 1
-    [ "$(prop "$UNIT" ControlGroup)" = /t575audio.slice/t575-headphones.service ] || return 1
-    pid=$(prop "$UNIT" MainPID) || return 1
-    case "$pid" in ''|0|*[!0-9]*) return 1 ;; esac
-    grep -Eq '^Cpus_allowed_list:[[:space:]]+0-7$' "/proc/$pid/status"
-}
+note() { printf 't575-saver-cpuset: %s\n' "$*" >&2; }
+prop() { systemctl show "$1" -p "$2" --value; }
+
+mkdir -p -m 0700 "$STATE"
+exec 9>"$STATE/lock"
+flock -x 9
+
 restore() {
-    [ -f "$OWN" ] || return 0
-    current=$(prop system.slice AllowedCPUs) || return 1
-    case "$current" in
-        0-3) systemctl set-property --runtime system.slice AllowedCPUs= || return 1 ;;
-        '') ;;
-        *) note "external CPU policy changed; not overwriting it" ;;
-    esac
-    rm -f "$OWN"
+    rc=0
+    for unit in $UNITS; do
+        [ -f "$STATE/$unit" ] || continue
+        current=$(prop "$unit" AllowedCPUs) || { rc=1; continue; }
+        case "$current" in
+            0-3) systemctl set-property --runtime "$unit" AllowedCPUs= || { rc=1; continue; } ;;
+            '') ;;
+            *) note "$unit: external policy retained" ;;
+        esac
+        rm -f "$STATE/$unit"
+    done
+    return "$rc"
 }
+
 case "${1:-}" in
 start)
-    if [ ! -f "$FLAG" ] || ! audio_ready; then
-        note "skipping: not opted in or audio not isolated"
+    if [ ! -f "$FLAG" ] && [ ! -f "$TEST" ]; then
         restore
         exit $?
     fi
-    if [ -f "$OWN" ]; then
-        if [ "$(prop system.slice AllowedCPUs)" = 0-3 ] &&
-           [ "$(cat /sys/fs/cgroup/system.slice/cpuset.cpus.effective 2>/dev/null)" = 0-3 ]; then
-            exit 0
-        fi
-        restore || exit 1
-    fi
-    current=$(prop system.slice AllowedCPUs) || exit 1
-    if [ -n "$current" ]; then
-        note "existing CPU policy retained"
-        exit 0
-    fi
-    # Mark ownership before changing the property so stop can recover it.
-    : > "$OWN" || exit 1
-    if ! systemctl set-property --runtime system.slice AllowedCPUs=0-3 ||
-       [ "$(cat /sys/fs/cgroup/system.slice/cpuset.cpus.effective 2>/dev/null)" != 0-3 ] ||
-       ! audio_ready; then
-        note "CPU isolation verification failed; restoring"
-        restore || note "restore failed: manual recovery required"
+    if [ -n "$(prop system.slice AllowedCPUs)" ]; then
+        note "parent restriction detected; not applying policy"
+        restore
         exit 1
     fi
-    note "background CPU set applied; audio remains on CPUs 0-7"
+    # Preserve the running audio controller without restarting it.
+    hp=$(prop t575-headphones.service MainPID)
+    case "$hp" in
+        ''|0|*[!0-9]*) note "audio controller not running; skipping"; restore; exit $? ;;
+    esac
+    if ! grep -Eq '^Cpus_allowed_list:[[:space:]]+0-7$' "/proc/$hp/status"; then
+        note "audio CPU access is not 0-7; skipping"
+        restore
+        exit 1
+    fi
+    for unit in $UNITS; do
+        [ "$(prop "$unit" ActiveState)" = active ] || continue
+        [ "$(prop "$unit" ControlGroup)" = "/system.slice/$unit" ] || continue
+        current=$(prop "$unit" AllowedCPUs)
+        if [ -n "$current" ] && [ ! -f "$STATE/$unit" ]; then
+            note "$unit: existing CPU policy retained"
+            continue
+        fi
+        if [ -f "$STATE/$unit" ] && [ "$current" != 0-3 ] && [ -n "$current" ]; then
+            note "$unit: external policy retained"
+            rm -f "$STATE/$unit"
+            continue
+        fi
+        : > "$STATE/$unit"
+        if ! systemctl set-property --runtime "$unit" AllowedCPUs=0-3 ||
+           [ "$(cat "/sys/fs/cgroup/system.slice/$unit/cpuset.cpus.effective" 2>/dev/null)" != 0-3 ]; then
+            note "$unit: verification failed; restoring owned policies"
+            restore || note "restore failed; manual inspection required"
+            exit 1
+        fi
+        note "$unit: CPUs 0-3"
+    done
+    if [ "$(prop t575-headphones.service MainPID)" != "$hp" ] ||
+       ! grep -Eq '^Cpus_allowed_list:[[:space:]]+0-7$' "/proc/$hp/status"; then
+        note "audio verification failed; restoring owned policies"
+        restore || note "restore failed; manual inspection required"
+        exit 1
+    fi
     ;;
 stop)
     restore
