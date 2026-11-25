@@ -36,3 +36,13 @@ Same temporary test script and +120 s RTC fallback. Kernel entered s2idle at 10:
 2026-11-25 11:02:30–11:22:31 CET, 1201 seconds elapsed, automatic screen-off suspend with +1200 s relative RTC alarm, battery only. Headphones unplugged around display blanking. Photographed test output: capacity 65 -> 63%, charge_now 2512000 -> 2450000 uAh (62 mAh, 185.8 mA), charge_counter 2939000 -> 2878000 uAh (61 mAh, 182.8 mA). Mean of the two estimates 184.3 mA, includes entry/exit awake overhead. Battery temperature 21.8 C unchanged; user reported tablet did not get warm. Success counter 3 -> 4, fail 0 -> 0, original headphone controller unchanged, TAS2562 locked, temporary override removed, test service completed successfully. Approximate reduction 67% versus prior 564 mA screen-on idle, not matched display conditions. Upstream Wi-Fi test ~171 mA via charge_now (~219 mA via charge_counter). Actual kernel entry/exit and wake IRQ still to collect for extended trial.
 
 Resume issue: screen did not illuminate at alarm expiry; local console later accessible. Wi-Fi hardware and radio enabled, brcmfmac and brcmfmac_wcc loaded, wlan0 present but unmanaged in NetworkManager; usb0 and Bluetooth device also unmanaged. Possible NetworkManager sleep-state or interface management issue, not yet established. Capture state/reason and sleep/resume journals before intervention. No permanent wake marker until network recovery verified. No driver reload, flash, or C2 changes.
+
+### Extended resume: manual network recovery verified
+
+Local console: nmcli general status reported network off while nmcli networking reported enabled; Wi-Fi hardware/radio enabled; wlan0 unmanaged with GENERAL.REASON 73. User confirmed the first explicit recovery command immediately restored connectivity:
+
+```sh
+sudo busctl call org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.NetworkManager Sleep b false
+```
+
+No driver reload or NetworkManager restart required. This establishes a recoverable NetworkManager sleep-state symptom, not the root cause of the missed/ineffective resume transition. Collect logind, systemd-sleep, NetworkManager and Wi-Fi recovery logs for the long trial; design a conditional post-resume safeguard respecting intentionally disabled networking and Wi-Fi. Persistent suspend enablement still pending repeated recovery validation.
