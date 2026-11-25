@@ -1,0 +1,8 @@
+# Battery care (docs/BATTERY.md "Battery care"): upower offers its charge
+# limit (GNOME Settings, Power: "Preserve battery health") for a battery
+# with CHARGE_LIMIT=start,end. The kernel's max77705_charger adds the
+# charge_control_*_threshold controls to the gauge. upower's own default
+# (60-upower-battery.rules, hwdb: 75,80 for every battery) is replaced here,
+# hence 61-: charging pauses at 85 %, Samsung's "Protect battery" level,
+# and resumes at 80 %.
+ACTION!="remove", SUBSYSTEM=="power_supply", KERNEL=="max170xx_battery", TEST=="charge_control_end_threshold", ENV{CHARGE_LIMIT}="80,85"

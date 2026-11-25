@@ -1,0 +1,6 @@
+# Battery care is on unless the owner turns it off (docs/BATTERY.md "Battery
+# care"): upower keeps that choice in this file, "1" on and "0" off, and
+# applies it whenever the battery appears. Created only when missing, so a
+# choice made in Settings stays across boots and updates.
+d /var/lib/upower 0755 root root -
+f /var/lib/upower/charging-threshold-status 0644 root root - 1

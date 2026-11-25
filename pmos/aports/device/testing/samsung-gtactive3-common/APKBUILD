@@ -11,7 +11,7 @@ maintainer="dixonSolutions <203963471+dixonSolutions@users.noreply.github.com>"
 pkgname=samsung-gtactive3-common
 pkgdesc="Samsung Galaxy Tab Active3: support shared by every variant"
 pkgver=2
-pkgrel=56
+pkgrel=57
 url="https://github.com/exynos-linux/samsung-gtactive3"
 license="MIT"
 arch="aarch64"
@@ -96,6 +96,7 @@ source="
 	usb-resume-check.sh
 	gtactive3wifi-usb-resume.service
 	60-gtactive3wifi-pm.rules
+	61-gtactive3wifi-battery-care.rules
 	modprobe-gtactive3wifi-camera.conf
 	libcamera-softisp.yaml
 	sysupdate-retry.conf
@@ -108,6 +109,7 @@ source="
 	gdm-panfrost.conf
 	panfrost-profile.sh
 	panfrost-profile.tmpfiles
+	battery-care.tmpfiles
 	nm-wifi-powersave.conf
 	80-gtactive3wifi-wlan-mac.rules
 	wlan-efs-mac
@@ -230,6 +232,7 @@ package() {
 	install -Dm755 "$srcdir"/usb-resume-check.sh \
 		"$pkgdir"/usr/libexec/gtactive3wifi/usb-resume-check
 	install -Dm644 "$srcdir"/60-gtactive3wifi-pm.rules \
+		"$srcdir"/61-gtactive3wifi-battery-care.rules \
 		-t "$pkgdir"/usr/lib/udev/rules.d/
 	# another UI (phosh, gnome, ...) through the A/B update
 	install -Dm755 "$srcdir"/switch-ui.sh \
@@ -280,6 +283,9 @@ package() {
 		"$pkgdir"/etc/tuned/profiles/throughput-performance/tuned.conf
 	install -Dm644 "$srcdir"/gtactive3wifi-reboot.tmpfiles \
 		"$pkgdir"/usr/lib/tmpfiles.d/gtactive3wifi-reboot.conf
+	# UPower battery protection defaults
+	install -Dm644 "$srcdir"/battery-care.tmpfiles \
+		"$pkgdir"/usr/lib/tmpfiles.d/gtactive3wifi-battery-care.conf
 	install -Dm644 "$srcdir"/firmware-path.tmpfiles \
 		"$pkgdir"/usr/lib/tmpfiles.d/00-device-samsung-gtactive3wifi-firmware.conf
 	# the owner's firmware, left on the ESP by the installer (setup.sh)
@@ -458,6 +464,8 @@ initramfs() {
 }
 
 sha512sums="
+4aab843e115626a410700e6643bacbe4c6331ec669c6a9be4a1b19e72ed3eff5f4e3458d4ecdc803c6dc54890a0c2e92743bf7a57b78c95191c6809c1a857989  battery-care.tmpfiles
+fc83f6ebbc3488746c6a43bdbc166f660b5a4ce47529643707dd459a66a426bac5e46f0cd9038953edd78b2b8054cecd19c346d691cf319cce81f8fa60bfd8da  61-gtactive3wifi-battery-care.rules
 acba813ff0feb882b6cb0cc4b4c9f8dc0b9b58cb3da7c6a87920ecf4ef63670ac90f23d3ca6bc5b057832fe8e4388c1eca60b6c79c7f3e50eab6d5986cd349d7  gtactive3wifi-usb-prep.c
 20423df55d57f7791d22c647927a3d3221225d0397410ec916b4e780ff6cc67123299f84006ac2d0dcb697307c4fc5630350b0d069c9cc84971de14f6e2d4aab  gtactive3wifi-usb-prep.service
 28297b58b56192c894ed5a1f60a4834b4490945054b6db21dcf72212605fdf4a5cd153331313eab1b78d65b13402038dfd08f5b41e1da9b3bb02db0d012328dc  gta3-console.c
